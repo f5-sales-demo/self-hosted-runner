@@ -1,0 +1,455 @@
+{
+  "schema_version": 1,
+  "upstream_runner_images": {
+    "repository": "actions/runner-images",
+    "revision": "8926c75ceb03577c5cc94415743a88f548b781ab",
+    "ubuntu_24_04_image_version": "20260810.271.1",
+    "reference_url": "https://github.com/actions/runner-images/tree/8926c75ceb03577c5cc94415743a88f548b781ab"
+  },
+  "base_images": {
+    "ubuntu": "docker.io/library/ubuntu@sha256:d78ab76437b1afc5f01e223d6bf0172763f404bb166441328845adbef44518cb",
+    "node": "docker.io/library/node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436",
+    "docker_cli": "docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe",
+    "apt_snapshot": "20260810T000000Z"
+  },
+  "setup_actions": {
+    "actions/setup-node": {
+      "tool": "node",
+      "field": "node-version",
+      "versions": [
+        "22.23.2"
+      ],
+      "cache_path": "/opt/hostedtoolcache/node/22.23.2/x64.complete"
+    },
+    "actions/setup-python": {
+      "tool": "python",
+      "field": "python-version",
+      "versions": [
+        "3.12.3"
+      ],
+      "cache_path": "/opt/hostedtoolcache/Python/3.12.3/x64.complete"
+    },
+    "actions/setup-go": {
+      "tool": "go",
+      "field": "go-version",
+      "versions": [
+        "1.25.12"
+      ],
+      "cache_path": "/opt/hostedtoolcache/Go/1.25.12/x64.complete"
+    },
+    "astral-sh/setup-uv": {
+      "tool": "uv",
+      "field": "version",
+      "versions": [
+        "0.8.24"
+      ]
+    },
+    "biomejs/setup-biome": {
+      "tool": "biome",
+      "field": "version",
+      "versions": [
+        "2.5.6"
+      ]
+    }
+  },
+  "tools": [
+    {
+      "name": "actions-runner",
+      "version": "2.336.0",
+      "source": "https://github.com/actions/runner/releases/tag/v2.336.0",
+      "sha256": "04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "test -x /opt/actions-runner/run.sh",
+      "expected": ""
+    },
+    {
+      "name": "github-cli",
+      "version": "2.97.0",
+      "source": "https://github.com/cli/cli/releases/tag/v2.97.0",
+      "sha256": "a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "gh --version",
+      "expected": "gh version 2.97.0"
+    },
+    {
+      "name": "node",
+      "version": "22.23.2",
+      "source": "docker.io/library/node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "node --version",
+      "expected": "v22.23.2"
+    },
+    {
+      "name": "npm",
+      "version": "10",
+      "source": "node 22.23.2 image",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "npm --version",
+      "expected": "10."
+    },
+    {
+      "name": "python",
+      "version": "3.12.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "python3 --version",
+      "expected": "Python 3.12.3"
+    },
+    {
+      "name": "pipx",
+      "version": "1.4.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "pipx --version",
+      "expected": ""
+    },
+    {
+      "name": "go",
+      "version": "1.25.12",
+      "source": "https://go.dev/dl/go1.25.12.linux-amd64.tar.gz",
+      "sha256": "234828b7a89e0e303d2556310ee549fbcf253d28de937bac3da13d6294262ac1",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "go version",
+      "expected": "go1.25.12"
+    },
+    {
+      "name": "dotnet",
+      "version": "10.0.302",
+      "source": "https://builds.dotnet.microsoft.com/dotnet/Sdk/10.0.302/dotnet-sdk-10.0.302-linux-x64.tar.gz",
+      "sha256": "264a838d6f5d1a252489c7bb2e2946a579d6a881391d50ffd175a01e4d948c1c",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "dotnet --version",
+      "expected": "10.0.302"
+    },
+    {
+      "name": "powershell",
+      "version": "7.6.4",
+      "source": "https://github.com/PowerShell/PowerShell/releases/tag/v7.6.4",
+      "sha256": "4471b5a36bfe86ec7af8525d36bb1cacba0128e7aac22d05cc064bc00e604721",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "pwsh --version",
+      "expected": "7.6.4"
+    },
+    {
+      "name": "aws-cli",
+      "version": "2.36.20",
+      "source": "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.36.20.zip",
+      "sha256": "59bdfab4035b0251a0c8de801abe01928861a89e27433bb80fc3fcf6dfe32352",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "aws --version",
+      "expected": "aws-cli/2.36.20"
+    },
+    {
+      "name": "helm",
+      "version": "3.21.3",
+      "source": "https://get.helm.sh/helm-v3.21.3-linux-amd64.tar.gz",
+      "sha256": "15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "helm version --short",
+      "expected": "v3.21.3"
+    },
+    {
+      "name": "java",
+      "version": "21.0.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "java -version",
+      "expected": "21."
+    },
+    {
+      "name": "php",
+      "version": "8.3.6",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "php --version",
+      "expected": "PHP 8.3"
+    },
+    {
+      "name": "ruby",
+      "version": "3.2.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "ruby --version",
+      "expected": "ruby 3.2"
+    },
+    {
+      "name": "gcc",
+      "version": "13.2.0",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "gcc --version",
+      "expected": "13."
+    },
+    {
+      "name": "cmake",
+      "version": "3.28.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "cmake --version",
+      "expected": "3.28"
+    },
+    {
+      "name": "git",
+      "version": "2.43.0",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "git --version",
+      "expected": "2.43"
+    },
+    {
+      "name": "git-lfs",
+      "version": "3.4.1",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "git-lfs version",
+      "expected": "git-lfs/3.4"
+    },
+    {
+      "name": "shellcheck",
+      "version": "0.9.0",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "shellcheck --version",
+      "expected": "version: 0.9"
+    },
+    {
+      "name": "android-commandline-tools",
+      "version": "12.0",
+      "source": "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip",
+      "sha256": "2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "sdkmanager --version",
+      "expected": "12.0"
+    },
+    {
+      "name": "postgresql-client",
+      "version": "16",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "psql --version",
+      "expected": "16."
+    },
+    {
+      "name": "mysql-client",
+      "version": "8",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "mysql --version",
+      "expected": "8.0"
+    },
+    {
+      "name": "docker-cli",
+      "version": "29.7.2",
+      "source": "docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe",
+      "profiles": [
+        "container-build"
+      ],
+      "command": "docker --version",
+      "expected": "29.7.2"
+    },
+    {
+      "name": "docker-buildx",
+      "version": "",
+      "source": "docker cli image",
+      "profiles": [
+        "container-build"
+      ],
+      "command": "docker buildx version",
+      "expected": ""
+    },
+    {
+      "name": "docker-compose",
+      "version": "",
+      "source": "docker cli image",
+      "profiles": [
+        "container-build"
+      ],
+      "command": "docker compose version",
+      "expected": ""
+    },
+    {
+      "name": "google-chrome",
+      "version": "151.0.7922.108",
+      "source": "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_151.0.7922.108-1_amd64.deb",
+      "sha256": "bfb6e6d345055eb481a50db423256fa2732ce010f785a56c327e213a638efdef",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "google-chrome --version",
+      "expected": "Google Chrome 151.0.7922.108"
+    },
+    {
+      "name": "chromedriver",
+      "version": "151.0.7922.77",
+      "source": "https://storage.googleapis.com/chrome-for-testing-public/151.0.7922.77/linux64/chromedriver-linux64.zip",
+      "sha256": "65dca829d176845f864b794be1ecdd31e855f14ca9fa1eb93b2d1c0e7242abdd",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "chromedriver --version",
+      "expected": "ChromeDriver 151.0.7922.77"
+    },
+    {
+      "name": "geckodriver",
+      "version": "0.37.1",
+      "source": "https://github.com/mozilla/geckodriver/releases/download/v0.37.1/geckodriver-v0.37.1-linux64.tar.gz",
+      "sha256": "e815130ea95983e162ae91843b48d3a3ce991735635fce83a647afde21e09f7e",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "geckodriver --version",
+      "expected": "geckodriver 0.37.1"
+    },
+    {
+      "name": "uv",
+      "version": "0.8.24",
+      "source": "https://github.com/astral-sh/uv/releases/download/0.8.24/uv-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "db8179fffd97b7557b9a519bae82eaa4f499b02ef546f738a35e74e26c47e6b7",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "uv --version",
+      "expected": "0.8.24"
+    },
+    {
+      "name": "biome",
+      "version": "2.5.6",
+      "source": "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%402.5.6/biome-linux-x64",
+      "sha256": "3cc9a0c3fa26ac26a89e8a3b203c010c9ae88e36f69a2679e79981f267ce9d57",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "biome --version",
+      "expected": "2.5.6"
+    },
+    {
+      "name": "google-cloud-cli",
+      "version": "579.0.0",
+      "source": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-579.0.0-linux-x86_64.tar.gz",
+      "sha256": "a9a7fbe51cda37cf6142b1bbcff12227550e60a6c67e8cf84644fb301371c4de",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "gcloud version",
+      "expected": "Google Cloud SDK 579.0.0"
+    },
+    {
+      "name": "kubectl",
+      "version": "1.36.3",
+      "source": "https://dl.k8s.io/release/v1.36.3/bin/linux/amd64/kubectl",
+      "sha256": "ebbd080e7c2e275093b55915722043257eb24004363e20acb3c4d71919f88336",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "kubectl version --client",
+      "expected": "v1.36.3"
+    },
+    {
+      "name": "kustomize",
+      "version": "5.8.1",
+      "source": "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/v5.8.1/kustomize_v5.8.1_linux_amd64.tar.gz",
+      "sha256": "029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "kustomize version",
+      "expected": "v5.8.1"
+    },
+    {
+      "name": "maven",
+      "version": "3.8.7",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "mvn --version",
+      "expected": ""
+    },
+    {
+      "name": "cargo",
+      "version": "1.75.0",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "cargo --version",
+      "expected": ""
+    }
+  ]
+}
