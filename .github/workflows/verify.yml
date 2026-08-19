@@ -1,0 +1,41 @@
+name: Verify immutable runner source
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  source-and-image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Validate catalog and audit fixtures
+        run: |
+          set -euo pipefail
+          python3 -m json.tool catalog/tool-catalog.json >/dev/null
+          python3 -m json.tool catalog/governed-repositories.json >/dev/null
+          python3 -m py_compile scripts/*.py tests/*.py
+          python3 -m unittest discover --start-directory tests --pattern "test_*.py"
+      - name: Build and verify socketless target without cache
+        run: |
+          set -euo pipefail
+          docker buildx build --no-cache --load --target standard --tag local/self-hosted-runner:standard .
+          docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
+      - name: Build and verify container-build target without cache
+        run: |
+          set -euo pipefail
+          docker buildx build --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
+          docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
+      - name: Prove standard target is socketless
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint sh local/self-hosted-runner:standard -c "command -v docker"; then
+            echo "standard target unexpectedly contains Docker" >&2
+            exit 1
+          fi

@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import json
+import re
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class ImageContractTests(unittest.TestCase):
+    def test_catalog_integrity_fields_are_immutable(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        self.assertEqual(catalog["schema_version"], 1)
+        self.assertRegex(catalog["upstream_runner_images"]["revision"], r"^[0-9a-f]{40}$")
+        self.assertGreaterEqual(len(catalog["setup_actions"]), 5)
+        for tool in catalog["tools"]:
+            self.assertTrue(tool["profiles"])
+            self.assertTrue(tool["command"])
+            if "sha256" in tool:
+                self.assertRegex(tool["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_standard_target_has_no_docker_client(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        standard = dockerfile.split("FROM runner-base AS standard", 1)[1].split("FROM runner-base AS container-build", 1)[0]
+        container_build = dockerfile.split("FROM runner-base AS container-build", 1)[1]
+        self.assertNotIn("docker", standard.lower())
+        self.assertIn("docker-buildx", container_build)
+        self.assertIn("docker-compose", container_build)
+        self.assertIn("USER runner", standard)
+        self.assertNotIn("--output /tmp/gcloud.tar.gz /tmp/", dockerfile)
+        self.assertIn("--output /tmp/uv.tar.gz", dockerfile)
+
+    def test_only_github_hosted_workflows_build_or_publish(self) -> None:
+        verify = (ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+        publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
+        self.assertIn("runs-on: ubuntu-24.04", verify)
+        self.assertIn("runs-on: ubuntu-24.04", publish)
+        self.assertIn("--no-cache", verify)
+        self.assertIn("--no-cache", publish)
+        self.assertIn("--provenance=mode=max", publish)
+        self.assertIn("--sbom=true", publish)
+        self.assertIn("actions/attest-build-provenance@", publish)
+        self.assertIn("actions/attest-sbom@", publish)
+        self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
+        self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
+
+
+if __name__ == "__main__":
+    unittest.main()
