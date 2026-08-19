@@ -1,0 +1,41 @@
+name: Check runner tool updates
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Check catalogued upstream releases
+        id: updates
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          python3 scripts/check-tool-updates.py --format text --fail-on-update | tee tool-update-report.txt
+          status="${PIPESTATUS[0]}"
+          python3 scripts/check-tool-updates.py --format json > tool-update-report.json
+          exit "$status"
+      - name: Upload update report
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: tool-update-report
+          path: |
+            tool-update-report.txt
+            tool-update-report.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Fail when maintenance is needed
+        if: steps.updates.outcome != "success"
+        run: |
+          echo "An upstream update is available, or an update source could not be queried."
+          echo "Review the attached report; update versions, URLs, and checksums together in a normal pull request."
+          exit 1

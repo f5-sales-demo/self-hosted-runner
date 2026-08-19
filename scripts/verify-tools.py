@@ -34,11 +34,14 @@ def main() -> int:
         else:
             print("[ok] {} {}".format(tool["name"], tool.get("version", "")))
     for action, cache in raw["setup_actions"].items():
+        markers = list(cache.get("cache_paths", {}).values())
         marker_value = cache.get("cache_path")
-        if marker_value and not Path(marker_value).is_file():
-            failures.append("{}: missing tool-cache marker {}".format(action, marker_value))
-        else:
-            print("[ok] {} catalog {}".format(action, cache["versions"][0]))
+        if marker_value:
+            markers.append(marker_value)
+        for marker in markers:
+            if not Path(marker).is_file():
+                failures.append("{}: missing tool-cache marker {}".format(action, marker))
+        print("[ok] {} catalog {}".format(action, ", ".join(cache["versions"])))
     docker_code, _ = run("command -v docker")
     if args.profile == "standard" and docker_code == 0:
         failures.append("standard profile unexpectedly contains docker")

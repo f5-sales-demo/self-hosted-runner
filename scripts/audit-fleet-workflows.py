@@ -21,6 +21,7 @@ FLEET_PATH = ROOT / "catalog/governed-repositories.json"
 EXACT_VERSION = re.compile(r"^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$")
 ENV_VERSION = re.compile(r"^\$\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*}}$")
 INSTALLER = re.compile(r"\b(?:sudo|apt(?:-get)?\s+(?:install|update)|apk\s+add|brew\s+install|choco\s+install|npm\s+install\s+-g|pip(?:3)?\s+install(?!\s+(?:-r|--requirement))|go\s+install|cargo\s+install|gem\s+install|composer\s+global|curl[^\n]*\|\s*(?:ba)?sh|wget[^\n]*(?:\|\s*(?:ba)?sh|-O\s*/(?:usr|opt|tmp)))")
+ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 LOCKFILE_INSTALL = re.compile(r"\b(?:npm\s+ci|bun\s+install\s+--frozen-lockfile|pip(?:3)?\s+install\s+(?:-r|--requirement)|poetry\s+install|composer\s+install|pnpm\s+install\s+--frozen-lockfile)\b")
 
 
@@ -75,6 +76,9 @@ def audit_job(document: dict, relative: str, job_name: str, job: object, setup: 
         uses = step.get("uses")
         if isinstance(uses, str) and not uses.startswith(("./", "docker://")):
             name = action_name(uses)
+            reference = uses.rsplit("@", 1)[1] if "@" in uses else ""
+            if not ACTION_SHA.fullmatch(reference):
+                findings.append(Finding("error", location, "marketplace action must be pinned to a full commit SHA: {}".format(uses)))
             if name in setup:
                 field = setup[name]["field"]
                 version = step.get("with", {}).get(field) if isinstance(step.get("with"), dict) else None
@@ -110,7 +114,7 @@ def audit_workflows(repository: str, workflows: dict[str, str], setup: dict) -> 
             findings.append(Finding("error", relative, "workflow must have a jobs object"))
             continue
         for name, job in document["jobs"].items():
-            findings.extend(audit_job(document, relative, str(name), job, setup))
+            findings.extend(audit_job(document, "{}/{}".format(repository, relative), str(name), job, setup))
     if not workflows:
         findings.append(Finding("info", repository, "no workflow files"))
     return findings
@@ -141,6 +145,7 @@ def main() -> int:
     parser.add_argument("--github", action="store_true", help="read workflows with authenticated gh api")
     parser.add_argument("--ref", default="main")
     parser.add_argument("--repository", action="append", default=[])
+    parser.add_argument("--format", choices=("text", "json"), default="text")
     args = parser.parse_args()
     if bool(args.checkouts_root) == bool(args.github):
         parser.error("select exactly one of --checkouts-root or --github")
@@ -152,10 +157,13 @@ def main() -> int:
     for repository in repositories:
         workflows = checkout_workflows(args.checkouts_root, repository) if args.checkouts_root else github_workflows(repository, args.ref)
         findings.extend(audit_workflows(repository, workflows, catalog["setup_actions"]))
-    for finding in findings:
-        print("[{}] {}: {}".format(finding.level, finding.location, finding.message))
     errors = [finding for finding in findings if finding.level == "error"]
-    print("audited {} repositories; {} errors".format(len(repositories), len(errors)))
+    if args.format == "json":
+        print(json.dumps({"repositories": len(repositories), "errors": len(errors), "findings": [finding.__dict__ for finding in findings]}, indent=2, sort_keys=True))
+    else:
+        for finding in findings:
+            print("[{}] {}: {}".format(finding.level, finding.location, finding.message))
+        print("audited {} repositories; {} errors".format(len(repositories), len(errors)))
     return 1 if errors else 0
 
 
