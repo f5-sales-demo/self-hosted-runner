@@ -5,7 +5,7 @@ This repository publishes image artifacts only. `docs-control` continues to own 
 ## Required first promotion
 
 1. Merge the builder PR and let the GitHub-hosted `publish.yml` workflow emit a `standard` and a `container-build` digest.
-2. Run `scripts/verify-promotion.sh` for both references with the merged source commit. This requires GHCR login and rejects self-hosted provenance.
+2. Run `scripts/verify-promotion.sh` for both references with the merged source commit. This requires GHCR login with `read:packages`, rejects self-hosted provenance, and requires a BuildKit OCI SPDX SBOM attestation.
 3. On the Ubuntu workstation, run `scripts/preload-image.sh` for the exact digest/profile pair. It pulls; it never builds.
 4. In a fresh `docs-control` issue and isolated worktree, replace every old `actions-runner` image reference with the `standard` digest and the old `actions-runner-container` reference with the `container-build` digest. Retire the old `runner-images/Containerfile` publisher only after the pilot succeeds.
 

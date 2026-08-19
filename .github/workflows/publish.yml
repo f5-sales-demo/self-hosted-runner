@@ -74,17 +74,3 @@ jobs:
           subject-name: ghcr.io/f5-sales-demo/self-hosted-runner
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
-      - name: Generate SPDX SBOM
-        uses: anchore/sbom-action@8e94d75ddd33f69f691467e42275782e4bfefe84
-        with:
-          image: ${{ steps.image.outputs.reference }}
-          format: spdx-json
-          output-file: ${{ runner.temp }}/runner-${{ matrix.profile }}.spdx.json
-          upload-artifact: false
-      - name: Attest SBOM
-        uses: actions/attest-sbom@10926c72720ffc3f7b666661c8e55b1344e2a365
-        with:
-          subject-name: ghcr.io/f5-sales-demo/self-hosted-runner
-          subject-digest: ${{ steps.image.outputs.digest }}
-          sbom-path: ${{ runner.temp }}/runner-${{ matrix.profile }}.spdx.json
-          push-to-registry: true
