@@ -37,7 +37,7 @@ It considers lockfile installs such as `npm ci`, `bun install --frozen-lockfile`
 ## Promotion sequence
 
 1. Merge a reviewed builder PR. Only the GitHub-hosted publish workflow builds and pushes a candidate.
-2. Record the two published digests and use `scripts/verify-promotion.sh` to verify their package/source attestations.
+2. Record the two published digests and use `scripts/verify-promotion.sh` to verify GitHub provenance and the BuildKit SPDX SBOM attestation.
 3. On the Ubuntu workstation, run `scripts/preload-image.sh` for each digest. It pulls the digest, proves local image identity, and runs the resident verifier without maintaining a second production build path.
 4. Update `docs-control` profile policy with those digests, then run one socketless and one trust-gated container-build pilot. Do not edit existing open issues #1533 or #1580 for this rollout.
 

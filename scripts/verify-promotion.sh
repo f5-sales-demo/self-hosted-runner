@@ -17,10 +17,29 @@ if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
+
 gh attestation verify "oci://${image}" \
   --repo f5-sales-demo/self-hosted-runner \
   --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
   --source-digest "$revision" \
   --deny-self-hosted-runners \
   --bundle-from-oci
-printf "verified provenance for %s from %s\n" "$image" "$revision"
+printf "verified GitHub provenance for %s from %s\n" "$image" "$revision"
+
+registry="${image%@*}"
+index="$(mktemp)"
+trap 'rm -f "$index"' EXIT
+docker buildx imagetools inspect --raw "$image" > "$index"
+mapfile -t attestations < <(jq -r '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest' "$index")
+found_spdx=0
+for attestation in "${attestations[@]}"; do
+  if docker buildx imagetools inspect --raw "${registry}@${attestation}" | jq -e 'any(.layers[]; ((.annotations["in-toto.io/predicate-type"] // "") | test("^https://spdx\.dev/")))' >/dev/null; then
+    found_spdx=1
+    break
+  fi
+done
+if [[ "$found_spdx" -ne 1 ]]; then
+  echo "published image is missing an OCI SPDX SBOM attestation" >&2
+  exit 1
+fi
+printf "verified BuildKit SPDX SBOM attestation for %s\n" "$image"

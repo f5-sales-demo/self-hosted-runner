@@ -45,7 +45,8 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f", publish)
         self.assertIn("driver: docker-container", publish)
         self.assertIn("actions/attest-build-provenance@", publish)
-        self.assertIn("actions/attest-sbom@", publish)
+        self.assertNotIn("actions/attest-sbom@", publish)
+        self.assertIn("BuildKit SPDX SBOM attestation", (ROOT / "scripts/verify-promotion.sh").read_text(encoding="utf-8"))
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
 
