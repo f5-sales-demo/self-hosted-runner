@@ -19,6 +19,7 @@
     "geckodriver": {"strategy": "github-release", "repository": "mozilla/geckodriver"},
     "uv": {"strategy": "github-release", "repository": "astral-sh/uv"},
     "biome": {"strategy": "github-release", "repository": "biomejs/biome"},
+    "ruff": {"strategy": "github-release", "repository": "astral-sh/ruff"},
     "kustomize": {"strategy": "github-release", "repository": "kubernetes-sigs/kustomize"},
     "bun": {"strategy": "github-release", "repository": "oven-sh/bun"},
     "opencode": {"strategy": "github-release", "repository": "anomalyco/opencode"},
@@ -85,6 +86,16 @@
       "versions": [
         "2.5.6"
       ]
+    },
+    "astral-sh/ruff-action": {
+      "tool": "ruff",
+      "field": "version",
+      "versions": [
+        "0.16.0"
+      ],
+      "cache_paths": {
+        "0.16.0": "/opt/hostedtoolcache/ruff/0.16.0/x86_64.complete"
+      }
     },
     "oven-sh/setup-bun": {
       "tool": "bun",
@@ -448,6 +459,18 @@
       ],
       "command": "biome --version",
       "expected": "2.5.6"
+    },
+    {
+      "name": "ruff",
+      "version": "0.16.0",
+      "source": "https://github.com/astral-sh/ruff/releases/tag/0.16.0",
+      "sha256": "98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "$AGENT_TOOLSDIRECTORY/ruff/0.16.0/x86_64/ruff --version",
+      "expected": "ruff 0.16.0"
     },
     {
       "name": "google-cloud-cli",
