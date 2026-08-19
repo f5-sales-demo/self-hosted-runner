@@ -33,7 +33,7 @@ docker buildx imagetools inspect --raw "$image" > "$index"
 mapfile -t attestations < <(jq -r '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest' "$index")
 found_spdx=0
 for attestation in "${attestations[@]}"; do
-  if docker buildx imagetools inspect --raw "${registry}@${attestation}" | jq -e 'any(.layers[]; ((.annotations["in-toto.io/predicate-type"] // "") | test("^https://spdx\.dev/")))' >/dev/null; then
+  if docker buildx imagetools inspect --raw "${registry}@${attestation}" | jq -e 'any(.layers[]; ((.annotations["in-toto.io/predicate-type"] // "") | test("^https://spdx\\.dev/")))' >/dev/null; then
     found_spdx=1
     break
   fi
