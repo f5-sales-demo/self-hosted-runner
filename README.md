@@ -19,7 +19,7 @@ The locked reference is [`actions/runner-images@8926c75ceb03577c5cc94415743a88f5
 
 ## Local commands
 
-Image construction and publication are intentionally restricted to the GitHub-hosted `ubuntu-24.04` workflows. The Ubuntu workstation may only pull and verify a published digest:
+Production image construction and publication are intentionally restricted to the GitHub-hosted `ubuntu-24.04` workflows. The Ubuntu workstation may use local no-cache builds for development validation only, never as a promotion source; production preloading pulls and verifies a published digest:
 
 ```bash
 scripts/preload-image.sh \
@@ -33,6 +33,16 @@ python3 scripts/audit-fleet-workflows.py --checkouts-root /path/to/checkouts
 ```
 
 It considers lockfile installs such as `npm ci`, `bun install --frozen-lockfile`, and `pip install -r requirements.txt` job-local. Self-hosted setup actions, floating tool versions, global installs, curl/wget installers, and privileged package installation are rejected unless their tool is supplied by the catalogue.
+
+## Upstream update detection
+
+`Check runner tool updates` runs weekly and on demand. It compares the catalogued, supported upstreams with their official release, registry, or Go-module endpoint and uploads a machine-readable report. An available version or a failed lookup makes the check fail intentionally.
+
+The report is a review signal, not an automated image mutation. Each update must be incorporated through a pull request that changes the exact version, source URL, checksum or Go module sum, catalog entry, and verifier together. This keeps production images immutable while avoiding silent drift.
+
+```bash
+python3 scripts/check-tool-updates.py --format json
+```
 
 ## Promotion sequence
 

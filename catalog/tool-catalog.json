@@ -12,22 +12,57 @@
     "docker_cli": "docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe",
     "apt_snapshot": "20260810T000000Z"
   },
+  "update_sources": {
+    "actions-runner": {"strategy": "github-release", "repository": "actions/runner"},
+    "github-cli": {"strategy": "github-release", "repository": "cli/cli"},
+    "powershell": {"strategy": "github-release", "repository": "PowerShell/PowerShell"},
+    "geckodriver": {"strategy": "github-release", "repository": "mozilla/geckodriver"},
+    "uv": {"strategy": "github-release", "repository": "astral-sh/uv"},
+    "biome": {"strategy": "github-release", "repository": "biomejs/biome"},
+    "kustomize": {"strategy": "github-release", "repository": "kubernetes-sigs/kustomize"},
+    "bun": {"strategy": "github-release", "repository": "oven-sh/bun"},
+    "opencode": {"strategy": "github-release", "repository": "anomalyco/opencode"},
+    "xcsh": {"strategy": "github-release", "repository": "f5-sales-demo/xcsh"},
+    "codex": {"strategy": "npm", "package": "@openai/codex"},
+    "claude-code": {"strategy": "npm", "package": "@anthropic-ai/claude-code-linux-x64"},
+    "node": {"strategy": "node"},
+    "node-20": {"strategy": "node"},
+    "node-24.14": {"strategy": "node"},
+    "node-24.19": {"strategy": "node"},
+    "tfplugindocs": {"strategy": "github-release", "repository": "hashicorp/terraform-plugin-docs"},
+    "golangci-lint": {"strategy": "github-release", "repository": "golangci/golangci-lint"},
+    "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"}
+  },
   "setup_actions": {
     "actions/setup-node": {
       "tool": "node",
       "field": "node-version",
       "versions": [
-        "22.23.2"
+        "20.19.6",
+        "22.23.2",
+        "24.14.1",
+        "24.19.0"
       ],
-      "cache_path": "/opt/hostedtoolcache/node/22.23.2/x64.complete"
+      "cache_paths": {
+        "20.19.6": "/opt/hostedtoolcache/node/20.19.6/x64.complete",
+        "22.23.2": "/opt/hostedtoolcache/node/22.23.2/x64.complete",
+        "24.14.1": "/opt/hostedtoolcache/node/24.14.1/x64.complete",
+        "24.19.0": "/opt/hostedtoolcache/node/24.19.0/x64.complete"
+      }
     },
     "actions/setup-python": {
       "tool": "python",
       "field": "python-version",
       "versions": [
-        "3.12.3"
+        "3.11.13",
+        "3.12.3",
+        "3.13.7"
       ],
-      "cache_path": "/opt/hostedtoolcache/Python/3.12.3/x64.complete"
+      "cache_paths": {
+        "3.11.13": "/opt/hostedtoolcache/Python/3.11.13/x64.complete",
+        "3.12.3": "/opt/hostedtoolcache/Python/3.12.3/x64.complete",
+        "3.13.7": "/opt/hostedtoolcache/Python/3.13.7/x64.complete"
+      }
     },
     "actions/setup-go": {
       "tool": "go",
@@ -49,6 +84,27 @@
       "field": "version",
       "versions": [
         "2.5.6"
+      ]
+    },
+    "oven-sh/setup-bun": {
+      "tool": "bun",
+      "field": "bun-version",
+      "versions": [
+        "1.3.11"
+      ]
+    },
+    "hashicorp/setup-terraform": {
+      "tool": "terraform",
+      "field": "terraform_version",
+      "versions": [
+        "1.15.8"
+      ]
+    },
+    "actions/setup-java": {
+      "tool": "java-17",
+      "field": "java-version",
+      "versions": [
+        "17.0.19"
       ]
     }
   },
@@ -450,6 +506,185 @@
       ],
       "command": "cargo --version",
       "expected": ""
+    },
+    {
+      "name": "bun",
+      "version": "1.3.11",
+      "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.11/bun-linux-x64.zip",
+      "sha256": "8611ba935af886f05a6f38740a15160326c15e5d5d07adef966130b4493607ed",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "bun --version",
+      "expected": "1.3.11"
+    },
+    {
+      "name": "terraform",
+      "version": "1.15.8",
+      "source": "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip",
+      "sha256": "d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "terraform version",
+      "expected": "Terraform v1.15.8"
+    },
+    {
+      "name": "node-20",
+      "version": "20.19.6",
+      "source": "https://nodejs.org/dist/v20.19.6/node-v20.19.6-linux-x64.tar.xz",
+      "sha256": "c514127107ebf6e3885f793b06674574d71fe22e3df91a78c52c5a6f84b3b5b0",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/opt/node-v20.19.6-linux-x64/bin/node --version",
+      "expected": "v20.19.6"
+    },
+    {
+      "name": "node-24.14",
+      "version": "24.14.1",
+      "source": "https://nodejs.org/dist/v24.14.1/node-v24.14.1-linux-x64.tar.xz",
+      "sha256": "84d38715d449447117d05c3e71acd78daa49d5b1bfa8aacf610303920c3322be",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/opt/node-v24.14.1-linux-x64/bin/node --version",
+      "expected": "v24.14.1"
+    },
+    {
+      "name": "node-24.19",
+      "version": "24.19.0",
+      "source": "https://nodejs.org/dist/v24.19.0/node-v24.19.0-linux-x64.tar.xz",
+      "sha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/opt/node-v24.19.0-linux-x64/bin/node --version",
+      "expected": "v24.19.0"
+    },
+    {
+      "name": "python-3.11",
+      "version": "3.11.13",
+      "source": "https://github.com/actions/python-versions/releases/download/3.11.13-15433298024/python-3.11.13-linux-24.04-x64.tar.gz",
+      "sha256": "bf58712e13464122707e63d8913f17aaeff63293ee4c0cee11ce9f76b188fab6",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/opt/python-3.11.13/bin/python3 --version",
+      "expected": "Python 3.11.13"
+    },
+    {
+      "name": "python-3.13",
+      "version": "3.13.7",
+      "source": "https://github.com/actions/python-versions/releases/download/3.13.7-16980743123/python-3.13.7-linux-24.04-x64.tar.gz",
+      "sha256": "06962ffec2157889b6edaddcfc47e96c3b002a55db076adcd0144d7d7a3b716d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/opt/python-3.13.7/bin/python3 --version",
+      "expected": "Python 3.13.7"
+    },
+    {
+      "name": "java-17",
+      "version": "17.0.19",
+      "source": "Ubuntu snapshot 20260810T000000Z package openjdk-17-jdk",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "/usr/lib/jvm/java-17-openjdk-amd64/bin/java -version",
+      "expected": "17.0.19"
+    },
+    {
+      "name": "codex",
+      "version": "0.148.0",
+      "source": "https://registry.npmjs.org/@openai/codex/-/codex-0.148.0-linux-x64.tgz",
+      "sha256": "52f1b8f5cf66fe776d2bd5e68a32ef6884b7e466fd80614bf8858046dfa9012f",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "codex --version",
+      "expected": "codex-cli 0.148.0"
+    },
+    {
+      "name": "claude-code",
+      "version": "2.1.236",
+      "source": "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-2.1.236.tgz",
+      "sha256": "2414f2c35505033e1cc8e50f0d7f3c49fe1af180820a236b1d4733bca4c7bc9d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "claude --version",
+      "expected": "2.1.236"
+    },
+    {
+      "name": "opencode",
+      "version": "1.18.18",
+      "source": "https://github.com/anomalyco/opencode/releases/download/v1.18.18/opencode-linux-x64.tar.gz",
+      "sha256": "0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "opencode --version",
+      "expected": "1.18.18"
+    },
+    {
+      "name": "xcsh",
+      "version": "20.20.3",
+      "source": "https://github.com/f5-sales-demo/xcsh/releases/download/v20.20.3/xcsh-linux-x64",
+      "sha256": "cb5c51e0912b7beec947f319049e7ec862a656e816fc1e2fbc1b36a060c51c8d",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "xcsh --version",
+      "expected": "xcsh/20.20.3"
+    },
+    {
+      "name": "tfplugindocs",
+      "version": "0.25.0",
+      "source": "https://github.com/hashicorp/terraform-plugin-docs/releases/download/v0.25.0/tfplugindocs_0.25.0_linux_amd64.zip",
+      "sha256": "912bd663e2deafc9ebf54e932bd2adf91bf6b7fcf545d4d9a82dc9597255854c",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "tfplugindocs --version",
+      "expected": "0.25.0"
+    },
+    {
+      "name": "golangci-lint",
+      "version": "2.12.2",
+      "source": "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-linux-amd64.tar.gz",
+      "sha256": "8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "golangci-lint --version",
+      "expected": "2.12.2"
+    },
+    {
+      "name": "govulncheck",
+      "version": "1.6.0",
+      "source": "golang.org/x/vuln/cmd/govulncheck module v1.6.0",
+      "module_sum": "h1:FeMO9Rm/HwyduOztbvKcOw+zvDEPr4I4aQNSfevFcKY=",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "GOVULNDB=off govulncheck -version",
+      "expected": "1.6.0"
     }
   ]
 }
