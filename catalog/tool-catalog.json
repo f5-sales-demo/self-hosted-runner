@@ -78,7 +78,10 @@
       "field": "version",
       "versions": [
         "0.8.24"
-      ]
+      ],
+      "cache_paths": {
+        "0.8.24": "/opt/hostedtoolcache/uv/0.8.24/x86_64.complete"
+      }
     },
     "biomejs/setup-biome": {
       "tool": "biome",
