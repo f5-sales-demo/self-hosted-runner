@@ -42,6 +42,8 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("--no-cache", publish)
         self.assertIn("--provenance=mode=max", publish)
         self.assertIn("--sbom=true", publish)
+        self.assertIn("docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f", publish)
+        self.assertIn("driver: docker-container", publish)
         self.assertIn("actions/attest-build-provenance@", publish)
         self.assertIn("actions/attest-sbom@", publish)
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
