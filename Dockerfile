@@ -188,6 +188,10 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && chown -R runner:runner "$AGENT_TOOLSDIRECTORY"
 
 RUN set -eux; \
+    install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64"; \
+    ln -s /usr/local/bin/uv "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"; \
+    ln -s /usr/local/bin/uvx "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uvx"; \
+    touch "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64.complete"; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/ruff.tar.gz "https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"; \
     echo "${RUFF_SHA256}  /tmp/ruff.tar.gz" | sha256sum --check --strict; \
     install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64"; \

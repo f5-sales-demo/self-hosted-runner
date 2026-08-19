@@ -65,5 +65,17 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("ARG RUFF_VERSION=0.16.0", dockerfile)
         self.assertIn('"$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64.complete"', dockerfile)
 
+    def test_setup_uv_is_preloaded_in_the_immutable_tool_cache(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        setup_uv = catalog["setup_actions"]["astral-sh/setup-uv"]
+        self.assertEqual(["0.8.24"], setup_uv["versions"])
+        self.assertEqual(
+            "/opt/hostedtoolcache/uv/0.8.24/x86_64.complete",
+            setup_uv["cache_paths"]["0.8.24"],
+        )
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64.complete"', dockerfile)
+        self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"', dockerfile)
+
 if __name__ == "__main__":
     unittest.main()
