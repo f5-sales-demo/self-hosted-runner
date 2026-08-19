@@ -38,6 +38,8 @@ ARG UV_VERSION=0.8.24
 ARG UV_SHA256=db8179fffd97b7557b9a519bae82eaa4f499b02ef546f738a35e74e26c47e6b7
 ARG BIOME_VERSION=2.5.6
 ARG BIOME_SHA256=3cc9a0c3fa26ac26a89e8a3b203c010c9ae88e36f69a2679e79981f267ce9d57
+ARG RUFF_VERSION=0.16.0
+ARG RUFF_SHA256=98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865
 ARG GCLOUD_VERSION=579.0.0
 ARG GCLOUD_SHA256=a9a7fbe51cda37cf6142b1bbcff12227550e60a6c67e8cf84644fb301371c4de
 ARG KUBECTL_VERSION=1.36.3
@@ -185,6 +187,13 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
     && chown -R runner:runner "$AGENT_TOOLSDIRECTORY"
 
+RUN set -eux; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/ruff.tar.gz "https://github.com/astral-sh/ruff/releases/download/${RUFF_VERSION}/ruff-x86_64-unknown-linux-gnu.tar.gz"; \
+    echo "${RUFF_SHA256}  /tmp/ruff.tar.gz" | sha256sum --check --strict; \
+    install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64"; \
+    tar --extract --gzip --file /tmp/ruff.tar.gz --directory "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64" --strip-components=1; \
+    touch "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64.complete"; \
+    rm -f /tmp/ruff.tar.gz
 COPY --chown=root:root scripts/runner-entrypoint.sh /usr/local/bin/runner-entrypoint
 COPY --chown=root:root scripts/verify-tools.py /usr/local/bin/verify-runner-tools
 COPY --chown=root:root catalog/tool-catalog.json /usr/local/share/runner-catalog/tool-catalog.json

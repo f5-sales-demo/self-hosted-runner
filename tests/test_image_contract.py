@@ -50,6 +50,20 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
 
+    def test_ruff_action_is_preloaded_in_the_immutable_tool_cache(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        ruff_action = catalog["setup_actions"]["astral-sh/ruff-action"]
+        self.assertEqual(["0.16.0"], ruff_action["versions"])
+        self.assertEqual(
+            "/opt/hostedtoolcache/ruff/0.16.0/x86_64.complete",
+            ruff_action["cache_paths"]["0.16.0"],
+        )
+        ruff = next(tool for tool in catalog["tools"] if tool["name"] == "ruff")
+        self.assertEqual("0.16.0", ruff["version"])
+        self.assertRegex(ruff["sha256"], r"^[0-9a-f]{64}$")
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG RUFF_VERSION=0.16.0", dockerfile)
+        self.assertIn('"$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64.complete"', dockerfile)
 
 if __name__ == "__main__":
     unittest.main()
