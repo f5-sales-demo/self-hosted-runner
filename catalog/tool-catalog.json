@@ -335,15 +335,15 @@
     },
     {
       "name": "google-chrome",
-      "version": "151.0.7922.108",
-      "source": "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_151.0.7922.108-1_amd64.deb",
-      "sha256": "bfb6e6d345055eb481a50db423256fa2732ce010f785a56c327e213a638efdef",
+      "version": "151.0.7922.77",
+      "source": "https://storage.googleapis.com/chrome-for-testing-public/151.0.7922.77/linux64/chrome-linux64.zip",
+      "sha256": "60a324a6e1d27b20f2035a2cdaf71641a739fe1f5571f63794773225820bce8a",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "google-chrome --version",
-      "expected": "Google Chrome 151.0.7922.108"
+      "expected": "Google Chrome for Testing 151.0.7922.77"
     },
     {
       "name": "chromedriver",

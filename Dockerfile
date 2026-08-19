@@ -26,8 +26,8 @@ ARG HELM_SHA256=15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
 ARG ANDROID_TOOLS_REVISION=11076708
 ARG ANDROID_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
 ARG APT_SNAPSHOT=20260810T000000Z
-ARG CHROME_VERSION=151.0.7922.108
-ARG CHROME_SHA256=bfb6e6d345055eb481a50db423256fa2732ce010f785a56c327e213a638efdef
+ARG CHROME_VERSION=151.0.7922.77
+ARG CHROME_SHA256=60a324a6e1d27b20f2035a2cdaf71641a739fe1f5571f63794773225820bce8a
 ARG CHROMEDRIVER_VERSION=151.0.7922.77
 ARG CHROMEDRIVER_SHA256=65dca829d176845f864b794be1ecdd31e855f14ca9fa1eb93b2d1c0e7242abdd
 ARG GECKODRIVER_VERSION=0.37.1
@@ -79,9 +79,9 @@ RUN set -eux; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/powershell.tar.gz "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-x64.tar.gz"; \
     echo "${POWERSHELL_SHA256}  /tmp/powershell.tar.gz" | sha256sum --check --strict; mkdir -p /opt/powershell && tar --extract --gzip --file /tmp/powershell.tar.gz --directory /opt/powershell; \
     chmod 0555 /opt/powershell/pwsh && ln -s /opt/powershell/pwsh /usr/local/bin/pwsh; \
-    curl --fail --location --proto =https --tlsv1.2 --output /tmp/google-chrome.deb \
-      "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable-${CHROME_VERSION}-1_amd64.deb"; \
-    echo "${CHROME_SHA256}  /tmp/google-chrome.deb" | sha256sum --check --strict; apt-get update && apt-get install --yes /tmp/google-chrome.deb && rm -rf /var/lib/apt/lists/*; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/chrome.zip \
+      "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_VERSION}/linux64/chrome-linux64.zip"; \
+    echo "${CHROME_SHA256}  /tmp/chrome.zip" | sha256sum --check --strict; unzip -q /tmp/chrome.zip -d /opt && ln -s /opt/chrome-linux64/chrome /usr/local/bin/google-chrome; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/chromedriver.zip \
       "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"; \
     echo "${CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum --check --strict; unzip -q /tmp/chromedriver.zip -d /opt && ln -s /opt/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver; \
@@ -104,8 +104,8 @@ RUN set -eux; \
     echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp && install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
-    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/google-chrome.deb /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
-    chown -R runner:runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chromedriver-linux64 /opt/google-cloud-sdk
+    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
+    chown -R runner:runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
