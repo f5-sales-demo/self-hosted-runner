@@ -34,7 +34,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Fail when maintenance is needed
-        if: steps.updates.outcome != "success"
+        if: steps.updates.outcome != 'success'
         run: |
           echo "An upstream update is available, or an update source could not be queried."
           echo "Review the attached report; update versions, URLs, and checksums together in a normal pull request."
