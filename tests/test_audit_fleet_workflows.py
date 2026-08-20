@@ -108,5 +108,35 @@ class FleetAuditTests(unittest.TestCase):
         self.assertTrue(any("has no dependency classification" in item.message for item in findings))
 
 
+    def test_github_client_retries_only_transient_errors_with_pacing(self) -> None:
+        calls, sleeps = [], []
+        outcomes = [RuntimeError("HTTP 503"), "ok"]
+
+        def run(args, *, timeout):
+            calls.append((args, timeout))
+            value = outcomes.pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        client = AUDIT.GitHubClient(
+            timeout=7,
+            attempts=2,
+            minimum_interval=3,
+            command_fn=run,
+            clock=lambda: 10,
+            sleep_fn=sleeps.append,
+        )
+        self.assertEqual(client.request(["gh", "api", "example"]), "ok")
+        self.assertEqual([item[1] for item in calls], [7, 7])
+        self.assertEqual(sleeps, [3])
+        with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
+            AUDIT.GitHubClient(
+                command_fn=lambda _args, *, timeout: (_ for _ in ()).throw(
+                    RuntimeError("HTTP 404")
+                )
+            ).request(["gh"])
+
+
 if __name__ == "__main__":
     unittest.main()
