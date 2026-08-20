@@ -76,6 +76,37 @@ class FleetAuditTests(unittest.TestCase):
         findings = AUDIT.audit_workflows("f5-sales-demo/fixture", workflows, self.catalog["setup_actions"])
         self.assertIn("marketplace action must be pinned to a full commit SHA", findings[0].message)
 
+    def test_inventory_classifies_actions_and_rejects_socket_on_standard(self) -> None:
+        workflows = {".github/workflows/test.yml": workflow([
+            "name: test", "on: push", "jobs:", "  verify:",
+            "    runs-on: [self-hosted, Linux, X64, fixture, ubuntu-24.04]", "    steps:",
+            "      - uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "      - uses: docker/login-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ])}
+        profiles = {tool["name"]: set(tool["profiles"]) for tool in self.catalog["tools"]}
+        inventory = {}
+        findings = AUDIT.audit_workflows(
+            "f5-sales-demo/fixture", workflows, self.catalog["setup_actions"],
+            self.catalog["marketplace_actions"], profiles, inventory,
+        )
+        self.assertTrue(any("docker-socket action is not allowed" in item.message for item in findings))
+        result = {item["name"]: item for item in AUDIT.inventory_json(inventory)}
+        self.assertEqual(result["actions/checkout"]["classification"], "runner-runtime-consumer")
+        self.assertEqual(result["docker/login-action"]["profiles"], ["standard"])
+
+    def test_unknown_marketplace_action_requires_a_dependency_classification(self) -> None:
+        workflows = {".github/workflows/test.yml": workflow([
+            "name: test", "on: push", "jobs:", "  verify:",
+            "    runs-on: self-hosted", "    steps:",
+            "      - uses: vendor/action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ])}
+        profiles = {tool["name"]: set(tool["profiles"]) for tool in self.catalog["tools"]}
+        findings = AUDIT.audit_workflows(
+            "f5-sales-demo/fixture", workflows, self.catalog["setup_actions"],
+            self.catalog["marketplace_actions"], profiles, {},
+        )
+        self.assertTrue(any("has no dependency classification" in item.message for item in findings))
+
 
 if __name__ == "__main__":
     unittest.main()
