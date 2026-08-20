@@ -77,6 +77,15 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64.complete"', dockerfile)
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"', dockerfile)
 
+    def test_setup_python_cache_has_python_and_pip_entrypoints(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        verifier = (ROOT / "scripts/verify-tools.py").read_text(encoding="utf-8")
+        self.assertIn("ln -s python3 /opt/python-${PYTHON311_VERSION}/bin/python", dockerfile)
+        self.assertIn("ln -s pip3 /opt/python-${PYTHON311_VERSION}/bin/pip", dockerfile)
+        self.assertIn("ln -s python3 /opt/python-${PYTHON313_VERSION}/bin/python", dockerfile)
+        self.assertIn("ln -s pip3 /opt/python-${PYTHON313_VERSION}/bin/pip", dockerfile)
+        self.assertIn("cache PATH did not resolve its python and pip entrypoints", verifier)
+
     def test_pnpm_and_spectral_are_immutable_image_tools(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         tools = {tool["name"]: tool for tool in catalog["tools"]}
