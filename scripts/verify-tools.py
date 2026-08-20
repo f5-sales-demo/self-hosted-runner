@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,14 @@ def main() -> int:
             if not Path(marker).is_file():
                 failures.append("{}: missing tool-cache marker {}".format(action, marker))
         print("[ok] {} catalog {}".format(action, ", ".join(cache["versions"])))
+    for version, marker in raw["setup_actions"].get("actions/setup-python", {}).get("cache_paths", {}).items():
+        tool_bin = Path(marker).with_suffix("") / "bin"
+        code, output = run("PATH={}:$PATH; export PATH; command -v python; python --version; command -v pip; pip --version".format(shlex.quote(str(tool_bin))))
+        expected = "Python {}".format(version)
+        if code or str(tool_bin / "python") not in output or str(tool_bin / "pip") not in output or expected not in output:
+            failures.append("actions/setup-python {}: cache PATH did not resolve its python and pip entrypoints: {!r}".format(version, output.strip()))
+        else:
+            print("[ok] actions/setup-python {} cache entrypoints".format(version))
     docker_code, _ = run("command -v docker")
     if args.profile == "standard" and docker_code == 0:
         failures.append("standard profile unexpectedly contains docker")

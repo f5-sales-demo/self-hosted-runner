@@ -149,8 +149,12 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/node20.tar.xz "htt
     mkdir -p /opt/python-${PYTHON311_VERSION} /opt/python-${PYTHON313_VERSION}; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/python311.tar.gz "https://github.com/actions/python-versions/releases/download/3.11.13-15433298024/python-${PYTHON311_VERSION}-linux-24.04-x64.tar.gz"; \
     echo "${PYTHON311_SHA256}  /tmp/python311.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/python311.tar.gz --directory /opt/python-${PYTHON311_VERSION}; \
+    ln -s python3 /opt/python-${PYTHON311_VERSION}/bin/python; \
+    ln -s pip3 /opt/python-${PYTHON311_VERSION}/bin/pip; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/python313.tar.gz "https://github.com/actions/python-versions/releases/download/3.13.7-16980743123/python-${PYTHON313_VERSION}-linux-24.04-x64.tar.gz"; \
     echo "${PYTHON313_SHA256}  /tmp/python313.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/python313.tar.gz --directory /opt/python-${PYTHON313_VERSION}; \
+    ln -s python3 /opt/python-${PYTHON313_VERSION}/bin/python; \
+    ln -s pip3 /opt/python-${PYTHON313_VERSION}/bin/pip; \
 curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https://registry.npmjs.org/@openai/codex/-/codex-${CODEX_VERSION}-linux-x64.tgz"; \
     echo "${CODEX_SHA256}  /tmp/codex.tgz" | sha256sum --check --strict; mkdir -p /opt/codex && tar --extract --gzip --file /tmp/codex.tgz --directory /opt/codex && ln -s /opt/codex/package/vendor/x86_64-unknown-linux-musl/bin/codex /usr/local/bin/codex; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/claude-code.tgz "https://registry.npmjs.org/@anthropic-ai/claude-code-linux-x64/-/claude-code-linux-x64-${CLAUDE_CODE_VERSION}.tgz"; \
