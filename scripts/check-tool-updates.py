@@ -49,6 +49,11 @@ def npm(config: dict[str, Any]) -> str:
     return str(document["dist-tags"][config.get("tag", "latest")])
 
 
+def antigravity_manifest(config: dict[str, Any]) -> str:
+    document = request_json(str(config["manifest_url"]))
+    return str(document["version"])
+
+
 def node(config: dict[str, Any], installed: str) -> str:
     major = int(installed.split(".", 1)[0])
     releases = request_json("https://nodejs.org/dist/index.json")
@@ -69,6 +74,8 @@ def latest(tool: dict[str, Any], config: dict[str, Any]) -> str:
         return github_release(config)
     if strategy == "npm":
         return npm(config)
+    if strategy == "antigravity-manifest":
+        return antigravity_manifest(config)
     if strategy == "node":
         return node(config, str(tool["version"]))
     if strategy == "go-module":

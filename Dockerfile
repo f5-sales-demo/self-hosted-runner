@@ -66,6 +66,9 @@ ARG CLAUDE_CODE_VERSION=2.1.236
 ARG CLAUDE_CODE_SHA256=2414f2c35505033e1cc8e50f0d7f3c49fe1af180820a236b1d4733bca4c7bc9d
 ARG OPENCODE_VERSION=1.18.18
 ARG OPENCODE_SHA256=0cddc222418b8553669905a8980c0cda7088f00da24d83d6ac76b01c9fdb2aaf
+ARG AGY_VERSION=1.1.15
+ARG AGY_RELEASE=1.1.15-5350383476932608
+ARG AGY_SHA256=d0b1d6f3678a061915caebc431930e240b863bf4059369c08c6ffceb24e66b5f
 ARG XCSH_VERSION=20.20.3
 ARG XCSH_SHA256=cb5c51e0912b7beec947f319049e7ec862a656e816fc1e2fbc1b36a060c51c8d
 
@@ -152,6 +155,8 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${CLAUDE_CODE_SHA256}  /tmp/claude-code.tgz" | sha256sum --check --strict; mkdir -p /opt/claude-code && tar --extract --gzip --file /tmp/claude-code.tgz --directory /opt/claude-code && install -m 0555 /opt/claude-code/package/claude /usr/local/bin/claude; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/opencode.tar.gz "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-x64.tar.gz"; \
     echo "${OPENCODE_SHA256}  /tmp/opencode.tar.gz" | sha256sum --check --strict; mkdir -p /opt/opencode && tar --extract --gzip --file /tmp/opencode.tar.gz --directory /opt/opencode && install -m 0555 /opt/opencode/opencode /usr/local/bin/opencode; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/agy.tar.gz "https://storage.googleapis.com/antigravity-public/antigravity-cli/${AGY_RELEASE}/linux-x64/cli_linux_x64.tar.gz"; \
+    echo "${AGY_SHA256}  /tmp/agy.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/agy.tar.gz --directory /tmp antigravity && install -m 0555 /tmp/antigravity /usr/local/bin/agy; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/xcsh "https://github.com/f5-sales-demo/xcsh/releases/download/v${XCSH_VERSION}/xcsh-linux-x64"; \
     echo "${XCSH_SHA256}  /tmp/xcsh" | sha256sum --check --strict; install -m 0555 /tmp/xcsh /usr/local/bin/xcsh; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"; \
@@ -167,7 +172,7 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp && install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
-    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
+    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
     chown -R runner:runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node

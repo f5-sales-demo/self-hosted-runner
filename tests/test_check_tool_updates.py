@@ -26,3 +26,20 @@ class CheckToolUpdatesTest(unittest.TestCase):
             self.assertEqual("snapshot", skipped[0]["name"])
         finally:
             updates.latest = original
+
+    def test_antigravity_manifest_uses_the_official_version_field(self):
+        original = updates.request_json
+        try:
+            updates.request_json = lambda url: {"version": "1.2.3"}
+            self.assertEqual(
+                "1.2.3",
+                updates.latest(
+                    {"version": "1.1.15"},
+                    {
+                        "strategy": "antigravity-manifest",
+                        "manifest_url": "https://example.invalid/manifests/linux_amd64.json",
+                    },
+                ),
+            )
+        finally:
+            updates.request_json = original
