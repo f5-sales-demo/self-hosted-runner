@@ -23,6 +23,7 @@
     "kustomize": {"strategy": "github-release", "repository": "kubernetes-sigs/kustomize"},
     "bun": {"strategy": "github-release", "repository": "oven-sh/bun"},
     "opencode": {"strategy": "github-release", "repository": "anomalyco/opencode"},
+    "agy": {"strategy": "antigravity-manifest", "manifest_url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json"},
     "xcsh": {"strategy": "github-release", "repository": "f5-sales-demo/xcsh"},
     "codex": {"strategy": "npm", "package": "@openai/codex"},
     "claude-code": {"strategy": "npm", "package": "@anthropic-ai/claude-code-linux-x64"},
@@ -663,6 +664,18 @@
       ],
       "command": "opencode --version",
       "expected": "1.18.18"
+    },
+    {
+      "name": "agy",
+      "version": "1.1.15",
+      "source": "https://storage.googleapis.com/antigravity-public/antigravity-cli/1.1.15-5350383476932608/linux-x64/cli_linux_x64.tar.gz",
+      "sha256": "d0b1d6f3678a061915caebc431930e240b863bf4059369c08c6ffceb24e66b5f",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "agy --version",
+      "expected": "1.1.15"
     },
     {
       "name": "xcsh",
