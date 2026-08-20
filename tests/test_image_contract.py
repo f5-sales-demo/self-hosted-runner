@@ -77,6 +77,17 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64.complete"', dockerfile)
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"', dockerfile)
 
+    def test_setup_go_uses_the_action_compatible_lowercase_cache_path(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        setup_go = catalog["setup_actions"]["actions/setup-go"]
+        self.assertEqual(
+            "/opt/hostedtoolcache/go/1.25.12/x64.complete",
+            setup_go["cache_path"],
+        )
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn('"$AGENT_TOOLSDIRECTORY/go/1.25.12/x64.complete"', dockerfile)
+        self.assertNotIn('"$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64.complete"', dockerfile)
+
     def test_setup_python_cache_has_python_and_pip_entrypoints(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         verifier = (ROOT / "scripts/verify-tools.py").read_text(encoding="utf-8")

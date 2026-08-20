@@ -15,6 +15,12 @@ Every production reference is an immutable `ghcr.io/f5-sales-demo/self-hosted-ru
 - The GitHub Actions runner, GitHub CLI, Go, .NET, PowerShell, AWS CLI, Helm, and Android command-line tools use versioned HTTPS URLs and verified SHA-256 checksums.
 - `catalog/tool-catalog.json` records the exact runner-images reference revision, installed tools, setup-action cache entries, sources, and version checks. `scripts/verify-tools.py` is installed in every target and validates the image contract.
 
+## Setup-action cache contract
+
+`/opt/hostedtoolcache` is an immutable image seed and remains read-only at runtime. `docs-control` copies that seed into each ephemeral runner's mounted workspace and exposes the private copy as `RUNNER_TOOL_CACHE`; setup actions can therefore use catalogued cache hits and install a missing version without mutating the image or sharing a host cache. `actions/setup-go` requires the lowercase `go` directory, so the Go seed is `/opt/hostedtoolcache/go/<version>/x64.complete`.
+
+The runtime cache is removed with the ephemeral runner workspace after every job. It is deliberately not a persistent host cache or a third image-authority path.
+
 The locked reference is [`actions/runner-images@8926c75ceb03577c5cc94415743a88f548b781ab`](https://github.com/actions/runner-images/tree/8926c75ceb03577c5cc94415743a88f548b781ab), Ubuntu 24.04 image version `20260810.271.1`. GitHub-hosted runner images are VM images, not a supported Docker base, so this project deliberately builds a container-compatible tool catalogue instead of inheriting an unsupported hosted-runner Dockerfile.
 
 ## Local commands

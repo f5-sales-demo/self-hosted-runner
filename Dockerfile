@@ -188,16 +188,16 @@ COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
 COPY --from=node-cli /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/node/20.19.6" "$AGENT_TOOLSDIRECTORY/node/22.23.2" "$AGENT_TOOLSDIRECTORY/node/24.14.1" "$AGENT_TOOLSDIRECTORY/node/24.19.0" "$AGENT_TOOLSDIRECTORY/Go/1.25.12" "$AGENT_TOOLSDIRECTORY/Python/3.11.13" "$AGENT_TOOLSDIRECTORY/Python/3.12.3" "$AGENT_TOOLSDIRECTORY/Python/3.13.7" \
+    && install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/node/20.19.6" "$AGENT_TOOLSDIRECTORY/node/22.23.2" "$AGENT_TOOLSDIRECTORY/node/24.14.1" "$AGENT_TOOLSDIRECTORY/node/24.19.0" "$AGENT_TOOLSDIRECTORY/go/1.25.12" "$AGENT_TOOLSDIRECTORY/Python/3.11.13" "$AGENT_TOOLSDIRECTORY/Python/3.12.3" "$AGENT_TOOLSDIRECTORY/Python/3.13.7" \
     && ln -s /opt/node-v20.19.6-linux-x64 "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64" \
     && ln -s /usr/local "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64" \
     && ln -s /opt/node-v24.14.1-linux-x64 "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64" \
     && ln -s /opt/node-v24.19.0-linux-x64 "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64" \
-    && ln -s /opt/go "$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64" \
+    && ln -s /opt/go "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64" \
     && ln -s /opt/python-3.11.13 "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64" \
     && ln -s /usr "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64" \
     && ln -s /opt/python-3.13.7 "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64" \
-    && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
+    && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
     && chown -R runner:runner "$AGENT_TOOLSDIRECTORY"
 
 RUN printf '%s\n' '#!/bin/sh' 'exec node /opt/pnpm/package/bin/pnpm.cjs "$@"' > /usr/local/bin/pnpm \
