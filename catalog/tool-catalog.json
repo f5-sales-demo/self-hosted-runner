@@ -74,7 +74,7 @@
       "versions": [
         "1.25.12"
       ],
-      "cache_path": "/opt/hostedtoolcache/Go/1.25.12/x64.complete"
+      "cache_path": "/opt/hostedtoolcache/go/1.25.12/x64.complete"
     },
     "astral-sh/setup-uv": {
       "tool": "uv",
