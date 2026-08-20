@@ -32,7 +32,9 @@ The fleet audit is safe to run from a GitHub-hosted job or from a checkout of th
 python3 scripts/audit-fleet-workflows.py --checkouts-root /path/to/checkouts
 ```
 
-It considers lockfile installs such as `npm ci`, `bun install --frozen-lockfile`, and `pip install -r requirements.txt` job-local. Self-hosted setup actions, floating tool versions, global installs, curl/wget installers, and privileged package installation are rejected unless their tool is supplied by the catalogue.
+Its JSON output contains a machine-readable inventory of every Marketplace action used by a self-hosted job, its full-SHA references, and its dependency classification. Every action must be classified as an image-tool setup, runner-runtime consumer, Docker/socket consumer, or workflow-only; unclassified actions fail the audit.
+
+It considers lockfile installs such as `npm ci`, `bun install --frozen-lockfile`, and `pip install -r requirements.txt` job-local. Self-hosted setup actions, floating tool versions, global installs, curl/wget installers, privileged package installation, and Docker/socket actions outside `container-build` are rejected unless their tool is supplied by the catalogue.
 
 ## Upstream update detection
 

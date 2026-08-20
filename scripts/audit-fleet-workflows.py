@@ -64,10 +64,29 @@ def exact(value: object) -> bool:
     return isinstance(value, str) and bool(EXACT_VERSION.fullmatch(value))
 
 
-def audit_job(document: dict, relative: str, job_name: str, job: object, setup: dict) -> Iterable[Finding]:
+def target_profile(job: dict) -> str:
+    labels = job.get("runs-on")
+    if isinstance(labels, str):
+        return "container-build" if labels == "container-build" else "standard"
+    return "container-build" if "container-build" in labels else "standard"
+
+
+def record_action(inventory: dict[str, dict], name: str, reference: str, profile: str, location: str, config: dict | None) -> None:
+    item = inventory.setdefault(name, {"name": name, "classification": config.get("classification", "uncatalogued") if config else "uncatalogued", "tool": config.get("tool") if config else None, "references": set(), "profiles": set(), "locations": set()})
+    item["references"].add(reference)
+    item["profiles"].add(profile)
+    item["locations"].add(location)
+
+
+def inventory_json(inventory: dict[str, dict]) -> list[dict]:
+    return [{"name": item["name"], "classification": item["classification"], "tool": item["tool"], "references": sorted(item["references"]), "profiles": sorted(item["profiles"]), "locations": sorted(item["locations"])} for _, item in sorted(inventory.items())]
+
+
+def audit_job(document: dict, relative: str, job_name: str, job: object, setup: dict, marketplace: dict | None = None, tool_profiles: dict | None = None, inventory: dict | None = None) -> Iterable[Finding]:
     if not isinstance(job, dict) or not is_self_hosted(job.get("runs-on")):
         return ()
     findings: list[Finding] = []
+    profile = target_profile(job)
     for index, step in enumerate(job.get("steps", [])):
         location = "{}/{}/steps/{}".format(relative, job_name, index)
         if not isinstance(step, dict):
@@ -77,6 +96,8 @@ def audit_job(document: dict, relative: str, job_name: str, job: object, setup: 
         if isinstance(uses, str) and not uses.startswith(("./", "docker://")):
             name = action_name(uses)
             reference = uses.rsplit("@", 1)[1] if "@" in uses else ""
+            config = marketplace.get(name) if marketplace is not None else None
+            if inventory is not None: record_action(inventory, name, reference, profile, location, config)
             if not ACTION_SHA.fullmatch(reference):
                 findings.append(Finding("error", location, "marketplace action must be pinned to a full commit SHA: {}".format(uses)))
             if name in setup:
@@ -91,6 +112,19 @@ def audit_job(document: dict, relative: str, job_name: str, job: object, setup: 
                 findings.append(Finding("error", location, "uncatalogued setup action {}".format(name)))
             elif "download" in name and name not in {"actions/download-artifact"}:
                 findings.append(Finding("error", location, "uncatalogued download action {}".format(name)))
+            elif marketplace is not None and config is None:
+                findings.append(Finding("error", location, "marketplace action has no dependency classification: {}".format(name)))
+            if config is not None:
+                classification, tool = config.get("classification"), config.get("tool")
+                if classification not in {"image-tool-setup", "runner-runtime-consumer", "docker-socket-consumer", "workflow-only"}:
+                    findings.append(Finding("error", location, "marketplace action has invalid dependency classification: {}".format(name)))
+                elif classification != "workflow-only":
+                    if not isinstance(tool, str) or tool not in (tool_profiles or {}):
+                        findings.append(Finding("error", location, "marketplace action requires an uncatalogued image tool: {}".format(name)))
+                    elif profile not in tool_profiles[tool]:
+                        findings.append(Finding("error", location, "marketplace action tool is unavailable in {}: {}".format(profile, name)))
+                if classification == "docker-socket-consumer" and profile != "container-build":
+                    findings.append(Finding("error", location, "docker-socket action is not allowed on the standard profile: {}".format(name)))
         run = step.get("run")
         if not isinstance(run, str):
             continue
@@ -102,7 +136,7 @@ def audit_job(document: dict, relative: str, job_name: str, job: object, setup: 
     return findings
 
 
-def audit_workflows(repository: str, workflows: dict[str, str], setup: dict) -> list[Finding]:
+def audit_workflows(repository: str, workflows: dict[str, str], setup: dict, marketplace: dict | None = None, tool_profiles: dict | None = None, inventory: dict | None = None) -> list[Finding]:
     findings: list[Finding] = []
     for relative, content in sorted(workflows.items()):
         try:
@@ -114,7 +148,7 @@ def audit_workflows(repository: str, workflows: dict[str, str], setup: dict) -> 
             findings.append(Finding("error", relative, "workflow must have a jobs object"))
             continue
         for name, job in document["jobs"].items():
-            findings.extend(audit_job(document, "{}/{}".format(repository, relative), str(name), job, setup))
+            findings.extend(audit_job(document, "{}/{}".format(repository, relative), str(name), job, setup, marketplace, tool_profiles, inventory))
     if not workflows:
         findings.append(Finding("info", repository, "no workflow files"))
     return findings
@@ -154,15 +188,18 @@ def main() -> int:
     if len(repositories) != 39 and not args.repository:
         raise SystemExit("fleet manifest must contain exactly 39 repositories")
     findings: list[Finding] = []
+    inventory: dict[str, dict] = {}
+    tool_profiles = {tool["name"]: set(tool["profiles"]) for tool in catalog["tools"] if isinstance(tool, dict) and isinstance(tool.get("name"), str) and isinstance(tool.get("profiles"), list)}
     for repository in repositories:
         workflows = checkout_workflows(args.checkouts_root, repository) if args.checkouts_root else github_workflows(repository, args.ref)
-        findings.extend(audit_workflows(repository, workflows, catalog["setup_actions"]))
+        findings.extend(audit_workflows(repository, workflows, catalog["setup_actions"], catalog.get("marketplace_actions", {}), tool_profiles, inventory))
     errors = [finding for finding in findings if finding.level == "error"]
     if args.format == "json":
-        print(json.dumps({"repositories": len(repositories), "errors": len(errors), "findings": [finding.__dict__ for finding in findings]}, indent=2, sort_keys=True))
+        print(json.dumps({"repositories": len(repositories), "errors": len(errors), "findings": [finding.__dict__ for finding in findings], "marketplace_actions": inventory_json(inventory)}, indent=2, sort_keys=True))
     else:
         for finding in findings:
             print("[{}] {}: {}".format(finding.level, finding.location, finding.message))
+        for action in inventory_json(inventory): print("[inventory] {}: {} ({}) on {}".format(action["name"], action["classification"], action["tool"] or "no image tool", ", ".join(action["profiles"])))
         print("audited {} repositories; {} errors".format(len(repositories), len(errors)))
     return 1 if errors else 0
 
