@@ -89,8 +89,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # The snapshot fixes the complete apt package set. No service is enabled or started here; every target runs as the unprivileged runner user.
 RUN rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
-    && apt-get update \
-    && apt-get install --yes --no-install-recommends \
+    && apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 update \
+    && apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
       ant bash build-essential cargo composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client \
       dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 \
       libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full \
@@ -101,6 +101,8 @@ RUN rm -f /etc/apt/sources.list.d/* \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
     && install -d -o runner -g runner /opt/actions-runner /runner-runtime "$AGENT_TOOLSDIRECTORY"
 
+ARG PNPM_VERSION=11.3.0
+ARG PNPM_SHA256=5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474
 RUN set -eux; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"; \
     echo "${GH_SHA256}  /tmp/gh.tar.gz" | sha256sum --check --strict; \
@@ -159,6 +161,8 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${AGY_SHA256}  /tmp/agy.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/agy.tar.gz --directory /tmp antigravity && install -m 0555 /tmp/antigravity /usr/local/bin/agy; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/xcsh "https://github.com/f5-sales-demo/xcsh/releases/download/v${XCSH_VERSION}/xcsh-linux-x64"; \
     echo "${XCSH_SHA256}  /tmp/xcsh" | sha256sum --check --strict; install -m 0555 /tmp/xcsh /usr/local/bin/xcsh; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/pnpm.tgz "https://registry.npmjs.org/pnpm/-/pnpm-${PNPM_VERSION}.tgz"; \
+    echo "${PNPM_SHA256}  /tmp/pnpm.tgz" | sha256sum --check --strict; mkdir -p /opt/pnpm && tar --extract --gzip --file /tmp/pnpm.tgz --directory /opt/pnpm && rm -f /tmp/pnpm.tgz; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/tfplugindocs.zip "https://github.com/hashicorp/terraform-plugin-docs/releases/download/v${TFPLUGINDOCS_VERSION}/tfplugindocs_${TFPLUGINDOCS_VERSION}_linux_amd64.zip"; \
     echo "${TFPLUGINDOCS_SHA256}  /tmp/tfplugindocs.zip" | sha256sum --check --strict; unzip -q /tmp/tfplugindocs.zip -d /tmp/tfplugindocs && install -m 0555 "$(find /tmp/tfplugindocs -type f -name tfplugindocs -print -quit)" /usr/local/bin/tfplugindocs; \
@@ -191,6 +195,17 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s /opt/python-3.13.7 "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64" \
     && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
     && chown -R runner:runner "$AGENT_TOOLSDIRECTORY"
+
+RUN printf '%s\n' '#!/bin/sh' 'exec node /opt/pnpm/package/bin/pnpm.cjs "$@"' > /usr/local/bin/pnpm \
+    && chmod 0555 /usr/local/bin/pnpm \
+    && chown -R runner:runner /opt/pnpm
+
+COPY --chown=root:root catalog/spectral-package.json /opt/spectral/package.json
+COPY --chown=root:root catalog/spectral-package-lock.json /opt/spectral/package-lock.json
+RUN cd /opt/spectral \
+    && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && ln -s /opt/spectral/node_modules/.bin/spectral /usr/local/bin/spectral \
+    && chown -R runner:runner /opt/spectral
 
 RUN set -eux; \
     install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64"; \

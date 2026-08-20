@@ -1,0 +1,9 @@
+{
+  "name": "f5-sales-demo-runner-spectral",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pinned production dependency closure for the immutable runner Spectral CLI",
+  "dependencies": {
+    "@stoplight/spectral-cli": "6.16.3"
+  }
+}

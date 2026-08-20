@@ -77,5 +77,16 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64.complete"', dockerfile)
         self.assertIn('"$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"', dockerfile)
 
+    def test_pnpm_and_spectral_are_immutable_image_tools(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        tools = {tool["name"]: tool for tool in catalog["tools"]}
+        self.assertEqual("11.3.0", tools["pnpm"]["version"])
+        self.assertEqual("6.16.3", tools["spectral"]["version"])
+        self.assertEqual(["11.3.0"], catalog["setup_actions"]["pnpm/action-setup"]["versions"])
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG PNPM_VERSION=11.3.0", dockerfile)
+        self.assertIn("exec node /opt/pnpm/package/bin/pnpm.cjs", dockerfile)
+        self.assertIn("npm ci --omit=dev --ignore-scripts --no-audit --no-fund", dockerfile)
+
 if __name__ == "__main__":
     unittest.main()
