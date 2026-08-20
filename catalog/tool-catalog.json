@@ -33,7 +33,9 @@
     "node-24.19": {"strategy": "node"},
     "tfplugindocs": {"strategy": "github-release", "repository": "hashicorp/terraform-plugin-docs"},
     "golangci-lint": {"strategy": "github-release", "repository": "golangci/golangci-lint"},
-    "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"}
+    "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"},
+    "pnpm": {"strategy": "npm", "package": "pnpm"},
+    "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"}
   },
   "setup_actions": {
     "actions/setup-node": {
@@ -121,6 +123,13 @@
       "versions": [
         "17.0.19"
       ]
+    },
+    "pnpm/action-setup": {
+      "tool": "pnpm",
+      "field": "version",
+      "versions": [
+        "11.3.0"
+      ]
     }
   },
   "marketplace_actions": {
@@ -203,6 +212,30 @@
       ],
       "command": "npm --version",
       "expected": "10."
+    },
+    {
+      "name": "pnpm",
+      "version": "11.3.0",
+      "source": "https://registry.npmjs.org/pnpm/-/pnpm-11.3.0.tgz",
+      "sha256": "5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "pnpm --version",
+      "expected": "11.3.0"
+    },
+    {
+      "name": "spectral",
+      "version": "6.16.3",
+      "source": "https://registry.npmjs.org/@stoplight/spectral-cli/-/spectral-cli-6.16.3.tgz",
+      "sha256": "12e15e818dbaa8a148fa72030e5f9f9b87a0383794c9b5f8e934f63dd12a95f2",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "spectral --version",
+      "expected": "6.16.3"
     },
     {
       "name": "python",
