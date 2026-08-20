@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -32,11 +33,75 @@ class Finding:
     message: str
 
 
-def command(args: list[str]) -> str:
-    result = subprocess.run(args, check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+def command(args: list[str], *, timeout: float | None = None) -> str:
+    try:
+        result = subprocess.run(
+            args,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            "command timed out after {} seconds: {}".format(timeout, " ".join(args))
+        ) from error
     if result.returncode:
         raise RuntimeError("command failed: {}: {}".format(" ".join(args), result.stderr.strip()))
     return result.stdout
+
+
+class GitHubClient:
+    # Bound GitHub API requests so fleet auditing cannot exhaust API capacity.
+    def __init__(
+        self,
+        *,
+        timeout: float = 30.0,
+        attempts: int = 3,
+        minimum_interval: float = 1.0,
+        command_fn=command,
+        clock=time.monotonic,
+        sleep_fn=time.sleep,
+    ) -> None:
+        self.timeout = timeout
+        self.attempts = attempts
+        self.minimum_interval = minimum_interval
+        self.command_fn = command_fn
+        self.clock = clock
+        self.sleep_fn = sleep_fn
+        self.last_request: float | None = None
+
+    @staticmethod
+    def transient(error: Exception) -> bool:
+        message = str(error).lower()
+        return (
+            "timed out" in message
+            or "timeout" in message
+            or "rate limit" in message
+            or "http 429" in message
+            or bool(re.search(r"http 5\d\d", message))
+        )
+
+    def request(self, args: list[str]) -> str:
+        for attempt in range(self.attempts):
+            if self.last_request is not None:
+                remaining = self.minimum_interval - (self.clock() - self.last_request)
+                if remaining > 0:
+                    self.sleep_fn(remaining)
+            self.last_request = self.clock()
+            try:
+                return self.command_fn(args, timeout=self.timeout)
+            except Exception as error:
+                if not self.transient(error) or attempt + 1 == self.attempts:
+                    if self.transient(error) and self.attempts > 1:
+                        raise RuntimeError(
+                            "GitHub request failed after {} attempts: {}".format(
+                                self.attempts, error
+                            )
+                        ) from error
+                    raise
+        raise AssertionError("unreachable")
 
 
 def load_json(path: Path) -> dict:
@@ -161,12 +226,14 @@ def checkout_workflows(root: Path, repository: str) -> dict[str, str]:
     return {path.relative_to(directory.parent.parent).as_posix(): path.read_text(encoding="utf-8") for path in sorted((*directory.glob("*.yml"), *directory.glob("*.yaml")))}
 
 
-def github_workflows(repository: str, ref: str) -> dict[str, str]:
-    tree = json.loads(command(["gh", "api", "repos/{}/git/trees/{}?recursive=1".format(repository, ref)]))
+def github_workflows(repository: str, ref: str, github: GitHubClient) -> dict[str, str]:
+    tree = json.loads(
+        github.request(["gh", "api", "repos/{}/git/trees/{}?recursive=1".format(repository, ref)])
+    )
     paths = [item["path"] for item in tree.get("tree", []) if item.get("type") == "blob" and item.get("path", "").startswith(".github/workflows/") and item["path"].endswith((".yml", ".yaml"))]
     result = {}
     for path in paths:
-        encoded = json.loads(command(["gh", "api", "repos/{}/contents/{}?ref={}".format(repository, path, ref)]))["content"]
+        encoded = json.loads(github.request(["gh", "api", "repos/{}/contents/{}?ref={}".format(repository, path, ref)]))["content"]
         result[path] = base64.b64decode(encoded).decode("utf-8")
     return result
 
@@ -179,6 +246,9 @@ def main() -> int:
     parser.add_argument("--github", action="store_true", help="read workflows with authenticated gh api")
     parser.add_argument("--ref", default="main")
     parser.add_argument("--repository", action="append", default=[])
+    parser.add_argument("--github-timeout", type=float, default=30.0, help="per-request gh timeout in seconds")
+    parser.add_argument("--github-attempts", type=int, default=3, help="maximum attempts for transient GitHub API failures")
+    parser.add_argument("--github-minimum-interval", type=float, default=1.0, help="minimum seconds between GitHub API requests")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     args = parser.parse_args()
     if bool(args.checkouts_root) == bool(args.github):
@@ -187,11 +257,18 @@ def main() -> int:
     repositories = args.repository or load_json(args.fleet)["repositories"]
     if len(repositories) != 39 and not args.repository:
         raise SystemExit("fleet manifest must contain exactly 39 repositories")
+    if args.github_timeout <= 0 or args.github_attempts < 1 or args.github_minimum_interval < 0:
+        parser.error("GitHub timeout and attempts must be positive; minimum interval cannot be negative")
     findings: list[Finding] = []
     inventory: dict[str, dict] = {}
+    github = GitHubClient(
+        timeout=args.github_timeout,
+        attempts=args.github_attempts,
+        minimum_interval=args.github_minimum_interval,
+    ) if args.github else None
     tool_profiles = {tool["name"]: set(tool["profiles"]) for tool in catalog["tools"] if isinstance(tool, dict) and isinstance(tool.get("name"), str) and isinstance(tool.get("profiles"), list)}
     for repository in repositories:
-        workflows = checkout_workflows(args.checkouts_root, repository) if args.checkouts_root else github_workflows(repository, args.ref)
+        workflows = checkout_workflows(args.checkouts_root, repository) if args.checkouts_root else github_workflows(repository, args.ref, github)
         findings.extend(audit_workflows(repository, workflows, catalog["setup_actions"], catalog.get("marketplace_actions", {}), tool_profiles, inventory))
     errors = [finding for finding in findings if finding.level == "error"]
     if args.format == "json":
