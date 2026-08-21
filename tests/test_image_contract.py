@@ -110,5 +110,16 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("exec node /opt/pnpm/package/bin/pnpm.cjs", dockerfile)
         self.assertIn("npm ci --omit=dev --ignore-scripts --no-audit --no-fund", dockerfile)
 
+    def test_xcsh_linux_test_dependencies_are_immutable_image_tools(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        for package in (
+            "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev",
+            "librsvg2-dev", "fd-find", "ripgrep", "imagemagick",
+        ):
+            self.assertIn(package, dockerfile)
+        self.assertIn("ln -s /usr/bin/fdfind /usr/local/bin/fd", dockerfile)
+        self.assertIn("ln -s /usr/bin/convert /usr/local/bin/magick", dockerfile)
+        self.assertIn("USER runner", dockerfile)
+
 if __name__ == "__main__":
     unittest.main()
