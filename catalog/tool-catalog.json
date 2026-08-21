@@ -605,14 +605,14 @@
       "expected": ""
     },
     {
-      "name": "cargo",
-      "version": "1.75.0",
+      "name": "rustup",
+      "version": "1.26.0",
       "source": "ubuntu snapshot 20260810T000000Z",
       "profiles": [
         "standard",
         "container-build"
       ],
-      "command": "cargo --version",
+      "command": "rustup --version",
       "expected": ""
     },
     {
