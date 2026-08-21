@@ -616,6 +616,14 @@
       "expected": ""
     },
     {
+      "name": "gcc-aarch64-linux-gnu",
+      "version": "ubuntu-snapshot",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": ["standard", "container-build"],
+      "command": "aarch64-linux-gnu-gcc --version",
+      "expected": ""
+    },
+    {
       "name": "bun",
       "version": "1.3.11",
       "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.11/bun-linux-x64.zip",
