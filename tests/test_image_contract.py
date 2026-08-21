@@ -114,7 +114,7 @@ class ImageContractTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         for package in (
             "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev",
-            "librsvg2-dev", "fd-find", "ripgrep", "imagemagick",
+            "librsvg2-dev", "fd-find", "ripgrep", "imagemagick", "rustup",
         ):
             self.assertIn(package, dockerfile)
         self.assertIn("ln -s /usr/bin/fdfind /usr/local/bin/fd", dockerfile)

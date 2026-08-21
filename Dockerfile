@@ -91,11 +91,11 @@ RUN rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
     && apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 update \
     && apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
-      ant bash build-essential cargo composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client \
+      ant bash build-essential composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client \
       dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 \
       libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full \
       php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 \
-      python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustc shellcheck \
+      python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck \
       sqlite3 sudo swig unzip wget xz-utils zip zstd \
       libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
