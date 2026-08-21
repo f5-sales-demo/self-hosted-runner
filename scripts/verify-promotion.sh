@@ -22,8 +22,7 @@ gh attestation verify "oci://${image}" \
   --repo f5-sales-demo/self-hosted-runner \
   --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
   --source-digest "$revision" \
-  --deny-self-hosted-runners \
-  --bundle-from-oci
+  --deny-self-hosted-runners
 printf "verified GitHub provenance for %s from %s\n" "$image" "$revision"
 
 registry="${image%@*}"
