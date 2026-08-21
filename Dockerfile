@@ -211,6 +211,13 @@ RUN cd /opt/spectral \
     && ln -s /opt/spectral/node_modules/.bin/spectral /usr/local/bin/spectral \
     && chown -R runner:runner /opt/spectral
 
+COPY --chown=root:root catalog/semantic-release/package.json /opt/semantic-release/package.json
+COPY --chown=root:root catalog/semantic-release/package-lock.json /opt/semantic-release/package-lock.json
+RUN cd /opt/semantic-release \
+    && npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+    && ln -s /opt/semantic-release/node_modules/.bin/semantic-release /usr/local/bin/semantic-release \
+    && chown -R runner:runner /opt/semantic-release
+
 RUN set -eux; \
     install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64"; \
     ln -s /usr/local/bin/uv "$AGENT_TOOLSDIRECTORY/uv/${UV_VERSION}/x86_64/uv"; \

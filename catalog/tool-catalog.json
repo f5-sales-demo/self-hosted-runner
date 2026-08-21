@@ -35,7 +35,8 @@
     "golangci-lint": {"strategy": "github-release", "repository": "golangci/golangci-lint"},
     "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"},
     "pnpm": {"strategy": "npm", "package": "pnpm"},
-    "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"}
+    "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"},
+    "semantic-release": {"strategy": "npm", "package": "semantic-release"}
   },
   "setup_actions": {
     "actions/setup-node": {
@@ -236,6 +237,19 @@
       ],
       "command": "spectral --version",
       "expected": "6.16.3"
+    },
+    {
+      "name": "semantic-release",
+      "version": "25.0.9",
+      "source": "https://registry.npmjs.org/semantic-release/-/semantic-release-25.0.9.tgz",
+      "sha256": "cb88d5c8a23a5127b561793764735d5270cfd3dd6eaa041a08edf712a5533062",
+      "lockfile": "catalog/semantic-release/package-lock.json",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "semantic-release --version",
+      "expected": "25.0.9"
     },
     {
       "name": "python",
