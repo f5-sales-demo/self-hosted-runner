@@ -48,7 +48,6 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          metadata="${RUNNER_TEMP}/metadata-${PROFILE}.json"
           tag="sha-${GITHUB_SHA}-${PROFILE}"
           docker buildx build \
             --no-cache \
@@ -58,11 +57,10 @@ jobs:
             --label "org.opencontainers.image.created=${SOURCE_DATE_EPOCH:-0}" \
             --provenance=mode=max \
             --sbom=true \
-            --metadata-file "$metadata" \
             --push \
             --tag "${IMAGE}:${tag}" \
             .
-          digest="$(jq -er ".\"containerimage.digest\"" "$metadata")"
+          digest="$(docker buildx imagetools inspect --format '{{json .Manifest}}' "${IMAGE}:${tag}" | jq -er '.digest')"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           reference="${IMAGE}@${digest}"
           docker buildx imagetools inspect "$reference" >/dev/null
