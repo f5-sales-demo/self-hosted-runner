@@ -120,6 +120,9 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("ln -s /usr/bin/fdfind /usr/local/bin/fd", dockerfile)
         self.assertIn("ln -s /usr/bin/convert /usr/local/bin/magick", dockerfile)
         self.assertIn("USER runner", dockerfile)
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        rustup = next(tool for tool in catalog["tools"] if tool["name"] == "rustup")
+        self.assertEqual("rustup --version", rustup["command"])
 
 if __name__ == "__main__":
     unittest.main()
