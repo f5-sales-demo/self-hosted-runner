@@ -56,7 +56,6 @@ jobs:
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.created=${SOURCE_DATE_EPOCH:-0}" \
             --provenance=mode=max \
-            --sbom=true \
             --push \
             --tag "${IMAGE}:${tag}" \
             .
