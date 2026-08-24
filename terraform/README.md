@@ -87,3 +87,8 @@ values through approved secret management, CI variables, or locally created
 ignored files. Do not place names, IDs, addresses, image references, public
 keys, backend coordinates, credentials, registration tokens, or any other
 environment-specific detail in GitHub.
+
+The source contains no deployment defaults. Supply regions, network ranges,
+availability zones, VM SKUs, gallery image-version IDs, and capacity limits at
+runtime through the approved mechanism. The committed configuration defines
+only the logical resource graph and fixed security policy.

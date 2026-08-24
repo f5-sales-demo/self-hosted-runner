@@ -1,7 +1,6 @@
 variable "location" {
   description = "Azure region for the dedicated state backend."
   type        = string
-  default     = "eastus2"
 }
 
 variable "state_resource_group_name" {

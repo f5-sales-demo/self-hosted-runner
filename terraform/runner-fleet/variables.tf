@@ -1,7 +1,6 @@
 variable "location" {
   type        = string
   description = "Azure region for the runner fleet."
-  default     = "eastus2"
 }
 
 variable "resource_group_name" {
@@ -74,22 +73,59 @@ variable "container_build_gallery_image_version_id" {
   }
 }
 
+variable "virtual_network_address_space" {
+  type        = list(string)
+  description = "Address prefixes for the fleet virtual network, supplied by the deployment environment."
+
+  validation {
+    condition     = length(var.virtual_network_address_space) > 0 && alltrue([for cidr in var.virtual_network_address_space : can(cidrnetmask(cidr))])
+    error_message = "virtual_network_address_space must contain one or more valid CIDRs."
+  }
+}
+
+variable "socketless_subnet_address_prefix" {
+  type        = string
+  description = "CIDR for the socketless runner subnet, supplied by the deployment environment."
+
+  validation {
+    condition     = can(cidrnetmask(var.socketless_subnet_address_prefix))
+    error_message = "socketless_subnet_address_prefix must be a valid CIDR."
+  }
+}
+
+variable "container_build_subnet_address_prefix" {
+  type        = string
+  description = "CIDR for the trusted container-build runner subnet, supplied by the deployment environment."
+
+  validation {
+    condition     = can(cidrnetmask(var.container_build_subnet_address_prefix))
+    error_message = "container_build_subnet_address_prefix must be a valid CIDR."
+  }
+}
+
+variable "availability_zones" {
+  type        = set(string)
+  description = "Availability zones for runner VMSS instances, supplied by the deployment environment."
+
+  validation {
+    condition     = length(var.availability_zones) > 0
+    error_message = "availability_zones must contain at least one zone."
+  }
+}
+
 variable "socketless_vm_sku" {
   type        = string
   description = "VM SKU for normal socketless runners."
-  default     = "Standard_D4s_v5"
 }
 
 variable "container_build_vm_sku" {
   type        = string
   description = "VM SKU for trusted container-build runners."
-  default     = "Standard_D8s_v5"
 }
 
 variable "socketless_max_instances" {
   type        = number
   description = "Dispatcher-enforced maximum socketless VMSS capacity."
-  default     = 6
 
   validation {
     condition     = var.socketless_max_instances >= 0 && var.socketless_max_instances <= 20
@@ -100,7 +136,6 @@ variable "socketless_max_instances" {
 variable "container_build_max_instances" {
   type        = number
   description = "Dispatcher-enforced maximum trusted build VMSS capacity."
-  default     = 2
 
   validation {
     condition     = var.container_build_max_instances >= 0 && var.container_build_max_instances <= 5

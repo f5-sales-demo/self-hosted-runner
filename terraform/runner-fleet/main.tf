@@ -3,14 +3,14 @@ locals {
     socketless = {
       sku     = var.socketless_vm_sku
       maximum = var.socketless_max_instances
-      subnet  = "10.80.1.0/24"
+      subnet  = var.socketless_subnet_address_prefix
       image   = var.socketless_gallery_image_version_id
       profile = "socketless"
     }
     container_build = {
       sku     = var.container_build_vm_sku
       maximum = var.container_build_max_instances
-      subnet  = "10.80.2.0/24"
+      subnet  = var.container_build_subnet_address_prefix
       image   = var.container_build_gallery_image_version_id
       profile = "container-build"
     }
@@ -36,7 +36,7 @@ resource "azurerm_virtual_network" "fleet" {
   name                = "${var.name_prefix}-runner-vnet"
   location            = azurerm_resource_group.fleet.location
   resource_group_name = azurerm_resource_group.fleet.name
-  address_space       = ["10.80.0.0/16"]
+  address_space       = var.virtual_network_address_space
   tags                = var.tags
 }
 
@@ -182,7 +182,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "pool" {
   disable_password_authentication = true
   upgrade_mode                    = "Manual"
   overprovision                   = false
-  zones                           = ["1", "2", "3"]
+  zones                           = sort(tolist(var.availability_zones))
   tags                            = merge(var.tags, { pool = each.key, runner-profile = each.value.profile })
 
   admin_ssh_key {
