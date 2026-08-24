@@ -54,6 +54,26 @@ variable "operator_ipv4_cidrs" {
   }
 }
 
+variable "socketless_gallery_image_version_id" {
+  type        = string
+  description = "Immutable Azure Compute Gallery image-version resource ID for socketless runners."
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Compute/galleries/[^/]+/images/[^/]+/versions/[^/]+$", var.socketless_gallery_image_version_id))
+    error_message = "socketless_gallery_image_version_id must be a complete Azure Compute Gallery image-version resource ID."
+  }
+}
+
+variable "container_build_gallery_image_version_id" {
+  type        = string
+  description = "Immutable Azure Compute Gallery image-version resource ID for trusted container-build runners."
+
+  validation {
+    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Compute/galleries/[^/]+/images/[^/]+/versions/[^/]+$", var.container_build_gallery_image_version_id))
+    error_message = "container_build_gallery_image_version_id must be a complete Azure Compute Gallery image-version resource ID."
+  }
+}
+
 variable "socketless_vm_sku" {
   type        = string
   description = "VM SKU for normal socketless runners."

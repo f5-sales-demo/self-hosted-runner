@@ -1,8 +1,10 @@
 # Azure autoscaling runner fleet
 
 This is a non-applying Terraform plan for an Azure-hosted, ephemeral GitHub
-Actions runner fleet. State bootstrap is separate from the runner fleet so no
-backend coordinates, state, credentials, or secrets are committed.
+Actions runner fleet. It is a Linux-only foundation: the external dispatcher,
+GitHub App credential lifecycle, Windows runners, and macOS capacity are
+follow-up work. State bootstrap is separate from the runner fleet so no backend
+coordinates, state, credentials, registration tokens, or secrets are committed.
 
 ## Layout
 
@@ -11,9 +13,10 @@ backend coordinates, state, credentials, or secrets are committed.
   resource group, network isolation, Key Vault, observability, identities, and
   scale-to-zero socketless and container-build VM Scale Sets.
 
-The pools have separate subnets, identities, capacity limits, and bootstrap
-profiles. The container-build pool must retain the trusted Docker admission
-policy; this Terraform code does not weaken it.
+The pools have separate subnets, identities, immutable Azure Compute Gallery
+image-version IDs, capacity inputs, and bootstrap profiles. The container-build
+pool must retain the trusted Docker admission policy; this Terraform code does
+not weaken it.
 
 ## Validate without Azure mutation
 
@@ -25,11 +28,14 @@ terraform -chdir=terraform/runner-fleet init -backend=false
 terraform -chdir=terraform/runner-fleet validate
 ```
 
+The CI workflow runs formatting and backend-disabled validation on every pull
+request and main-branch push. It cannot apply infrastructure.
+
 ## State backend bootstrap
 
 After a reviewed and explicitly authorized bootstrap apply, initialize the
-main backend with values from the bootstrap output. Keep these values outside
-version control.
+main backend with deployment-system-held values. Keep them outside version
+control; the bootstrap module deliberately does not output backend coordinates.
 
 ```sh
 terraform -chdir=terraform/runner-fleet init \
@@ -41,23 +47,34 @@ terraform -chdir=terraform/runner-fleet init \
 ```
 
 Azure AD authentication is mandatory: shared access keys are disabled. Supply
-only trusted, stable operator or CI egress CIDRs for the bootstrap
-`state_allowed_ipv4_cidrs` input, and grant each Terraform identity `Storage
-Blob Data Contributor`. The container is private and the storage firewall
-denies every other network. Do not commit state, plan files, backend
-coordinates, GitHub App credentials, webhook secrets, or private keys.
+only trusted, stable operator or CI egress CIDRs in `state_allowed_ipv4_cidrs`,
+an existing central Log Analytics workspace ID, and every authorized operator
+or CI object ID in `terraform_principal_ids`. The module creates one `Storage
+Blob Data Contributor` assignment at the state container for each identity.
+The container is private, the storage firewall denies every other network, and
+Blob read/write/delete logs go to that workspace. Do not commit state, plan
+files, backend coordinates, GitHub App credentials, registration tokens,
+webhook secrets, or private keys.
 
 ## Dispatcher contract
 
-VMSS capacity starts at zero. The autoscale settings deliberately contain no
-scale-out rules: a separately reviewed dispatcher is the only component
-allowed to raise capacity. Before doing so, it must verify the repository,
-exact labels, queue state, Docker trust gate, and configured capacity limit.
-Each VM must register one ephemeral runner, execute one job, deregister, and
-return to zero capacity. The NSGs allow Internet egress only on HTTPS and deny
-both Internet and virtual-network ingress.
+VMSS capacity starts at zero and Terraform creates no Azure Monitor autoscale
+setting. A separately reviewed dispatcher owns VMSS count decisions and must
+enforce `dispatcher_capacity_limits` as application policy. Terraform does not
+claim to make direct VMSS writes mathematically impossible. Before a capacity
+change, it verifies repository, exact labels, queue state, and Docker trust.
+Each VM registers one ephemeral runner, executes one job, deregisters, and
+returns to zero. NSGs allow Internet egress only on HTTPS and deny Azure Load
+Balancer, Internet, and virtual-network ingress.
 
 `runner_bootstrap_uri` must point to a credential-free, versioned HTTPS
 artifact and `runner_bootstrap_sha256` must be its reviewed SHA-256 digest.
-Cloud-init verifies the digest before granting execution permission. The
-bootstrap receives no long-lived GitHub credential from Terraform.
+Cloud-init verifies the digest before granting execution permission. Terraform
+supplies only immutable image IDs, the artifact URI and digest, and Key
+Vault/managed-identity references. It never stores GitHub App credentials,
+registration tokens, or backend coordinates.
+
+## Diagnostics
+
+Key Vault `AuditEvent` logs, per-pool VMSS `AllMetrics`, and state Blob
+`StorageRead`, `StorageWrite`, and `StorageDelete` logs go to Log Analytics.

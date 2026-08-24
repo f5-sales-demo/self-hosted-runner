@@ -19,9 +19,19 @@ variable "state_storage_account_name" {
   }
 }
 
-variable "terraform_operator_principal_id" {
-  description = "Object ID granted Storage Blob Data Contributor on the state container."
+variable "log_analytics_workspace_id" {
+  description = "Resource ID of the existing Log Analytics workspace that receives state Blob audit logs."
   type        = string
+}
+
+variable "terraform_principal_ids" {
+  description = "Object IDs for the explicitly authorized Terraform operators and CI identities granted Blob Data Contributor on the state container."
+  type        = set(string)
+
+  validation {
+    condition     = length(var.terraform_principal_ids) > 0 && alltrue([for principal_id in var.terraform_principal_ids : can(regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", principal_id))])
+    error_message = "terraform_principal_ids must contain at least one Azure AD object ID in UUID form."
+  }
 }
 
 variable "state_allowed_ipv4_cidrs" {

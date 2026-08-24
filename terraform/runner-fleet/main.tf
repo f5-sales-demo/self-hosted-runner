@@ -4,12 +4,14 @@ locals {
       sku     = var.socketless_vm_sku
       maximum = var.socketless_max_instances
       subnet  = "10.80.1.0/24"
+      image   = var.socketless_gallery_image_version_id
       profile = "socketless"
     }
     container_build = {
       sku     = var.container_build_vm_sku
       maximum = var.container_build_max_instances
       subnet  = "10.80.2.0/24"
+      image   = var.container_build_gallery_image_version_id
       profile = "container-build"
     }
   }
@@ -46,8 +48,20 @@ resource "azurerm_network_security_group" "pool" {
   tags                = merge(var.tags, { pool = each.key })
 
   security_rule {
-    name                       = "deny-internet-inbound"
+    name                       = "deny-azure-load-balancer-inbound"
     priority                   = 100
+    direction                  = "Inbound"
+    access                     = "Deny"
+    protocol                   = "*"
+    source_port_range          = "*"
+    destination_port_range     = "*"
+    source_address_prefix      = "AzureLoadBalancer"
+    destination_address_prefix = "*"
+  }
+
+  security_rule {
+    name                       = "deny-internet-inbound"
+    priority                   = 110
     direction                  = "Inbound"
     access                     = "Deny"
     protocol                   = "*"
@@ -59,7 +73,7 @@ resource "azurerm_network_security_group" "pool" {
 
   security_rule {
     name                       = "deny-virtual-network-inbound"
-    priority                   = 110
+    priority                   = 120
     direction                  = "Inbound"
     access                     = "Deny"
     protocol                   = "*"
@@ -139,6 +153,16 @@ resource "azurerm_key_vault" "fleet" {
 
 data "azurerm_client_config" "current" {}
 
+resource "azurerm_monitor_diagnostic_setting" "key_vault" {
+  name                       = "key-vault-audit"
+  target_resource_id         = azurerm_key_vault.fleet.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.fleet.id
+
+  enabled_log {
+    category = "AuditEvent"
+  }
+}
+
 resource "azurerm_role_assignment" "pool_key_vault" {
   for_each             = local.pools
   scope                = azurerm_key_vault.fleet.id
@@ -150,6 +174,7 @@ resource "azurerm_linux_virtual_machine_scale_set" "pool" {
   for_each                        = local.pools
   name                            = "${var.name_prefix}-${each.key}-vmss"
   resource_group_name             = azurerm_resource_group.fleet.name
+  source_image_id                 = each.value.image
   location                        = azurerm_resource_group.fleet.location
   sku                             = each.value.sku
   instances                       = 0
@@ -163,13 +188,6 @@ resource "azurerm_linux_virtual_machine_scale_set" "pool" {
   admin_ssh_key {
     username   = "runneradmin"
     public_key = var.admin_ssh_public_key
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "ubuntu-24_04-lts"
-    sku       = "server"
-    version   = "latest"
   }
 
   os_disk {
@@ -208,21 +226,13 @@ resource "azurerm_linux_virtual_machine_scale_set" "pool" {
   )
 }
 
-resource "azurerm_monitor_autoscale_setting" "pool" {
-  for_each            = local.pools
-  name                = "${var.name_prefix}-${each.key}-capacity"
-  resource_group_name = azurerm_resource_group.fleet.name
-  location            = azurerm_resource_group.fleet.location
-  target_resource_id  = azurerm_linux_virtual_machine_scale_set.pool[each.key].id
-  tags                = merge(var.tags, { pool = each.key })
+resource "azurerm_monitor_diagnostic_setting" "pool_vmss_metrics" {
+  for_each                   = local.pools
+  name                       = "${each.key}-vmss-metrics"
+  target_resource_id         = azurerm_linux_virtual_machine_scale_set.pool[each.key].id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.fleet.id
 
-  profile {
-    name = "dispatcher-bounded"
-    capacity {
-      default = 0
-      minimum = 0
-      maximum = each.value.maximum
-    }
-
+  enabled_metric {
+    category = "AllMetrics"
   }
 }

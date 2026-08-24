@@ -1,0 +1,36 @@
+name: Validate Terraform foundation
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
+        with:
+          terraform_version: "1.8.5"
+          terraform_wrapper: false
+      - name: Check formatting
+        run: terraform fmt -check -recursive terraform
+      - name: Initialize and validate modules without a backend
+        run: |
+          set -euo pipefail
+          terraform -chdir=terraform/bootstrap init -backend=false
+          terraform -chdir=terraform/bootstrap validate
+          terraform -chdir=terraform/runner-fleet init -backend=false
+          terraform -chdir=terraform/runner-fleet validate

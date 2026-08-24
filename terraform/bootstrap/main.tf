@@ -46,8 +46,27 @@ resource "azurerm_storage_container" "state" {
   container_access_type = "private"
 }
 
-resource "azurerm_role_assignment" "terraform_operator" {
-  scope                = azurerm_storage_account.state.id
+resource "azurerm_role_assignment" "terraform_principal" {
+  for_each             = var.terraform_principal_ids
+  scope                = azurerm_storage_container.state.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.terraform_operator_principal_id
+  principal_id         = each.value
+}
+
+resource "azurerm_monitor_diagnostic_setting" "state_blob" {
+  name                       = "state-blob-audit"
+  target_resource_id         = "${azurerm_storage_account.state.id}/blobServices/default/"
+  log_analytics_workspace_id = var.log_analytics_workspace_id
+
+  enabled_log {
+    category = "StorageRead"
+  }
+
+  enabled_log {
+    category = "StorageWrite"
+  }
+
+  enabled_log {
+    category = "StorageDelete"
+  }
 }
