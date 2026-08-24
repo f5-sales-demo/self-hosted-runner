@@ -34,3 +34,12 @@ jobs:
           terraform -chdir=terraform/bootstrap validate
           terraform -chdir=terraform/runner-fleet init -backend=false
           terraform -chdir=terraform/runner-fleet validate
+      - name: Refuse committed Terraform variable files
+        run: |
+          set -euo pipefail
+          tracked_tfvars="$(git ls-files -- '*.tfvars' '*.tfvars.json')"
+          if [[ -n "$tracked_tfvars" ]]; then
+            echo "Terraform variable files must not be committed:" >&2
+            printf '%s\n' "$tracked_tfvars" >&2
+            exit 1
+          fi

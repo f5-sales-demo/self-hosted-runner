@@ -78,3 +78,12 @@ registration tokens, or backend coordinates.
 
 Key Vault `AuditEvent` logs, per-pool VMSS `AllMetrics`, and state Blob
 `StorageRead`, `StorageWrite`, and `StorageDelete` logs go to Log Analytics.
+
+## Local inputs
+
+Do not commit Terraform variable files. `*.tfvars` and `*.tfvars.json` are
+ignored, and CI rejects either type if it is force-added. Supply all deployment
+values through approved secret management, CI variables, or locally created
+ignored files. Do not place names, IDs, addresses, image references, public
+keys, backend coordinates, credentials, registration tokens, or any other
+environment-specific detail in GitHub.
