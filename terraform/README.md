@@ -49,7 +49,9 @@ terraform -chdir=terraform/runner-fleet init \
 Azure AD authentication is mandatory: shared access keys are disabled. Supply
 only trusted, stable operator or CI egress CIDRs in `state_allowed_ipv4_cidrs`,
 an existing central Log Analytics workspace ID, and every authorized operator
-or CI object ID in `terraform_principal_ids`. The module creates one `Storage
+or CI object ID in `terraform_principal_ids`. Azure Storage firewall rules
+accept prefixes only through `/30`; use the narrowest permitted range that
+contains the approved egress address. The module creates one `Storage
 Blob Data Contributor` assignment at the state container for each identity.
 The container is private, the storage firewall denies every other network, and
 Blob read/write/delete logs go to that workspace. Do not commit state, plan

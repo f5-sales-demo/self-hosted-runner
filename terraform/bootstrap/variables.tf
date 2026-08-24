@@ -38,8 +38,8 @@ variable "state_allowed_ipv4_cidrs" {
   type        = set(string)
 
   validation {
-    condition     = alltrue([for cidr in var.state_allowed_ipv4_cidrs : can(cidrnetmask(cidr))])
-    error_message = "state_allowed_ipv4_cidrs must contain valid IPv4 CIDRs."
+    condition     = alltrue([for cidr in var.state_allowed_ipv4_cidrs : can(cidrnetmask(cidr)) && can(regex("/(0|[1-9]|[12][0-9]|30)$", cidr))])
+    error_message = "state_allowed_ipv4_cidrs must contain valid IPv4 CIDRs with prefixes from /0 through /30, as required by Azure Storage firewall rules."
   }
 }
 
