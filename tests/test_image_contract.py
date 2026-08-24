@@ -120,12 +120,14 @@ class ImageContractTests(unittest.TestCase):
 
     def test_xcsh_linux_test_dependencies_are_immutable_image_tools(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        verifier = (ROOT / "scripts/verify-tools.py").read_text(encoding="utf-8")
         for package in (
             "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev",
             "librsvg2-dev", "fd-find", "ripgrep", "imagemagick", "rustup",
-            "gcc-aarch64-linux-gnu",
+            "gcc-aarch64-linux-gnu", "libc6-dev-arm64-cross",
         ):
             self.assertIn(package, dockerfile)
+        self.assertIn("aarch64-linux-gnu-gcc -x c - -o /tmp/runner-arm64-libc-smoke", verifier)
         self.assertIn("ln -s /usr/bin/fdfind /usr/local/bin/fd", dockerfile)
         self.assertIn("ln -s /usr/bin/convert /usr/local/bin/magick", dockerfile)
         self.assertIn("USER runner", dockerfile)

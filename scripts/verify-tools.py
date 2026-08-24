@@ -56,6 +56,15 @@ def main() -> int:
         failures.append("standard profile unexpectedly contains docker")
     if args.profile == "container-build" and docker_code != 0:
         failures.append("container-build profile is missing docker")
+    cross_code, cross_output = run(
+        "printf '#include <stdio.h>\\nint main(void) { return 0; }\\n' "
+        "| aarch64-linux-gnu-gcc -x c - -o /tmp/runner-arm64-libc-smoke "
+        "&& rm -f /tmp/runner-arm64-libc-smoke"
+    )
+    if cross_code:
+        failures.append("ARM64 cross compiler cannot use the target libc sysroot: {!r}".format(cross_output.strip()))
+    else:
+        print("[ok] ARM64 cross compiler libc sysroot")
     if failures:
         print("\n".join("[error] {}".format(failure) for failure in failures), file=sys.stderr)
         return 1
