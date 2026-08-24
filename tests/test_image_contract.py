@@ -52,6 +52,14 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
 
+    def test_pr_image_validation_is_cancellable_without_affecting_publication(self) -> None:
+        verify = (ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
+        publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
+        self.assertIn("self-hosted-runner-pr-image-validation", verify)
+        self.assertIn("cancel-in-progress: ${{ github.event_name == 'pull_request' }}", verify)
+        self.assertIn("publish-immutable-self-hosted-runner", publish)
+        self.assertIn("cancel-in-progress: false", publish)
+
     def test_ruff_action_is_preloaded_in_the_immutable_tool_cache(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         ruff_action = catalog["setup_actions"]["astral-sh/ruff-action"]

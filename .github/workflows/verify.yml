@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && 'self-hosted-runner-pr-image-validation' || format('self-hosted-runner-verify-{0}', github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   source-and-image:
     runs-on: ubuntu-24.04
