@@ -46,10 +46,9 @@ resource "azurerm_storage_container" "state" {
   container_access_type = "private"
 }
 
-
 resource "azurerm_monitor_diagnostic_setting" "state_blob" {
   name                       = "state-blob-audit"
-  target_resource_id         = "${azurerm_storage_account.state.id}/blobServices/default/"
+  target_resource_id         = "${azurerm_storage_account.state.id}/blobServices/default"
   log_analytics_workspace_id = var.log_analytics_workspace_id
 
   enabled_log {

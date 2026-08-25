@@ -30,16 +30,18 @@ pull_chart gha-runner-scale-set-controller "$controller_chart_digest"
 pull_chart gha-runner-scale-set "$scale_set_chart_digest"
 controller_chart="$tmpdir/gha-runner-scale-set-controller-$chart_version.tgz"
 scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
+sed "s|RUNNER_IMAGE_REQUIRED|$runner_image|g" arc/socketless-values.yaml >"$tmpdir/socketless-values.yaml"
+sed "s|RUNNER_IMAGE_REQUIRED|$runner_image|g" arc/container-build-values.yaml >"$tmpdir/container-build-values.yaml"
 
 helm lint "$controller_chart" -f arc/controller-values.yaml >/dev/null
 helm template arc "$controller_chart"   --namespace arc-systems   -f arc/controller-values.yaml   --post-renderer scripts/arc-controller-post-renderer.py >"$tmpdir/controller.yaml"
 grep -Fq 'ghcr.io/actions/gha-runner-scale-set-controller@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d' "$tmpdir/controller.yaml"
 
-helm lint "$scale_set_chart" -f arc/socketless-values.yaml   --set-string githubConfigUrl="$github_url"   --set-string 'template.spec.containers[0].image'="$runner_image" >/dev/null
-helm template self-hosted-runner-socketless "$scale_set_chart"   --namespace arc-runners-socketless   -f arc/socketless-values.yaml   --set-string githubConfigUrl="$github_url"   --set-string 'template.spec.containers[0].image'="$runner_image" >"$tmpdir/socketless.yaml"
+helm lint "$scale_set_chart" -f "$tmpdir/socketless-values.yaml" --set-string githubConfigUrl="$github_url" >/dev/null
+helm template self-hosted-runner-socketless "$scale_set_chart" --namespace arc-runners-socketless -f "$tmpdir/socketless-values.yaml" --set-string githubConfigUrl="$github_url" >"$tmpdir/socketless.yaml"
 
-helm lint "$scale_set_chart" -f arc/container-build-values.yaml   --set-string githubConfigUrl="$github_url"   --set-string 'template.spec.initContainers[0].image'="$runner_image"   --set-string 'template.spec.containers[0].image'="$runner_image" >/dev/null
-helm template self-hosted-runner-container-build "$scale_set_chart"   --namespace arc-runners-container-build   -f arc/container-build-values.yaml   --set-string githubConfigUrl="$github_url"   --set-string 'template.spec.initContainers[0].image'="$runner_image"   --set-string 'template.spec.containers[0].image'="$runner_image" >"$tmpdir/container-build.yaml"
+helm lint "$scale_set_chart" -f "$tmpdir/container-build-values.yaml" --set-string githubConfigUrl="$github_url" >/dev/null
+helm template self-hosted-runner-container-build "$scale_set_chart" --namespace arc-runners-container-build -f "$tmpdir/container-build-values.yaml" --set-string githubConfigUrl="$github_url" >"$tmpdir/container-build.yaml"
 
 ! grep -Fq RUNNER_IMAGE_REQUIRED "$tmpdir/socketless.yaml"
 ! grep -Fq RUNNER_IMAGE_REQUIRED "$tmpdir/container-build.yaml"

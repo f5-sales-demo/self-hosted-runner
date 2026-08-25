@@ -47,6 +47,14 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("minRunners: 0", build)
         self.assertIn("emptyDir:", build)
 
+    def test_controller_post_renderer_uses_python(self) -> None:
+        post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"
+        self.assertTrue(post_renderer.stat().st_mode & 0o111)
+        self.assertEqual(
+            "#!/usr/bin/env python3",
+            post_renderer.read_text(encoding="utf-8").splitlines()[0],
+        )
+
     def test_pilot_targets_only_named_scale_sets(self) -> None:
         workflow = (ROOT / ".github/workflows/arc-pilot.yml").read_text(encoding="utf-8")
         self.assertEqual(

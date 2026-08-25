@@ -40,9 +40,11 @@ pull_chart gha-runner-scale-set-controller "$controller_chart_digest"
 pull_chart gha-runner-scale-set "$scale_set_chart_digest"
 controller_chart="$tmpdir/gha-runner-scale-set-controller-$chart_version.tgz"
 scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
+sed "s|RUNNER_IMAGE_REQUIRED|$SOCKETLESS_IMAGE|g" arc/socketless-values.yaml >"$tmpdir/socketless-values.yaml"
+sed "s|RUNNER_IMAGE_REQUIRED|$CONTAINER_BUILD_IMAGE|g" arc/container-build-values.yaml >"$tmpdir/container-build-values.yaml"
 
 helm upgrade --install arc "$controller_chart" --namespace arc-systems --create-namespace   --values arc/controller-values.yaml --post-renderer scripts/arc-controller-post-renderer.py   --wait --timeout 10m
-helm upgrade --install self-hosted-runner-socketless "$scale_set_chart"   --namespace arc-runners-socketless --values arc/socketless-values.yaml   --set-string githubConfigUrl="$GITHUB_CONFIG_URL"   --set-string 'template.spec.containers[0].image'="$SOCKETLESS_IMAGE"   --wait --timeout 10m
-helm upgrade --install self-hosted-runner-container-build "$scale_set_chart"   --namespace arc-runners-container-build --values arc/container-build-values.yaml   --set-string githubConfigUrl="$GITHUB_CONFIG_URL"   --set-string 'template.spec.initContainers[0].image'="$CONTAINER_BUILD_IMAGE"   --set-string 'template.spec.containers[0].image'="$CONTAINER_BUILD_IMAGE"   --wait --timeout 10m
+helm upgrade --install self-hosted-runner-socketless "$scale_set_chart" --namespace arc-runners-socketless --values "$tmpdir/socketless-values.yaml" --set-string githubConfigUrl="$GITHUB_CONFIG_URL" --wait --timeout 10m
+helm upgrade --install self-hosted-runner-container-build "$scale_set_chart" --namespace arc-runners-container-build --values "$tmpdir/container-build-values.yaml" --set-string githubConfigUrl="$GITHUB_CONFIG_URL" --wait --timeout 10m
 helm upgrade --install runner-image-cache arc/prepull   --namespace arc-runners-socketless --set-string profile=socketless   --set-string image="$SOCKETLESS_IMAGE" --wait --timeout 10m
 helm upgrade --install runner-image-cache arc/prepull   --namespace arc-runners-container-build --set-string profile=container-build   --set-string image="$CONTAINER_BUILD_IMAGE"   --set-string 'additionalImages[0]'="$dind_image" --wait --timeout 10m
