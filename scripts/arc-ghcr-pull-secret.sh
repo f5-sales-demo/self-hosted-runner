@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+config=${1:-}
+[[ -n "$config" ]] || { echo "usage: scripts/arc-ghcr-pull-secret.sh <repository-config>" >&2; exit 2; }
 : "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN must be a read-only package token}"
@@ -11,13 +13,16 @@ case "$(stat -c '%a' "$KUBECONFIG")" in
 esac
 [[ "$GHCR_USERNAME" =~ ^[A-Za-z0-9-]+$ ]]
 
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+config_json=$(python3 scripts/arc-config.py "$config")
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 chmod 0700 "$tmpdir"
-config="$tmpdir/config.json"
+config_file="$tmpdir/config.json"
 manifest="$tmpdir/secret.yaml"
 export GHCR_USERNAME GHCR_TOKEN
-python3 - "$config" <<'PY'
+python3 - "$config_file" <<'PY'
 import base64
 import json
 import os
@@ -28,14 +33,17 @@ credential = f"{os.environ['GHCR_USERNAME']}:{os.environ['GHCR_TOKEN']}".encode(
 payload = {"auths": {"ghcr.io": {"auth": base64.b64encode(credential).decode()}}}
 pathlib.Path(sys.argv[1]).write_text(json.dumps(payload), encoding="utf-8")
 PY
-chmod 0600 "$config"
+chmod 0600 "$config_file"
 unset GHCR_TOKEN
 
-for namespace in arc-runners-socketless arc-runners-container-build; do
+while IFS= read -r namespace; do
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  kubectl -n "$namespace" create secret generic ghcr-pull     --type=kubernetes.io/dockerconfigjson     --from-file=.dockerconfigjson="$config"     --dry-run=client -o yaml >"$manifest"
+  kubectl -n "$namespace" create secret generic ghcr-pull \
+    --type=kubernetes.io/dockerconfigjson \
+    --from-file=.dockerconfigjson="$config_file" \
+    --dry-run=client -o yaml >"$manifest"
   chmod 0600 "$manifest"
   kubectl apply -f "$manifest" >/dev/null
   : >"$manifest"
   printf 'updated GHCR pull secret in %s\n' "$namespace"
-done
+done < <(jq -r '.scale_sets[].namespace' <<<"$config_json")

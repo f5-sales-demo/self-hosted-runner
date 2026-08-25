@@ -45,7 +45,7 @@ names, operator CIDRs, pod CIDR, service CIDR, and DNS service IP. Then run:
     terraform -chdir=terraform/bootstrap validate
     terraform -chdir=terraform/runner-fleet init -backend=false
     terraform -chdir=terraform/runner-fleet validate
-    scripts/validate-arc.sh
+    scripts/validate-arc.sh arc/repositories/self-hosted-runner.yaml arc/repositories/xcsh.yaml
     scripts/check-committed-artifacts.sh
 
 Initialize the real backend, save a binary plan in the ignored worktree, and
@@ -64,15 +64,33 @@ accepts only digest-addressed GHCR runner images. The build profile has a
 pinned DinD image, Unix socket, and emptyDir work and layer stores. The
 socketless profile exposes neither the Docker CLI nor a Docker socket.
 
-First export KUBECONFIG and install the controller with
-scripts/arc-deploy.sh controller. Create or install a repository-scoped GitHub
-App with Administration read/write and Metadata read-only. Keep its IDs and
-private key outside Git. Export GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and
-GITHUB_APP_PRIVATE_KEY_FILE, then run scripts/arc-github-app-secret.sh. If the
-GHCR package is private, supply a dedicated read-only package credential through
-GHCR_USERNAME and GHCR_TOKEN, then run scripts/arc-ghcr-pull-secret.sh. Do not
-reuse a broad operator token.
+Every runner operation requires one validated configuration from
+`arc/repositories/`. First export `KUBECONFIG` and install the shared controller:
 
-Finally export GITHUB_CONFIG_URL, SOCKETLESS_IMAGE, and CONTAINER_BUILD_IMAGE,
-then run scripts/arc-deploy.sh runners. Both scale sets use zero idle runners. The socketless
-pool stays at one warm node; the build pool scales from and back to zero.
+    scripts/arc-deploy.sh arc/repositories/self-hosted-runner.yaml controller
+
+Create or install a repository-scoped GitHub App with Administration read/write
+and Metadata read-only. Keep its IDs and private key outside Git. Export
+`GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, and
+`GITHUB_APP_PRIVATE_KEY_FILE`, then create the selected repository secrets:
+
+    scripts/arc-github-app-secret.sh arc/repositories/xcsh.yaml
+
+If the GHCR package is private, supply a dedicated read-only package credential
+through `GHCR_USERNAME` and `GHCR_TOKEN`, then run:
+
+    scripts/arc-ghcr-pull-secret.sh arc/repositories/xcsh.yaml
+
+Do not reuse a broad operator token. Alternatively, an operator may copy the
+existing secrets server-side into the configured namespaces after verifying the
+source and destination namespaces; never print or persist the secret payloads.
+
+Finally export `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE` as immutable
+references and deploy the xcsh scale sets and pre-pullers:
+
+    scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
+
+The xcsh socketless and container-build scale sets are capped at 10 and 3
+respectively, both with zero idle runners. The original self-hosted-runner
+configuration retains its 20 and 5 limits. The socketless node pool stays warm;
+the build pool scales from and back to zero.

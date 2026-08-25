@@ -2,9 +2,6 @@ githubConfigSecret: arc-github-app
 controllerServiceAccount:
   name: arc-gha-rs-controller
   namespace: arc-systems
-runnerScaleSetName: self-hosted-runner-container-build
-minRunners: 0
-maxRunners: 5
 listenerTemplate:
   spec:
     nodeSelector:
