@@ -2,9 +2,6 @@ name: Validate AKS ARC pilot
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - codex/44-azure-autoscaling-runner-fleet-20260824T193216Z
 
 permissions:
   contents: read
