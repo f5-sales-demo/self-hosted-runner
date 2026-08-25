@@ -44,6 +44,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertRegex(deploy, r"scale_set_chart_digest=sha256:[0-9a-f]{64}")
         self.assertRegex(build, r"docker\.io/library/docker@sha256:[0-9a-f]{64}")
         self.assertIn("RUNNER_IMAGE_REQUIRED", build)
+        self.assertIn("controller|runners|all", deploy)
         self.assertIn("minRunners: 0", build)
         self.assertIn("emptyDir:", build)
 

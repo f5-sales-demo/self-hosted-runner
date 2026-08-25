@@ -64,11 +64,12 @@ accepts only digest-addressed GHCR runner images. The build profile has a
 pinned DinD image, Unix socket, and emptyDir work and layer stores. The
 socketless profile exposes neither the Docker CLI nor a Docker socket.
 
-Create or install a repository-scoped GitHub App with Administration read/write
-and Metadata read-only. Keep its IDs and private key outside Git. Export
-KUBECONFIG, GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and
+First export KUBECONFIG and install the controller with
+scripts/arc-deploy.sh controller. Create or install a repository-scoped GitHub
+App with Administration read/write and Metadata read-only. Keep its IDs and
+private key outside Git. Export GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and
 GITHUB_APP_PRIVATE_KEY_FILE, then run scripts/arc-github-app-secret.sh.
 
-Export GITHUB_CONFIG_URL, SOCKETLESS_IMAGE, and CONTAINER_BUILD_IMAGE and run
-scripts/arc-deploy.sh. Both scale sets use zero idle runners. The socketless
+Finally export GITHUB_CONFIG_URL, SOCKETLESS_IMAGE, and CONTAINER_BUILD_IMAGE,
+then run scripts/arc-deploy.sh runners. Both scale sets use zero idle runners. The socketless
 pool stays at one warm node; the build pool scales from and back to zero.
