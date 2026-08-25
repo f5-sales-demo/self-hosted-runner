@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -25,6 +26,15 @@ def main() -> int:
     args = parser.parse_args()
     raw = json.loads(args.catalog.read_text(encoding="utf-8"))
     failures: list[str] = []
+    for runner_root in (Path("/home/runner"), Path("/opt/actions-runner")):
+        for executable in ("config.sh", "run.sh"):
+            path = runner_root / executable
+            if not path.is_file() or not os.access(path, os.X_OK):
+                failures.append(f"runner payload is missing executable {path}")
+            else:
+                print(f"[ok] runner payload {path}")
+    if Path("/opt/actions-runner").is_symlink():
+        failures.append("legacy runner payload path must be a real directory")
     for tool in raw["tools"]:
         if args.profile not in tool["profiles"]:
             continue
