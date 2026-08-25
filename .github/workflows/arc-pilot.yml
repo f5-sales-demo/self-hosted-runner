@@ -1,0 +1,72 @@
+name: Validate AKS ARC pilot
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  socketless:
+    runs-on: self-hosted-runner-socketless
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify complete socketless tool contract
+        run: verify-runner-tools standard
+      - name: Prove Docker is unavailable
+        run: |
+          set -euo pipefail
+          if command -v docker || [[ -S /var/run/docker.sock ]]; then
+            echo "socketless runner unexpectedly exposes Docker" >&2
+            exit 1
+          fi
+
+  container-build:
+    runs-on: self-hosted-runner-container-build
+    timeout-minutes: 60
+    outputs:
+      daemon-id: ${{ steps.daemon.outputs.id }}
+      probe-image: ${{ steps.daemon.outputs.probe-image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify complete container-build tool contract
+        run: verify-runner-tools container-build
+      - name: Build through the private DinD daemon
+        id: daemon
+        run: |
+          set -euo pipefail
+          daemon_id="$(docker info --format '{{.ID}}')"
+          [[ -n "$daemon_id" ]]
+          probe_image="arc-stage1-probe:$GITHUB_RUN_ID"
+          context="$RUNNER_TEMP/arc-stage1-build"
+          mkdir -p "$context"
+          printf 'FROM scratch\nLABEL stage1=ephemeral\n' >"$context/Dockerfile"
+          docker buildx create --driver docker-container --use --name "stage1-$GITHUB_RUN_ID"
+          docker buildx inspect --bootstrap
+          docker buildx build --load --tag "$probe_image" "$context"
+          docker image inspect "$probe_image" >/dev/null
+          printf 'id=%s\nprobe-image=%s\n' "$daemon_id" "$probe_image" >>"$GITHUB_OUTPUT"
+
+  container-build-cleanroom:
+    needs: container-build
+    runs-on: self-hosted-runner-container-build
+    timeout-minutes: 30
+    steps:
+      - name: Prove the prior pod-local daemon and image cache are gone
+        env:
+          PRIOR_DAEMON_ID: ${{ needs.container-build.outputs.daemon-id }}
+          PROBE_IMAGE: ${{ needs.container-build.outputs.probe-image }}
+        run: |
+          set -euo pipefail
+          current_daemon_id="$(docker info --format '{{.ID}}')"
+          [[ -n "$current_daemon_id" ]]
+          [[ "$current_daemon_id" != "$PRIOR_DAEMON_ID" ]]
+          if docker image inspect "$PROBE_IMAGE" >/dev/null 2>&1; then
+            echo "a prior runner pod's Docker cache survived" >&2
+            exit 1
+          fi

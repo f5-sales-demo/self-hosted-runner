@@ -1,0 +1,29 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/actions/gha-runner-scale-set-controller
+  tag: "0.14.2"
+  pullPolicy: IfNotPresent
+nodeSelector:
+  runner-profile: system
+tolerations:
+  - key: CriticalAddonsOnly
+    operator: Exists
+    effect: NoSchedule
+priorityClassName: system-cluster-critical
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+flags:
+  logLevel: info
+  logFormat: json
+  updateStrategy: eventual

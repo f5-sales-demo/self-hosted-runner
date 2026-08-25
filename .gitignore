@@ -6,3 +6,13 @@ dist/
 coverage.xml
 *.tfvars
 *.tfvars.json
+*.tfstate
+*.tfstate.*
+*.tfplan
+backend.hcl
+kubeconfig*
+*.kubeconfig
+*.local.yaml
+*.pem
+*.key
+.arc/

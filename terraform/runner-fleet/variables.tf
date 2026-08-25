@@ -1,153 +1,109 @@
 variable "location" {
   type        = string
-  description = "Azure region for the runner fleet."
+  description = "Azure region for the AKS runner platform."
+
+  validation {
+    condition     = lower(var.location) == "canadacentral"
+    error_message = "Stage 1 is approved only for Canada Central."
+  }
 }
 
 variable "resource_group_name" {
   type        = string
-  description = "Dedicated Azure resource group for the runner fleet."
+  description = "Dedicated resource group for the AKS runner platform."
 }
 
-variable "name_prefix" {
+variable "cluster_name" {
   type        = string
-  description = "Short globally unique prefix used in resource names."
+  description = "AKS cluster name."
+}
+
+variable "cluster_dns_prefix" {
+  type        = string
+  description = "DNS prefix for the public AKS API endpoint."
 
   validation {
-    condition     = can(regex("^[a-z0-9]{3,15}$", var.name_prefix))
-    error_message = "name_prefix must contain 3-15 lowercase letters or digits so derived Key Vault names remain valid."
+    condition     = can(regex("^[a-z0-9][a-z0-9-]{0,52}[a-z0-9]$", var.cluster_dns_prefix))
+    error_message = "cluster_dns_prefix must be a lowercase Azure-compatible DNS prefix."
   }
 }
 
-variable "admin_ssh_public_key" {
+variable "log_analytics_workspace_name" {
   type        = string
-  description = "Break-glass SSH public key; never commit a private key."
+  description = "Log Analytics workspace name for AKS diagnostics and Container Insights."
 }
 
-variable "runner_bootstrap_uri" {
+variable "kubernetes_version" {
   type        = string
-  description = "HTTPS URI for a versioned bootstrap artifact; it must not contain credentials or a query string."
+  description = "Exact AKS Kubernetes patch version selected by the availability preflight."
+  default     = "1.35.7"
 
   validation {
-    condition     = can(regex("^https://[^?#]+$", var.runner_bootstrap_uri))
-    error_message = "runner_bootstrap_uri must be a credential-free HTTPS URI without a query string or fragment."
-  }
-}
-
-variable "runner_bootstrap_sha256" {
-  type        = string
-  description = "Expected SHA-256 hex digest for the bootstrap artifact downloaded by each VMSS instance."
-
-  validation {
-    condition     = can(regex("^[0-9a-fA-F]{64}$", var.runner_bootstrap_sha256))
-    error_message = "runner_bootstrap_sha256 must be a 64-character hexadecimal SHA-256 digest."
+    condition     = var.kubernetes_version == "1.35.7"
+    error_message = "Stage 1 is pinned to Kubernetes 1.35.7; stop rather than substitute another version."
   }
 }
 
 variable "operator_ipv4_cidrs" {
   type        = set(string)
-  description = "Trusted operator or CI egress IPv4 CIDRs allowed to manage Key Vault secrets."
+  description = "Explicit public IPv4 CIDRs allowed to reach the AKS API."
 
   validation {
-    condition     = alltrue([for cidr in var.operator_ipv4_cidrs : can(cidrnetmask(cidr))])
-    error_message = "operator_ipv4_cidrs must contain valid IPv4 CIDRs."
-  }
-}
-
-variable "socketless_gallery_image_version_id" {
-  type        = string
-  description = "Immutable Azure Compute Gallery image-version resource ID for socketless runners."
-
-  validation {
-    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Compute/galleries/[^/]+/images/[^/]+/versions/[^/]+$", var.socketless_gallery_image_version_id))
-    error_message = "socketless_gallery_image_version_id must be a complete Azure Compute Gallery image-version resource ID."
-  }
-}
-
-variable "container_build_gallery_image_version_id" {
-  type        = string
-  description = "Immutable Azure Compute Gallery image-version resource ID for trusted container-build runners."
-
-  validation {
-    condition     = can(regex("^/subscriptions/[^/]+/resourceGroups/[^/]+/providers/Microsoft.Compute/galleries/[^/]+/images/[^/]+/versions/[^/]+$", var.container_build_gallery_image_version_id))
-    error_message = "container_build_gallery_image_version_id must be a complete Azure Compute Gallery image-version resource ID."
-  }
-}
-
-variable "virtual_network_address_space" {
-  type        = list(string)
-  description = "Address prefixes for the fleet virtual network, supplied by the deployment environment."
-
-  validation {
-    condition     = length(var.virtual_network_address_space) > 0 && alltrue([for cidr in var.virtual_network_address_space : can(cidrnetmask(cidr))])
-    error_message = "virtual_network_address_space must contain one or more valid CIDRs."
-  }
-}
-
-variable "socketless_subnet_address_prefix" {
-  type        = string
-  description = "CIDR for the socketless runner subnet, supplied by the deployment environment."
-
-  validation {
-    condition     = can(cidrnetmask(var.socketless_subnet_address_prefix))
-    error_message = "socketless_subnet_address_prefix must be a valid CIDR."
-  }
-}
-
-variable "container_build_subnet_address_prefix" {
-  type        = string
-  description = "CIDR for the trusted container-build runner subnet, supplied by the deployment environment."
-
-  validation {
-    condition     = can(cidrnetmask(var.container_build_subnet_address_prefix))
-    error_message = "container_build_subnet_address_prefix must be a valid CIDR."
+    condition = length(var.operator_ipv4_cidrs) > 0 && alltrue([
+      for cidr in var.operator_ipv4_cidrs :
+      can(cidrnetmask(cidr)) && can(regex("^[0-9.]+/(?:[0-9]|[12][0-9]|3[0-2])$", cidr))
+    ])
+    error_message = "operator_ipv4_cidrs must contain at least one valid IPv4 CIDR."
   }
 }
 
 variable "availability_zones" {
   type        = set(string)
-  description = "Availability zones for runner VMSS instances, supplied by the deployment environment."
+  description = "Approved Canada Central availability zones."
+  default     = ["1", "2", "3"]
 
   validation {
-    condition     = length(var.availability_zones) > 0
-    error_message = "availability_zones must contain at least one zone."
+    condition     = length(var.availability_zones) == 3 && length(setsubtract(var.availability_zones, toset(["1", "2", "3"]))) == 0
+    error_message = "Stage 1 requires Canada Central zones 1, 2, and 3; stop rather than substitute zones."
   }
 }
 
-variable "socketless_vm_sku" {
+variable "pod_cidr" {
   type        = string
-  description = "VM SKU for normal socketless runners."
-}
-
-variable "container_build_vm_sku" {
-  type        = string
-  description = "VM SKU for trusted container-build runners."
-}
-
-variable "socketless_max_instances" {
-  type        = number
-  description = "Dispatcher-enforced maximum socketless VMSS capacity."
+  description = "Non-overlapping private CIDR for Azure CNI Overlay pods."
 
   validation {
-    condition     = var.socketless_max_instances >= 0 && var.socketless_max_instances <= 20
-    error_message = "socketless_max_instances must be between 0 and 20."
+    condition     = can(cidrnetmask(var.pod_cidr))
+    error_message = "pod_cidr must be a valid IPv4 CIDR."
   }
 }
 
-variable "container_build_max_instances" {
-  type        = number
-  description = "Dispatcher-enforced maximum trusted build VMSS capacity."
+variable "service_cidr" {
+  type        = string
+  description = "Non-overlapping private CIDR for Kubernetes services."
 
   validation {
-    condition     = var.container_build_max_instances >= 0 && var.container_build_max_instances <= 5
-    error_message = "container_build_max_instances must be between 0 and 5."
+    condition     = can(cidrnetmask(var.service_cidr))
+    error_message = "service_cidr must be a valid IPv4 CIDR."
+  }
+}
+
+variable "dns_service_ip" {
+  type        = string
+  description = "Kubernetes DNS service IP contained by service_cidr."
+
+  validation {
+    condition     = can(cidrhost("${var.dns_service_ip}/32", 0))
+    error_message = "dns_service_ip must be a valid IPv4 address."
   }
 }
 
 variable "tags" {
   type        = map(string)
-  description = "Tags applied to all runner fleet resources."
+  description = "Tags applied to the AKS platform resources."
   default = {
     managed-by = "terraform"
-    workload   = "github-actions-runner-fleet"
+    workload   = "github-actions-runner-platform"
+    stage      = "pilot"
   }
 }

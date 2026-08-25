@@ -1,27 +1,24 @@
-output "pool_vmss_ids" {
-  description = "VMSS IDs the dispatcher may scale only after policy admission."
-  value       = { for name, pool in azurerm_linux_virtual_machine_scale_set.pool : name => pool.id }
+output "cluster_id" {
+  description = "AKS resource ID."
+  value       = azurerm_kubernetes_cluster.runner.id
 }
 
-output "dispatcher_capacity_limits" {
-  description = "Maximum VMSS capacities the separately reviewed dispatcher must enforce after admission."
-  value = {
-    socketless      = var.socketless_max_instances
-    container_build = var.container_build_max_instances
-  }
+output "cluster_name" {
+  description = "AKS cluster name used when obtaining an administrator kubeconfig."
+  value       = azurerm_kubernetes_cluster.runner.name
 }
 
-output "pool_identity_client_ids" {
-  description = "Managed identity client IDs for isolated runner pools."
-  value       = { for name, identity in azurerm_user_assigned_identity.pool : name => identity.client_id }
-}
-
-output "key_vault_id" {
-  description = "Key Vault resource ID; secret values are intentionally not Terraform outputs."
-  value       = azurerm_key_vault.fleet.id
+output "resource_group_name" {
+  description = "Resource group containing the AKS platform."
+  value       = azurerm_resource_group.runner.name
 }
 
 output "log_analytics_workspace_id" {
-  value       = azurerm_log_analytics_workspace.fleet.id
-  description = "Central diagnostics workspace for the fleet."
+  description = "Log Analytics workspace receiving control-plane and Container Insights data."
+  value       = azurerm_log_analytics_workspace.runner.id
+}
+
+output "runner_node_pool_names" {
+  description = "AKS node-pool names keyed by runner profile."
+  value       = { for profile, pool in azurerm_kubernetes_cluster_node_pool.runner : profile => pool.name }
 }

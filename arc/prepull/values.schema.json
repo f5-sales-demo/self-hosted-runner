@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["profile", "image", "additionalImages"],
+  "properties": {
+    "profile": {"type": "string", "enum": ["socketless", "container-build"]},
+    "image": {
+      "type": "string",
+      "pattern": "^ghcr\\.io/f5-sales-demo/self-hosted-runner@sha256:[0-9a-f]{64}$"
+    },
+    "additionalImages": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9.-]+/.+@sha256:[0-9a-f]{64}$"}
+    }
+  }
+}

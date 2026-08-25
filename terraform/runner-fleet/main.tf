@@ -1,236 +1,158 @@
 locals {
-  pools = {
+  runner_pools = {
     socketless = {
-      sku     = var.socketless_vm_sku
-      maximum = var.socketless_max_instances
-      subnet  = var.socketless_subnet_address_prefix
-      image   = var.socketless_gallery_image_version_id
-      profile = "socketless"
+      name         = "socketless"
+      vm_size      = "Standard_D8ads_v5"
+      minimum      = 1
+      maximum      = 20
+      os_disk_size = 128
+      profile      = "socketless"
     }
     container_build = {
-      sku     = var.container_build_vm_sku
-      maximum = var.container_build_max_instances
-      subnet  = var.container_build_subnet_address_prefix
-      image   = var.container_build_gallery_image_version_id
-      profile = "container-build"
+      name         = "build"
+      vm_size      = "Standard_D16ads_v5"
+      minimum      = 0
+      maximum      = 5
+      os_disk_size = 128
+      profile      = "container-build"
     }
   }
 }
 
-resource "azurerm_resource_group" "fleet" {
+resource "azurerm_resource_group" "runner" {
   name     = var.resource_group_name
   location = var.location
   tags     = var.tags
 }
 
-resource "azurerm_log_analytics_workspace" "fleet" {
-  name                = "${var.name_prefix}-runner-logs"
-  location            = azurerm_resource_group.fleet.location
-  resource_group_name = azurerm_resource_group.fleet.name
+resource "azurerm_log_analytics_workspace" "runner" {
+  name                = var.log_analytics_workspace_name
+  location            = azurerm_resource_group.runner.location
+  resource_group_name = azurerm_resource_group.runner.name
   sku                 = "PerGB2018"
   retention_in_days   = 30
   tags                = var.tags
 }
 
-resource "azurerm_virtual_network" "fleet" {
-  name                = "${var.name_prefix}-runner-vnet"
-  location            = azurerm_resource_group.fleet.location
-  resource_group_name = azurerm_resource_group.fleet.name
-  address_space       = var.virtual_network_address_space
-  tags                = var.tags
-}
+resource "azurerm_kubernetes_cluster" "runner" {
+  name                = var.cluster_name
+  location            = azurerm_resource_group.runner.location
+  resource_group_name = azurerm_resource_group.runner.name
+  dns_prefix          = var.cluster_dns_prefix
+  kubernetes_version  = var.kubernetes_version
+  sku_tier            = "Standard"
 
-resource "azurerm_network_security_group" "pool" {
-  for_each            = local.pools
-  name                = "${var.name_prefix}-${each.key}-nsg"
-  location            = azurerm_resource_group.fleet.location
-  resource_group_name = azurerm_resource_group.fleet.name
-  tags                = merge(var.tags, { pool = each.key })
+  node_os_upgrade_channel   = "NodeImage"
+  local_account_disabled    = false
+  oidc_issuer_enabled       = true
+  workload_identity_enabled = true
 
-  security_rule {
-    name                       = "deny-azure-load-balancer-inbound"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "AzureLoadBalancer"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "deny-internet-inbound"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "deny-virtual-network-inbound"
-    priority                   = 120
-    direction                  = "Inbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "VirtualNetwork"
-    destination_address_prefix = "*"
-  }
-
-  security_rule {
-    name                       = "allow-https-egress"
-    priority                   = 100
-    direction                  = "Outbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefix      = "*"
-    destination_address_prefix = "Internet"
-  }
-
-  security_rule {
-    name                       = "deny-other-internet-egress"
-    priority                   = 110
-    direction                  = "Outbound"
-    access                     = "Deny"
-    protocol                   = "*"
-    source_port_range          = "*"
-    destination_port_range     = "*"
-    source_address_prefix      = "*"
-    destination_address_prefix = "Internet"
-  }
-}
-
-resource "azurerm_subnet" "pool" {
-  for_each             = local.pools
-  name                 = "${each.key}-runners"
-  resource_group_name  = azurerm_resource_group.fleet.name
-  virtual_network_name = azurerm_virtual_network.fleet.name
-  address_prefixes     = [each.value.subnet]
-  service_endpoints    = ["Microsoft.KeyVault", "Microsoft.Storage"]
-}
-
-resource "azurerm_subnet_network_security_group_association" "pool" {
-  for_each                  = local.pools
-  subnet_id                 = azurerm_subnet.pool[each.key].id
-  network_security_group_id = azurerm_network_security_group.pool[each.key].id
-}
-
-resource "azurerm_user_assigned_identity" "pool" {
-  for_each            = local.pools
-  name                = "${var.name_prefix}-${each.key}-identity"
-  location            = azurerm_resource_group.fleet.location
-  resource_group_name = azurerm_resource_group.fleet.name
-  tags                = merge(var.tags, { pool = each.key })
-}
-
-resource "azurerm_key_vault" "fleet" {
-  name                          = "${var.name_prefix}runnerskv"
-  location                      = azurerm_resource_group.fleet.location
-  resource_group_name           = azurerm_resource_group.fleet.name
-  tenant_id                     = data.azurerm_client_config.current.tenant_id
-  sku_name                      = "standard"
-  rbac_authorization_enabled    = true
-  purge_protection_enabled      = true
-  soft_delete_retention_days    = 90
-  public_network_access_enabled = true
-  tags                          = var.tags
-
-  network_acls {
-    bypass                     = "None"
-    default_action             = "Deny"
-    ip_rules                   = tolist(var.operator_ipv4_cidrs)
-    virtual_network_subnet_ids = values(azurerm_subnet.pool)[*].id
-  }
-}
-
-data "azurerm_client_config" "current" {}
-
-resource "azurerm_monitor_diagnostic_setting" "key_vault" {
-  name                       = "key-vault-audit"
-  target_resource_id         = azurerm_key_vault.fleet.id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.fleet.id
-
-  enabled_log {
-    category = "AuditEvent"
-  }
-}
-
-resource "azurerm_role_assignment" "pool_key_vault" {
-  for_each             = local.pools
-  scope                = azurerm_key_vault.fleet.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azurerm_user_assigned_identity.pool[each.key].principal_id
-}
-
-resource "azurerm_linux_virtual_machine_scale_set" "pool" {
-  for_each                        = local.pools
-  name                            = "${var.name_prefix}-${each.key}-vmss"
-  resource_group_name             = azurerm_resource_group.fleet.name
-  source_image_id                 = each.value.image
-  location                        = azurerm_resource_group.fleet.location
-  sku                             = each.value.sku
-  instances                       = 0
-  admin_username                  = "runneradmin"
-  disable_password_authentication = true
-  upgrade_mode                    = "Manual"
-  overprovision                   = false
-  zones                           = sort(tolist(var.availability_zones))
-  tags                            = merge(var.tags, { pool = each.key, runner-profile = each.value.profile })
-
-  admin_ssh_key {
-    username   = "runneradmin"
-    public_key = var.admin_ssh_public_key
-  }
-
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "StandardSSD_LRS"
-  }
-
-  network_interface {
-    name    = "runner"
-    primary = true
-
-    ip_configuration {
-      name      = "runner"
-      primary   = true
-      subnet_id = azurerm_subnet.pool[each.key].id
+  default_node_pool {
+    name                         = "system"
+    vm_size                      = "Standard_D4as_v5"
+    type                         = "VirtualMachineScaleSets"
+    auto_scaling_enabled         = true
+    node_count                   = 1
+    min_count                    = 1
+    max_count                    = 3
+    only_critical_addons_enabled = true
+    max_pods                     = 50
+    os_disk_size_gb              = 128
+    os_disk_type                 = "Managed"
+    os_sku                       = "Ubuntu"
+    zones                        = sort(tolist(var.availability_zones))
+    node_public_ip_enabled       = false
+    node_labels = {
+      "runner-profile" = "system"
+    }
+    upgrade_settings {
+      max_surge                     = "33%"
+      drain_timeout_in_minutes      = 30
+      node_soak_duration_in_minutes = 0
     }
   }
 
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.pool[each.key].id]
+  api_server_access_profile {
+    authorized_ip_ranges = sort(tolist(var.operator_ipv4_cidrs))
   }
 
-  custom_data = base64encode(<<-CLOUDINIT
-    #cloud-config
-    write_files:
-      - path: /etc/f5-actions-runner/bootstrap.sha256
-        permissions: "0600"
-        content: "${lower(var.runner_bootstrap_sha256)}  /usr/local/sbin/f5-runner-bootstrap"
-    runcmd:
-      - ["/usr/bin/curl", "--fail", "--location", "--proto", "=https", "--tlsv1.2", "--retry", "3", "${var.runner_bootstrap_uri}", "-o", "/usr/local/sbin/f5-runner-bootstrap"]
-      - ["/usr/bin/sha256sum", "--check", "--status", "/etc/f5-actions-runner/bootstrap.sha256"]
-      - ["/usr/bin/chmod", "0700", "/usr/local/sbin/f5-runner-bootstrap"]
-      - ["/usr/local/sbin/f5-runner-bootstrap", "${each.value.profile}"]
-  CLOUDINIT
-  )
+  identity {
+    type = "SystemAssigned"
+  }
+
+  network_profile {
+    network_plugin      = "azure"
+    network_plugin_mode = "overlay"
+    network_data_plane  = "cilium"
+    network_policy      = "cilium"
+    load_balancer_sku   = "standard"
+    outbound_type       = "loadBalancer"
+    pod_cidr            = var.pod_cidr
+    service_cidr        = var.service_cidr
+    dns_service_ip      = var.dns_service_ip
+  }
+
+  oms_agent {
+    log_analytics_workspace_id      = azurerm_log_analytics_workspace.runner.id
+    msi_auth_for_monitoring_enabled = true
+  }
+
+  tags = var.tags
 }
 
-resource "azurerm_monitor_diagnostic_setting" "pool_vmss_metrics" {
-  for_each                   = local.pools
-  name                       = "${each.key}-vmss-metrics"
-  target_resource_id         = azurerm_linux_virtual_machine_scale_set.pool[each.key].id
-  log_analytics_workspace_id = azurerm_log_analytics_workspace.fleet.id
+resource "azurerm_kubernetes_cluster_node_pool" "runner" {
+  for_each = local.runner_pools
+
+  name                   = each.value.name
+  kubernetes_cluster_id  = azurerm_kubernetes_cluster.runner.id
+  vm_size                = each.value.vm_size
+  mode                   = "User"
+  os_type                = "Linux"
+  os_sku                 = "Ubuntu"
+  priority               = "Regular"
+  orchestrator_version   = var.kubernetes_version
+  zones                  = sort(tolist(var.availability_zones))
+  auto_scaling_enabled   = true
+  node_count             = each.value.minimum
+  min_count              = each.value.minimum
+  max_count              = each.value.maximum
+  max_pods               = 50
+  scale_down_mode        = "Delete"
+  os_disk_type           = "Ephemeral"
+  os_disk_size_gb        = each.value.os_disk_size
+  node_public_ip_enabled = false
+
+  node_labels = {
+    "runner-profile" = each.value.profile
+  }
+
+  node_taints = [
+    "runner-profile=${each.value.profile}:NoSchedule",
+  ]
+
+  upgrade_settings {
+    max_surge                     = "33%"
+    drain_timeout_in_minutes      = 30
+    node_soak_duration_in_minutes = 0
+  }
+
+  tags = merge(var.tags, {
+    runner-profile = each.value.profile
+  })
+
+  lifecycle {
+    ignore_changes = [node_count]
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "control_plane" {
+  name                       = "aks-control-plane"
+  target_resource_id         = azurerm_kubernetes_cluster.runner.id
+  log_analytics_workspace_id = azurerm_log_analytics_workspace.runner.id
+
+  enabled_log {
+    category_group = "allLogs"
+  }
 
   enabled_metric {
     category = "AllMetrics"

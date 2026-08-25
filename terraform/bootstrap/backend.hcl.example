@@ -1,0 +1,6 @@
+# Copy to backend.hcl (ignored) and replace every placeholder before init.
+# Authenticate with ARM_ACCESS_KEY supplied only to the Terraform process.
+resource_group_name  = "<state-resource-group>"
+storage_account_name = "<state-storage-account>"
+container_name       = "<state-container>"
+key                  = "<bootstrap-state-key>"

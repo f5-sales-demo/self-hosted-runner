@@ -14,7 +14,7 @@ resource "azurerm_storage_account" "state" {
   min_tls_version                   = "TLS1_2"
   https_traffic_only_enabled        = true
   allow_nested_items_to_be_public   = false
-  shared_access_key_enabled         = false
+  shared_access_key_enabled         = true
   public_network_access_enabled     = true
   default_to_oauth_authentication   = true
   local_user_enabled                = false
@@ -46,12 +46,6 @@ resource "azurerm_storage_container" "state" {
   container_access_type = "private"
 }
 
-resource "azurerm_role_assignment" "terraform_principal" {
-  for_each             = var.terraform_principal_ids
-  scope                = azurerm_storage_container.state.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = each.value
-}
 
 resource "azurerm_monitor_diagnostic_setting" "state_blob" {
   name                       = "state-blob-audit"
