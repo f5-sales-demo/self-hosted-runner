@@ -48,6 +48,7 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
   for namespace in arc-runners-socketless arc-runners-container-build; do
     kubectl get secret arc-github-app -n "$namespace" >/dev/null
+    kubectl get secret ghcr-pull -n "$namespace" >/dev/null
   done
 
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
@@ -57,6 +58,6 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
 
   helm upgrade --install self-hosted-runner-socketless "$scale_set_chart"     --namespace arc-runners-socketless     --values "$tmpdir/socketless-values.yaml"     --set-string githubConfigUrl="$GITHUB_CONFIG_URL"     --wait --timeout 10m
   helm upgrade --install self-hosted-runner-container-build "$scale_set_chart"     --namespace arc-runners-container-build     --values "$tmpdir/container-build-values.yaml"     --set-string githubConfigUrl="$GITHUB_CONFIG_URL"     --wait --timeout 10m
-  helm upgrade --install runner-image-cache arc/prepull     --namespace arc-runners-socketless     --set-string profile=socketless     --set-string image="$SOCKETLESS_IMAGE"     --wait --timeout 10m
-  helm upgrade --install runner-image-cache arc/prepull     --namespace arc-runners-container-build     --set-string profile=container-build     --set-string image="$CONTAINER_BUILD_IMAGE"     --set-string 'additionalImages[0]'="$dind_image"     --wait --timeout 10m
+  helm upgrade --install runner-image-cache arc/prepull     --namespace arc-runners-socketless     --set-string profile=socketless     --set-string image="$SOCKETLESS_IMAGE"     --set-string 'imagePullSecrets[0]'=ghcr-pull     --wait --timeout 10m
+  helm upgrade --install runner-image-cache arc/prepull     --namespace arc-runners-container-build     --set-string profile=container-build     --set-string image="$CONTAINER_BUILD_IMAGE"     --set-string 'additionalImages[0]'="$dind_image"     --set-string 'imagePullSecrets[0]'=ghcr-pull     --wait --timeout 10m
 fi

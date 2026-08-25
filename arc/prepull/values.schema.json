@@ -12,6 +12,10 @@
     "additionalImages": {
       "type": "array",
       "items": {"type": "string", "pattern": "^[a-z0-9.-]+/.+@sha256:[0-9a-f]{64}$"}
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$"}
     }
   }
 }

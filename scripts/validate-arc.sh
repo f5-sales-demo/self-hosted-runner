@@ -48,9 +48,13 @@ helm template self-hosted-runner-container-build "$scale_set_chart" --namespace 
 grep -Fq "$dind_image" "$tmpdir/container-build.yaml"
 grep -Fq 'runner-profile: socketless' "$tmpdir/socketless.yaml"
 grep -Fq 'runner-profile: container-build' "$tmpdir/container-build.yaml"
+grep -Fq 'name: ghcr-pull' "$tmpdir/socketless.yaml"
+grep -Fq 'name: ghcr-pull' "$tmpdir/container-build.yaml"
 
-helm lint arc/prepull   --set-string profile=socketless   --set-string image="$runner_image" >/dev/null
-helm template runner-image-cache arc/prepull   --namespace arc-runners-socketless   --set-string profile=socketless   --set-string image="$runner_image" >"$tmpdir/prepull-socketless.yaml"
-helm lint arc/prepull   --set-string profile=container-build   --set-string image="$runner_image"   --set-string 'additionalImages[0]'="$dind_image" >/dev/null
-helm template runner-image-cache arc/prepull   --namespace arc-runners-container-build   --set-string profile=container-build   --set-string image="$runner_image"   --set-string 'additionalImages[0]'="$dind_image" >"$tmpdir/prepull-container-build.yaml"
+helm lint arc/prepull   --set-string profile=socketless   --set-string image="$runner_image"   --set-string 'imagePullSecrets[0]'=ghcr-pull >/dev/null
+helm template runner-image-cache arc/prepull   --namespace arc-runners-socketless   --set-string profile=socketless   --set-string image="$runner_image"   --set-string 'imagePullSecrets[0]'=ghcr-pull >"$tmpdir/prepull-socketless.yaml"
+helm lint arc/prepull   --set-string profile=container-build   --set-string image="$runner_image"   --set-string 'additionalImages[0]'="$dind_image"   --set-string 'imagePullSecrets[0]'=ghcr-pull >/dev/null
+helm template runner-image-cache arc/prepull   --namespace arc-runners-container-build   --set-string profile=container-build   --set-string image="$runner_image"   --set-string 'additionalImages[0]'="$dind_image"   --set-string 'imagePullSecrets[0]'=ghcr-pull >"$tmpdir/prepull-container-build.yaml"
 grep -Fq "$dind_image" "$tmpdir/prepull-container-build.yaml"
+grep -Fq 'name: "ghcr-pull"' "$tmpdir/prepull-socketless.yaml"
+grep -Fq 'name: "ghcr-pull"' "$tmpdir/prepull-container-build.yaml"

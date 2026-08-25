@@ -24,6 +24,8 @@ listenerTemplate:
             memory: 512Mi
 template:
   spec:
+    imagePullSecrets:
+      - name: ghcr-pull
     nodeSelector:
       runner-profile: socketless
     tolerations:

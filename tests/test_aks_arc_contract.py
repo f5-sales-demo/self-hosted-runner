@@ -47,6 +47,9 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("controller|runners|all", deploy)
         self.assertIn("minRunners: 0", build)
         self.assertIn("emptyDir:", build)
+        self.assertIn("name: ghcr-pull", build)
+        self.assertIn("kubectl get secret ghcr-pull", deploy)
+        self.assertIn("'imagePullSecrets[0]'=ghcr-pull", deploy)
 
     def test_controller_post_renderer_uses_python(self) -> None:
         post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"

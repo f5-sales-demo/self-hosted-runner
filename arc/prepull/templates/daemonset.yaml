@@ -17,6 +17,12 @@ spec:
         runner-profile: {{ .Values.profile }}
     spec:
       automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ . | quote }}
+        {{- end }}
+      {{- end }}
       nodeSelector:
         runner-profile: {{ .Values.profile }}
       tolerations:

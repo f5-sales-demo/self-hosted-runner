@@ -68,7 +68,10 @@ First export KUBECONFIG and install the controller with
 scripts/arc-deploy.sh controller. Create or install a repository-scoped GitHub
 App with Administration read/write and Metadata read-only. Keep its IDs and
 private key outside Git. Export GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, and
-GITHUB_APP_PRIVATE_KEY_FILE, then run scripts/arc-github-app-secret.sh.
+GITHUB_APP_PRIVATE_KEY_FILE, then run scripts/arc-github-app-secret.sh. If the
+GHCR package is private, supply a dedicated read-only package credential through
+GHCR_USERNAME and GHCR_TOKEN, then run scripts/arc-ghcr-pull-secret.sh. Do not
+reuse a broad operator token.
 
 Finally export GITHUB_CONFIG_URL, SOCKETLESS_IMAGE, and CONTAINER_BUILD_IMAGE,
 then run scripts/arc-deploy.sh runners. Both scale sets use zero idle runners. The socketless
