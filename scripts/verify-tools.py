@@ -65,6 +65,20 @@ def main() -> int:
         failures.append("ARM64 cross compiler cannot use the target libc sysroot: {!r}".format(cross_output.strip()))
     else:
         print("[ok] ARM64 cross compiler libc sysroot")
+    for compiler, language, source in (
+        ("clang", "c", "int main(void) { return 0; }"),
+        ("clang++", "c++", "int main() { return 0; }"),
+    ):
+        output_path = "/tmp/runner-{}-smoke".format(compiler)
+        compiler_code, compiler_output = run(
+            "printf '%s\\n' {} | {} -x {} - -o {} && {} && rm -f {}".format(
+                shlex.quote(source), compiler, language, output_path, output_path, output_path
+            )
+        )
+        if compiler_code:
+            failures.append("{} cannot compile and run a {} smoke test: {!r}".format(compiler, language, compiler_output.strip()))
+        else:
+            print("[ok] {} {} smoke test".format(compiler, language))
     if failures:
         print("\n".join("[error] {}".format(failure) for failure in failures), file=sys.stderr)
         return 1

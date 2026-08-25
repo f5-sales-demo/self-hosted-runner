@@ -378,6 +378,28 @@
       "expected": "13."
     },
     {
+      "name": "clang",
+      "version": "18.1.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "clang --version",
+      "expected": "Ubuntu clang version 18.1.3"
+    },
+    {
+      "name": "clang++",
+      "version": "18.1.3",
+      "source": "ubuntu snapshot 20260810T000000Z",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "clang++ --version",
+      "expected": "Ubuntu clang version 18.1.3"
+    },
+    {
       "name": "cmake",
       "version": "3.28.3",
       "source": "ubuntu snapshot 20260810T000000Z",
