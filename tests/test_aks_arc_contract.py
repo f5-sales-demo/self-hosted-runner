@@ -45,11 +45,17 @@ class AksArcContractTests(unittest.TestCase):
         self.assertRegex(build, r"docker\.io/library/docker@sha256:[0-9a-f]{64}")
         self.assertIn("RUNNER_IMAGE_REQUIRED", build)
         self.assertIn("controller|runners|all", deploy)
-        self.assertIn("minRunners: 0", build)
+        self.assertIn("scripts/arc-config.py", deploy)
+        self.assertIn("--set-string runnerScaleSetName=", deploy)
+        self.assertIn("--set minRunners=", deploy)
+        self.assertIn("--set maxRunners=", deploy)
+        self.assertNotIn("runnerScaleSetName:", build)
+        self.assertNotIn("minRunners:", build)
+        self.assertNotIn("maxRunners:", build)
         self.assertIn("emptyDir:", build)
         self.assertIn("name: ghcr-pull", build)
         self.assertIn("kubectl get secret ghcr-pull", deploy)
-        self.assertIn("'imagePullSecrets[0]'=ghcr-pull", deploy)
+        self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
 
     def test_controller_post_renderer_uses_python(self) -> None:
         post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"
@@ -72,6 +78,11 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("verify-runner-tools container-build", workflow)
         self.assertIn("docker buildx build", workflow)
         self.assertIn("prior runner pod's Docker cache survived", workflow)
+
+    def test_arc_workflow_validates_every_repository_configuration(self) -> None:
+        workflow = (ROOT / ".github/workflows/terraform.yml").read_text(encoding="utf-8")
+        self.assertIn("arc/repositories/self-hosted-runner.yaml", workflow)
+        self.assertIn("arc/repositories/xcsh.yaml", workflow)
 
 
 if __name__ == "__main__":
