@@ -1,0 +1,6 @@
+apiVersion: v2
+name: runner-image-prepull
+description: Profile-isolated image pre-puller for ephemeral ARC runners
+type: application
+version: 0.1.0
+appVersion: "1"

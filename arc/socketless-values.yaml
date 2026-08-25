@@ -1,0 +1,55 @@
+githubConfigSecret: arc-github-app
+controllerServiceAccount:
+  name: arc-gha-rs-controller
+  namespace: arc-systems
+runnerScaleSetName: self-hosted-runner-socketless
+minRunners: 0
+maxRunners: 20
+listenerTemplate:
+  spec:
+    nodeSelector:
+      runner-profile: system
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+        effect: NoSchedule
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+template:
+  spec:
+    imagePullSecrets:
+      - name: ghcr-pull
+    nodeSelector:
+      runner-profile: socketless
+    tolerations:
+      - key: runner-profile
+        operator: Equal
+        value: socketless
+        effect: NoSchedule
+    securityContext:
+      fsGroup: 1001
+    containers:
+      - name: runner
+        image: RUNNER_IMAGE_REQUIRED
+        imagePullPolicy: IfNotPresent
+        command: [/home/runner/run.sh]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          runAsNonRoot: true
+          runAsUser: 1001
+        resources:
+          requests:
+            cpu: "7"
+            memory: 24Gi
+          limits:
+            cpu: "7"
+            memory: 28Gi

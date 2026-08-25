@@ -30,6 +30,10 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("docker-buildx", container_build)
         self.assertIn("docker-compose", container_build)
         self.assertIn("USER runner", standard)
+        self.assertIn("RUNNER_MANUALLY_TRAP_SIG=1", dockerfile)
+        self.assertIn("ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1", dockerfile)
+        self.assertIn("tar --extract --gzip --file /tmp/actions-runner.tar.gz --directory /home/runner", dockerfile)
+        self.assertIn("find /home/runner -mindepth 1 -maxdepth 1", (ROOT / "scripts/runner-entrypoint.sh").read_text(encoding="utf-8"))
         self.assertNotIn("--output /tmp/gcloud.tar.gz /tmp/", dockerfile)
         self.assertIn("--output /tmp/uv.tar.gz", dockerfile)
 

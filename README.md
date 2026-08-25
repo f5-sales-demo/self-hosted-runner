@@ -60,3 +60,14 @@ python3 scripts/check-tool-updates.py --format json
 4. Update `docs-control` profile policy with those digests, then run one socketless and one trust-gated container-build pilot. Do not edit existing open issues #1533 or #1580 for this rollout.
 
 See [docs/rollout.md](docs/rollout.md) for the required downstream handoff.
+
+## AKS execution platform
+
+Stage 1 uses AKS and GitHub Actions Runner Controller. Terraform owns Azure
+infrastructure; interactive Helm owns ARC, the repository-scoped scale sets,
+and image pre-pullers. The standard image remains socketless. The
+container-build image connects only to a privileged, pod-local DinD daemon.
+
+See [terraform/README.md](terraform/README.md) for the backend, AKS, ARC, and
+pilot procedure. Runtime image digests, GitHub App material, Terraform inputs,
+plans, state, and kubeconfig are never committed.
