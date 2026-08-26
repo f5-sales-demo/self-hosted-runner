@@ -105,8 +105,7 @@ RUN rm -f /etc/apt/sources.list.d/* \
     && ln -s /usr/bin/convert /usr/local/bin/magick \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
-    && install -d -o runner -g runner /home/runner /runner-runtime "$AGENT_TOOLSDIRECTORY" \
-    && ln -s /home/runner /opt/actions-runner
+    && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime "$AGENT_TOOLSDIRECTORY"
 
 ARG PNPM_VERSION=11.3.0
 ARG PNPM_SHA256=5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474
@@ -116,7 +115,8 @@ RUN set -eux; \
     tar --extract --gzip --file /tmp/gh.tar.gz --directory /tmp; install -m 0555 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/actions-runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"; \
     echo "${RUNNER_SHA256}  /tmp/actions-runner.tar.gz" | sha256sum --check --strict; \
-    tar --extract --gzip --file /tmp/actions-runner.tar.gz --directory /home/runner; \
+    tar --extract --gzip --file /tmp/actions-runner.tar.gz --directory /opt/actions-runner; \
+    cp --archive --link /opt/actions-runner/. /home/runner/; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"; \
     echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/go.tar.gz --directory /opt; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/dotnet.tar.gz "https://builds.dotnet.microsoft.com/dotnet/Sdk/${DOTNET_VERSION}/dotnet-sdk-${DOTNET_VERSION}-linux-x64.tar.gz"; \
@@ -188,7 +188,7 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
     rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
-    chown -R runner:runner /home/runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode
+    chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
