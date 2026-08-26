@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/i18n-core",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-i18n-core-socketless",
+      "release": "i18n-core-socketless",
+      "runner_scale_set_name": "docs-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-i18n-core-container-build",
+      "release": "i18n-core-container-build",
+      "runner_scale_set_name": "docs-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

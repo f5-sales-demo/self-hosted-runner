@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/docs-builder",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-docs-builder-socketless",
+      "release": "docs-builder-socketless",
+      "runner_scale_set_name": "docs-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 4
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-docs-builder-container-build",
+      "release": "docs-builder-container-build",
+      "runner_scale_set_name": "docs-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
+    }
+  ]
+}
