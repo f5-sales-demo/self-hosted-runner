@@ -23,7 +23,7 @@ class AksArcContractTests(unittest.TestCase):
             'network_plugin_mode = "overlay"',
             'network_data_plane  = "cilium"',
             'network_policy      = "cilium"',
-            'node_public_ip_enabled = false',
+            "node_public_ip_enabled = false",
             '"Standard_D4as_v5"',
             '"Standard_D8ads_v5"',
             '"Standard_D16ads_v5"',
@@ -66,7 +66,9 @@ class AksArcContractTests(unittest.TestCase):
         )
 
     def test_pilot_targets_only_named_scale_sets(self) -> None:
-        workflow = (ROOT / ".github/workflows/arc-pilot.yml").read_text(encoding="utf-8")
+        workflow = (ROOT / ".github/workflows/arc-pilot.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertEqual(
             1, len(re.findall(r"runs-on: self-hosted-runner-socketless", workflow))
         )
@@ -80,9 +82,10 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("prior runner pod's Docker cache survived", workflow)
 
     def test_arc_workflow_validates_every_repository_configuration(self) -> None:
-        workflow = (ROOT / ".github/workflows/terraform.yml").read_text(encoding="utf-8")
-        self.assertIn("arc/repositories/self-hosted-runner.yaml", workflow)
-        self.assertIn("arc/repositories/xcsh.yaml", workflow)
+        workflow = (ROOT / ".github/workflows/terraform.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scripts/validate-arc.sh arc/repositories/*.yaml", workflow)
 
 
 if __name__ == "__main__":

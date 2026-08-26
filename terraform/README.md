@@ -94,3 +94,13 @@ The xcsh socketless and container-build scale sets are capped at 10 and 3
 respectively, both with zero idle runners. The original self-hosted-runner
 configuration retains its 20 and 5 limits. The socketless node pool stays warm;
 the build pool scales from and back to zero.
+
+Validate the complete repository set together before deployment:
+
+    scripts/validate-arc.sh arc/repositories/*.yaml
+
+The documentation cohort uses twelve zero-idle, repository-scoped scale sets
+for docs, docs-builder, docs-theme, i18n-core, starlight-llms-txt, and
+docs-icons. Its namespaces and Helm releases are unique, while repository scope
+allows the cohort to share the workflow labels docs-socketless and
+docs-container-build.

@@ -53,9 +53,6 @@ jobs:
           terraform -chdir=terraform/runner-fleet init -backend=false
           terraform -chdir=terraform/runner-fleet validate
       - name: Validate ARC Helm rendering
-        run: >-
-          scripts/validate-arc.sh
-          arc/repositories/self-hosted-runner.yaml
-          arc/repositories/xcsh.yaml
+        run: scripts/validate-arc.sh arc/repositories/*.yaml
       - name: Refuse committed runtime and secret artifacts
         run: scripts/check-committed-artifacts.sh
