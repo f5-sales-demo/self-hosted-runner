@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/terraform-provider-xcsh",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-terraform-provider-xcsh-socketless",
+      "release": "terraform-provider-xcsh-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 6
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-terraform-provider-xcsh-container-build",
+      "release": "terraform-provider-xcsh-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
+    }
+  ]
+}

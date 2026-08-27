@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/cdn-simulator",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-cdn-simulator-socketless",
+      "release": "cdn-simulator-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-cdn-simulator-container-build",
+      "release": "cdn-simulator-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

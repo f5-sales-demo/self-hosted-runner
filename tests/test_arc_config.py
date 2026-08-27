@@ -97,14 +97,96 @@ class ArcConfigTests(unittest.TestCase):
                     self.assertEqual(0, item["min_runners"])
                     self.assertEqual(maximum, item["max_runners"])
 
+    def test_managed_repository_configs_are_exact(self) -> None:
+        expected = {
+            "docs-control": (8, 2),
+            "api-specs": (6, 2),
+            "api-specs-enriched": (6, 2),
+            "terraform-provider-xcsh": (6, 2),
+            "devcontainer": (4, 2),
+            "console": (4, 1),
+            "marketplace": (4, 1),
+            "marketplace-claude-code": (4, 1),
+            "mcn": (4, 1),
+            "origin-server": (4, 1),
+            "starlight-mega-menu": (4, 1),
+            "vscode-xcsh": (4, 1),
+            "xcsh-action": (4, 1),
+            "xcsh-chrome-extension": (4, 1),
+            "administration": (3, 1),
+            "api-protection": (3, 1),
+            "apt-repo": (3, 1),
+            "bot-advanced": (3, 1),
+            "bot-standard": (3, 1),
+            "cdn": (3, 1),
+            "cdn-simulator": (3, 1),
+            "csd": (3, 1),
+            "ddos": (3, 1),
+            "demo-resource-template": (3, 1),
+            "demo-resources": (3, 1),
+            "dns": (3, 1),
+            "nginx": (3, 1),
+            "observability": (3, 1),
+            "traffic-generator": (3, 1),
+            "waf": (3, 1),
+            "was": (3, 1),
+            "webapp-api-protection": (3, 1),
+        }
+        self.assertEqual(32, len(expected))
+        self.assertEqual(
+            {f"https://github.com/f5-sales-demo/{name}" for name in expected},
+            MODULE.MANAGED_COHORT,
+        )
+        for repository, (socketless_max, container_max) in expected.items():
+            with self.subTest(repository=repository):
+                config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
+                profiles = {item["profile"]: item for item in config["scale_sets"]}
+                for profile, maximum in (
+                    ("socketless", socketless_max),
+                    ("container-build", container_max),
+                ):
+                    item = profiles[profile]
+                    self.assertEqual(
+                        f"arc-runners-{repository}-{profile}", item["namespace"]
+                    )
+                    self.assertEqual(f"{repository}-{profile}", item["release"])
+                    self.assertEqual(
+                        f"managed-{profile}", item["runner_scale_set_name"]
+                    )
+                    self.assertEqual(0, item["min_runners"])
+                    self.assertEqual(maximum, item["max_runners"])
+
+    def test_config_directory_exactly_covers_catalog_plus_controller_repo(self) -> None:
+        catalog = json.loads(
+            (ROOT / "catalog/governed-repositories.json").read_text(encoding="utf-8")
+        )
+        expected = {
+            repository.split("/", 1)[1] for repository in catalog["repositories"]
+        }
+        expected.add("self-hosted-runner")
+        self.assertEqual(expected, {path.stem for path in CONFIG_DIR.glob("*.yaml")})
+        self.assertEqual(40, len(expected))
+
     def test_all_configs_have_globally_safe_identities(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
-        configs = MODULE.validate_config_set(paths, ROOT)
+        configs = MODULE.validate_complete_config_set(paths, ROOT)
         self.assertEqual(len(paths), len(configs))
         docs = [
             config for config in configs if config["repository"] in MODULE.DOCS_COHORT
         ]
         self.assertEqual(6, len(docs))
+        managed = [
+            config
+            for config in configs
+            if config["repository"] in MODULE.MANAGED_COHORT
+        ]
+        self.assertEqual(32, len(managed))
+        self.assertEqual(40, len(configs))
+
+    def test_complete_config_set_rejects_missing_repository(self) -> None:
+        paths = sorted(CONFIG_DIR.glob("*.yaml"))
+        with self.assertRaisesRegex(MODULE.ConfigError, "coverage mismatch"):
+            MODULE.validate_complete_config_set(paths[:-1], ROOT)
 
     def test_cross_config_collisions_fail_closed(self) -> None:
         first = MODULE.load_config(CONFIG_DIR / "self-hosted-runner.yaml", ROOT)
@@ -126,15 +208,27 @@ class ArcConfigTests(unittest.TestCase):
                 with self.subTest(config=config), self.assertRaises(MODULE.ConfigError):
                     MODULE.validate_config_set([first_path, second_path], ROOT)
 
-    def test_docs_shared_labels_cannot_escape_or_swap(self) -> None:
-        escaped = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
-        escaped["scale_sets"][0]["runner_scale_set_name"] = "docs-socketless"
-        swapped = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
-        swapped["scale_sets"][0]["runner_scale_set_name"] = "docs-container-build"
-        swapped["scale_sets"][1]["runner_scale_set_name"] = "docs-socketless"
+    def test_shared_labels_cannot_escape_or_swap(self) -> None:
+        escaped_docs = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
+        escaped_docs["scale_sets"][0]["runner_scale_set_name"] = "docs-socketless"
+        escaped_managed = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
+        escaped_managed["scale_sets"][0]["runner_scale_set_name"] = "managed-socketless"
+        swapped_docs = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
+        swapped_docs["scale_sets"][0]["runner_scale_set_name"] = "docs-container-build"
+        swapped_docs["scale_sets"][1]["runner_scale_set_name"] = "docs-socketless"
+        swapped_managed = MODULE.load_config(CONFIG_DIR / "administration.yaml", ROOT)
+        swapped_managed["scale_sets"][0]["runner_scale_set_name"] = (
+            "managed-container-build"
+        )
+        swapped_managed["scale_sets"][1]["runner_scale_set_name"] = "managed-socketless"
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"
-            for config in (escaped, swapped):
+            for config in (
+                escaped_docs,
+                escaped_managed,
+                swapped_docs,
+                swapped_managed,
+            ):
                 path.write_text(json.dumps(config), encoding="utf-8")
                 with self.subTest(config=config), self.assertRaises(MODULE.ConfigError):
                     MODULE.load_config(path, ROOT)
@@ -173,6 +267,9 @@ class ArcConfigTests(unittest.TestCase):
         mutations.append(bad)
         bad = copy.deepcopy(baseline)
         bad["scale_sets"][0]["max_runners"] = 0
+        mutations.append(bad)
+        bad = copy.deepcopy(baseline)
+        bad["scale_sets"][0]["max_runners"] = 9
         mutations.append(bad)
         bad = copy.deepcopy(baseline)
         bad["scale_sets"][0]["values"] = "../socketless-values.yaml"

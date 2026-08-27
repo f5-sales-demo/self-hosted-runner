@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/dns",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-dns-socketless",
+      "release": "dns-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-dns-container-build",
+      "release": "dns-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

@@ -37,6 +37,77 @@ DOCS_SHARED_LABELS = {
     "socketless": "docs-socketless",
     "container-build": "docs-container-build",
 }
+MANAGED_COHORT = {
+    f"https://github.com/f5-sales-demo/{name}"
+    for name in (
+        "administration",
+        "api-protection",
+        "api-specs",
+        "api-specs-enriched",
+        "apt-repo",
+        "bot-advanced",
+        "bot-standard",
+        "cdn",
+        "cdn-simulator",
+        "console",
+        "csd",
+        "ddos",
+        "demo-resource-template",
+        "demo-resources",
+        "devcontainer",
+        "dns",
+        "docs-control",
+        "marketplace",
+        "marketplace-claude-code",
+        "mcn",
+        "nginx",
+        "observability",
+        "origin-server",
+        "starlight-mega-menu",
+        "terraform-provider-xcsh",
+        "traffic-generator",
+        "vscode-xcsh",
+        "waf",
+        "was",
+        "webapp-api-protection",
+        "xcsh-action",
+        "xcsh-chrome-extension",
+    )
+}
+MANAGED_SHARED_LABELS = {
+    "socketless": "managed-socketless",
+    "container-build": "managed-container-build",
+}
+EXPECTED_CAPS = {
+    "https://github.com/f5-sales-demo/self-hosted-runner": (20, 5),
+    "https://github.com/f5-sales-demo/xcsh": (10, 3),
+    "https://github.com/f5-sales-demo/docs": (3, 1),
+    "https://github.com/f5-sales-demo/docs-builder": (4, 2),
+    "https://github.com/f5-sales-demo/docs-icons": (3, 1),
+    "https://github.com/f5-sales-demo/docs-theme": (3, 1),
+    "https://github.com/f5-sales-demo/i18n-core": (3, 1),
+    "https://github.com/f5-sales-demo/starlight-llms-txt": (3, 1),
+    **{repository: (3, 1) for repository in MANAGED_COHORT},
+    **{
+        f"https://github.com/f5-sales-demo/{name}": limits
+        for name, limits in {
+            "docs-control": (8, 2),
+            "api-specs": (6, 2),
+            "api-specs-enriched": (6, 2),
+            "terraform-provider-xcsh": (6, 2),
+            "devcontainer": (4, 2),
+            "console": (4, 1),
+            "marketplace": (4, 1),
+            "marketplace-claude-code": (4, 1),
+            "mcn": (4, 1),
+            "origin-server": (4, 1),
+            "starlight-mega-menu": (4, 1),
+            "vscode-xcsh": (4, 1),
+            "xcsh-action": (4, 1),
+            "xcsh-chrome-extension": (4, 1),
+        }.items()
+    },
+}
 
 
 class ConfigError(ValueError):
@@ -71,6 +142,8 @@ def load_config(path: Path, repository_root: Path):
     repository = raw["repository"]
     if not isinstance(repository, str) or not REPOSITORY_RE.fullmatch(repository):
         raise ConfigError("repository must be an exact HTTPS GitHub repository URL")
+    if repository not in EXPECTED_CAPS:
+        raise ConfigError(f"repository is outside the exact ARC fleet: {repository}")
     scale_sets = raw["scale_sets"]
     if not isinstance(scale_sets, list) or len(scale_sets) != 2:
         raise ConfigError("scale_sets must contain exactly two entries")
@@ -126,14 +199,42 @@ def load_config(path: Path, repository_root: Path):
     config = {"repository": repository, "scale_sets": normalized}
     for spec in normalized:
         label = spec["runner_scale_set_name"]
-        expected = DOCS_SHARED_LABELS[spec["profile"]]
-        if repository in DOCS_COHORT and label != expected:
+        minimum = spec["min_runners"]
+        maximum = spec["max_runners"]
+        contracts = (
+            (DOCS_COHORT, DOCS_SHARED_LABELS, "documentation"),
+            (MANAGED_COHORT, MANAGED_SHARED_LABELS, "managed"),
+        )
+        for cohort, shared_labels, name in contracts:
+            expected = shared_labels[spec["profile"]]
+            if repository in cohort and label != expected:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} runner scale set name must equal {expected}"
+                )
+            if repository not in cohort and label in shared_labels.values():
+                raise ConfigError(
+                    f"{label} is reserved for the repository-scoped {name} cohort"
+                )
+        if repository in MANAGED_COHORT:
+            name = repository.rsplit("/", 1)[1]
+            expected_namespace = f"arc-runners-{name}-{spec['profile']}"
+            expected_release = f"{name}-{spec['profile']}"
+            if spec["namespace"] != expected_namespace:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} namespace must equal {expected_namespace}"
+                )
+            if spec["release"] != expected_release:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} release must equal {expected_release}"
+                )
+            if minimum != 0:
+                raise ConfigError(f"{repository} min_runners must equal zero")
+        expected_maximum = EXPECTED_CAPS[repository][
+            0 if spec["profile"] == "socketless" else 1
+        ]
+        if maximum != expected_maximum:
             raise ConfigError(
-                f"{repository} {spec['profile']} runner scale set name must equal {expected}"
-            )
-        if repository not in DOCS_COHORT and label in DOCS_SHARED_LABELS.values():
-            raise ConfigError(
-                f"{label} is reserved for the repository-scoped documentation cohort"
+                f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
             )
     return config
 
@@ -159,16 +260,33 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                 if previous is None:
                     observed[value] = repository
                     continue
-                if (
-                    field == "runner_scale_set_name"
-                    and value == DOCS_SHARED_LABELS[spec["profile"]]
-                    and previous in DOCS_COHORT
-                    and repository in DOCS_COHORT
-                ):
+                shared_label_collision = field == "runner_scale_set_name" and any(
+                    value == labels[spec["profile"]]
+                    and previous in cohort
+                    and repository in cohort
+                    for cohort, labels in (
+                        (DOCS_COHORT, DOCS_SHARED_LABELS),
+                        (MANAGED_COHORT, MANAGED_SHARED_LABELS),
+                    )
+                )
+                if shared_label_collision:
                     continue
                 raise ConfigError(
                     f"{field} value {value} collides between {previous} and {repository}"
                 )
+    return configs
+
+
+def validate_complete_config_set(paths: list[Path], repository_root: Path):
+    """Require the checked-in configuration set to cover the exact ARC fleet."""
+    configs = validate_config_set(paths, repository_root)
+    observed = {config["repository"] for config in configs}
+    expected = set(EXPECTED_CAPS)
+    if observed != expected:
+        raise ConfigError(
+            "ARC configuration coverage mismatch: "
+            f"missing={sorted(expected - observed)}, extra={sorted(observed - expected)}"
+        )
     return configs
 
 
@@ -184,7 +302,7 @@ def main(argv=None):
     root = Path(__file__).resolve().parent.parent
     try:
         if args.validate_set:
-            result = validate_config_set(args.configuration, root)
+            result = validate_complete_config_set(args.configuration, root)
         elif len(args.configuration) == 1:
             result = load_config(args.configuration[0], root)
         else:

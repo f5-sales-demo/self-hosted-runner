@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/console",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-console-socketless",
+      "release": "console-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 4
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-console-container-build",
+      "release": "console-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

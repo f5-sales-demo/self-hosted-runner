@@ -67,6 +67,9 @@ Stage 1 uses AKS and GitHub Actions Runner Controller. Terraform owns Azure
 infrastructure; interactive Helm owns ARC, the repository-scoped scale sets,
 and image pre-pullers. The standard image remains socketless. The
 container-build image connects only to a privileged, pod-local DinD daemon.
+All repository scale sets use zero idle runners. Two shared image-cache
+DaemonSets run in `arc-runner-cache`, one per node profile; repository
+namespaces do not carry duplicate cache releases.
 
 See [terraform/README.md](terraform/README.md) for the backend, AKS, ARC, and
 pilot procedure. Runtime image digests, GitHub App material, Terraform inputs,

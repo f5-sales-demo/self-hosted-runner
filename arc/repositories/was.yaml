@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/was",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-was-socketless",
+      "release": "was-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-was-container-build",
+      "release": "was-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}
