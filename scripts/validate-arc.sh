@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-(($# > 0)) || { echo "usage: scripts/validate-arc.sh <repository-config> [...]" >&2; exit 2; }
+(($# > 0)) || {
+  echo "usage: scripts/validate-arc.sh <repository-config> [...]" >&2
+  exit 2
+}
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 command -v helm >/dev/null
@@ -45,6 +48,23 @@ helm template arc "$controller_chart" \
   -f arc/controller-values.yaml \
   --post-renderer scripts/arc-controller-post-renderer.py >"$tmpdir/controller.yaml"
 grep -Fq 'ghcr.io/actions/gha-runner-scale-set-controller@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d' "$tmpdir/controller.yaml"
+
+for profile in socketless container-build; do
+  prepull_args=(
+    --namespace arc-runner-cache
+    --set-string "profile=$profile"
+    --set-string "image=$runner_image"
+    --set-string 'imagePullSecrets[0]=ghcr-pull'
+  )
+  if [[ "$profile" == container-build ]]; then
+    prepull_args+=(--set-string "additionalImages[0]=$dind_image")
+  fi
+  helm lint arc/prepull "${prepull_args[@]}" >/dev/null
+  helm template "runner-image-cache-$profile" arc/prepull "${prepull_args[@]}" >"$tmpdir/prepull-$profile.yaml"
+  grep -Fq 'namespace: arc-runner-cache' "$tmpdir/prepull-$profile.yaml"
+  grep -Fq "name: runner-image-prepull-$profile" "$tmpdir/prepull-$profile.yaml"
+  grep -Fq 'name: "ghcr-pull"' "$tmpdir/prepull-$profile.yaml"
+done
 
 for config in "$@"; do
   config_json=$(python3 scripts/arc-config.py "$config")
@@ -97,18 +117,5 @@ for config in "$@"; do
       grep -Fq 'DOCKER_HOST' "$rendered_manifest"
     fi
 
-    prepull_args=(
-      --namespace "$namespace"
-      --set-string "profile=$profile"
-      --set-string "image=$runner_image"
-      --set-string 'imagePullSecrets[0]=ghcr-pull'
-    )
-    if [[ "$profile" == container-build ]]; then
-      prepull_args+=(--set-string "additionalImages[0]=$dind_image")
-    fi
-    helm lint arc/prepull "${prepull_args[@]}" >/dev/null
-    helm template runner-image-cache arc/prepull "${prepull_args[@]}" \
-      >"$tmpdir/$repository_name-prepull-$profile.yaml"
-    grep -Fq 'name: "ghcr-pull"' "$tmpdir/$repository_name-prepull-$profile.yaml"
   done
 done

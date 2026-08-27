@@ -4,15 +4,24 @@ set -euo pipefail
 config=${1:-}
 mode=${2:-all}
 case "$mode" in
-  controller|runners|all) ;;
-  *) echo "usage: scripts/arc-deploy.sh <repository-config> [controller|runners|all]" >&2; exit 2 ;;
+controller | cache | runners | all) ;;
+*)
+  echo "usage: scripts/arc-deploy.sh <repository-config> [controller|cache|runners|all]" >&2
+  exit 2
+  ;;
 esac
-[[ -n "$config" ]] || { echo "repository configuration is required" >&2; exit 2; }
+[[ -n "$config" ]] || {
+  echo "repository configuration is required" >&2
+  exit 2
+}
 
 : "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
 case "$(stat -c '%a' "$KUBECONFIG")" in
-  400|600) ;;
-  *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1 ;;
+400 | 600) ;;
+*)
+  echo "KUBECONFIG must have mode 0400 or 0600" >&2
+  exit 1
+  ;;
 esac
 
 repo_root=$(git rev-parse --show-toplevel)
@@ -54,12 +63,37 @@ if [[ "$mode" == controller || "$mode" == all ]]; then
     --wait --timeout 10m
 fi
 
-if [[ "$mode" == runners || "$mode" == all ]]; then
+if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable GHCR reference}"
   : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable GHCR reference}"
   image_pattern='^ghcr\.io/f5-sales-demo/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
+fi
+
+if [[ "$mode" == cache || "$mode" == all ]]; then
+  cache_namespace=arc-runner-cache
+  kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
+  for profile in socketless container-build; do
+    image=$SOCKETLESS_IMAGE
+    [[ "$profile" == socketless ]] || image=$CONTAINER_BUILD_IMAGE
+    cache_args=(
+      upgrade --install "runner-image-cache-$profile" arc/prepull
+      --namespace "$cache_namespace"
+      --set-string "profile=$profile"
+      --set-string "image=$image"
+      --set-string 'imagePullSecrets[0]=ghcr-pull'
+      --wait --timeout 10m
+    )
+    if [[ "$profile" == container-build ]]; then
+      cache_args+=(--set-string "additionalImages[0]=$dind_image")
+    fi
+    helm "${cache_args[@]}"
+    kubectl rollout status "daemonset/runner-image-prepull-$profile" -n "$cache_namespace" --timeout=10m
+  done
+fi
+
+if [[ "$mode" == runners || "$mode" == all ]]; then
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
   scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
 
@@ -86,18 +120,5 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
       --set minRunners="$min_runners" \
       --set maxRunners="$max_runners" \
       --wait --timeout 10m
-
-    prepull_args=(
-      upgrade --install runner-image-cache arc/prepull
-      --namespace "$namespace"
-      --set-string "profile=$profile"
-      --set-string "image=$image"
-      --set-string 'imagePullSecrets[0]=ghcr-pull'
-      --wait --timeout 10m
-    )
-    if [[ "$profile" == container-build ]]; then
-      prepull_args+=(--set-string "additionalImages[0]=$dind_image")
-    fi
-    helm "${prepull_args[@]}"
   done
 fi

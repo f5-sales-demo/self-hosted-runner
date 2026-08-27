@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/marketplace",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-marketplace-socketless",
+      "release": "marketplace-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 4
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-marketplace-container-build",
+      "release": "marketplace-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

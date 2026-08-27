@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: runner-image-prepull-{{ .Values.profile }}
+  namespace: {{ .Release.Namespace }}
   labels:
     app.kubernetes.io/name: runner-image-prepull
     runner-profile: {{ .Values.profile }}

@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/observability",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-observability-socketless",
+      "release": "observability-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-observability-container-build",
+      "release": "observability-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/api-specs-enriched",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-api-specs-enriched-socketless",
+      "release": "api-specs-enriched-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 6
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-api-specs-enriched-container-build",
+      "release": "api-specs-enriched-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
+    }
+  ]
+}
