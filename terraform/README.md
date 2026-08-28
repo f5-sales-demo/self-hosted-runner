@@ -13,7 +13,8 @@ control-plane diagnostics.
 | Pool | SKU | Autoscaling | OS disk | Workload |
 | --- | --- | --- | --- | --- |
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
-| socketless | Standard_D8ads_v5 | 1-20 | ephemeral | socketless runners |
+| socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
+| compute | Standard_D16ads_v5 | 0-5 | ephemeral | CPU-heavy socketless xcsh runners |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
 Labels and NoSchedule taints enforce profile placement. Do not substitute
@@ -24,7 +25,7 @@ another version, region, zone, SKU, disk type, or capacity when preflight fails.
 The separately bootstrapped Azure Storage backend uses HTTPS, a private
 container, versioning, soft delete, and a deny-by-default firewall. It permits
 shared-key access because the operator lacks Blob data-plane and
-role-assignment permissions. Terraform creates no role assignments.
+role-assignment permissions. Terraform creates only one workload role assignment: pull-only `AcrPull` on the dedicated runner ACR for the AKS kubelet identity. It creates no operator or secret-management role assignments.
 
 Copy each backend.hcl.example to its ignored backend.hcl peer. Derive the key
 only inside the interactive shell running Terraform:
@@ -90,10 +91,7 @@ references and deploy the xcsh scale sets and pre-pullers:
 
     scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
 
-The xcsh socketless and container-build scale sets are capped at 10 and 3
-respectively, both with zero idle runners. The original self-hosted-runner
-configuration retains its 20 and 5 limits. The socketless node pool stays warm;
-the build pool scales from and back to zero.
+The xcsh socketless, compute, and container-build scale sets are capped at 10, 5, and 3 respectively, all with zero idle runners. The original self-hosted-runner configuration retains its 20 and 5 limits. Every worker pool scales to zero; after demand drains, the autoscaler retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -104,3 +102,19 @@ for docs, docs-builder, docs-theme, i18n-core, starlight-llms-txt, and
 docs-icons. Its namespaces and Helm releases are unique, while repository scope
 allows the cohort to share the workflow labels docs-socketless and
 docs-container-build.
+
+## Capacity evidence and image mirror
+
+Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/5/5 worker fleet plus three system nodes consumes 412 vCPUs, leaving more than 20% headroom at that quota.
+
+The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains the publication authority. Copy and verify each approved source digest, then deploy only the returned equal digest:
+
+    scripts/mirror-runner-image.sh copy ghcr.io/f5-sales-demo/self-hosted-runner@sha256:<digest>
+
+For ACR deployment, pass the two ACR digest references in `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE`, and their equal GHCR references in `SOCKETLESS_SOURCE_IMAGE` and `CONTAINER_BUILD_SOURCE_IMAGE`. `arc-deploy.sh` refuses an ACR deployment unless both manifests are byte-identical. Tags are never accepted.
+
+Capture a 30-day GitHub baseline and the live Kubernetes scheduling/metrics state from the protected workstation kubeconfig:
+
+    scripts/arc-capacity.py collect --repository f5-sales-demo/xcsh --days 30 --output arc-capacity.json
+
+The checked-in policy defines the 06:00-22:00 America/Toronto service window, warm (20-second p95) and cold (180-second p95) targets, two consecutive five-minute breach rule, ten-minute job wait, two-minute saturated-pool rule, 20% quota headroom, and deterministic repository cap formula. A start is warm only when a schedulable Ready node of the requested profile existed when the job entered the queue.

@@ -66,9 +66,17 @@ fi
 if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable GHCR reference}"
   : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable GHCR reference}"
-  image_pattern='^ghcr\.io/f5-sales-demo/self-hosted-runner@sha256:[0-9a-f]{64}$'
+  image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io)/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
+  if [[ "$SOCKETLESS_IMAGE" == f5salesdemoarcca.azurecr.io/* ]]; then
+    : "${SOCKETLESS_SOURCE_IMAGE:?SOCKETLESS_SOURCE_IMAGE must identify the equal GHCR digest}"
+    scripts/mirror-runner-image.sh verify "$SOCKETLESS_SOURCE_IMAGE" "$SOCKETLESS_IMAGE" >/dev/null
+  fi
+  if [[ "$CONTAINER_BUILD_IMAGE" == f5salesdemoarcca.azurecr.io/* ]]; then
+    : "${CONTAINER_BUILD_SOURCE_IMAGE:?CONTAINER_BUILD_SOURCE_IMAGE must identify the equal GHCR digest}"
+    scripts/mirror-runner-image.sh verify "$CONTAINER_BUILD_SOURCE_IMAGE" "$CONTAINER_BUILD_IMAGE" >/dev/null
+  fi
 fi
 
 if [[ "$mode" == cache || "$mode" == all ]]; then
@@ -76,16 +84,19 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
   kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
   for profile in socketless container-build; do
     image=$SOCKETLESS_IMAGE
-    [[ "$profile" == socketless ]] || image=$CONTAINER_BUILD_IMAGE
+    [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
     cache_args=(
       upgrade --install "runner-image-cache-$profile" arc/prepull
       --namespace "$cache_namespace"
       --set-string "profile=$profile"
       --set-string "image=$image"
       --set-string 'imagePullSecrets[0]=ghcr-pull'
+      --set-string "nodeProfiles[0]=$profile"
       --wait --timeout 10m
     )
-    if [[ "$profile" == container-build ]]; then
+    if [[ "$profile" == socketless ]]; then
+      cache_args+=(--set-string "nodeProfiles[1]=compute")
+    elif [[ "$profile" == container-build ]]; then
       cache_args+=(--set-string "additionalImages[0]=$dind_image")
     fi
     helm "${cache_args[@]}"
@@ -97,8 +108,8 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
   scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
 
-  for profile in socketless container-build; do
-    spec=$(jq -cer --arg profile "$profile" '.scale_sets[] | select(.profile == $profile)' <<<"$config_json")
+  while IFS= read -r spec; do
+    profile=$(jq -er .profile <<<"$spec")
     namespace=$(jq -er .namespace <<<"$spec")
     release=$(jq -er .release <<<"$spec")
     scale_set_name=$(jq -er .runner_scale_set_name <<<"$spec")
@@ -106,7 +117,7 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
     min_runners=$(jq -er .min_runners <<<"$spec")
     max_runners=$(jq -er .max_runners <<<"$spec")
     image=$SOCKETLESS_IMAGE
-    [[ "$profile" == socketless ]] || image=$CONTAINER_BUILD_IMAGE
+    [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
 
     kubectl get secret arc-github-app -n "$namespace" >/dev/null
     kubectl get secret ghcr-pull -n "$namespace" >/dev/null
@@ -120,5 +131,5 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
       --set minRunners="$min_runners" \
       --set maxRunners="$max_runners" \
       --wait --timeout 10m
-  done
+  done < <(jq -c '.scale_sets[]' <<<"$config_json")
 fi

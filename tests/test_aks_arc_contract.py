@@ -16,7 +16,6 @@ class AksArcContractTests(unittest.TestCase):
             "shared_image_gallery",
             "key_vault",
             "cloud-init",
-            "role_assignment",
         ):
             self.assertNotIn(forbidden, source)
         for required in (
@@ -32,6 +31,10 @@ class AksArcContractTests(unittest.TestCase):
             'os_disk_type           = "Ephemeral"',
             'category_group = "allLogs"',
             "oms_agent",
+            'name                          = "f5salesdemoarcca"',
+            'sku                           = "Premium"',
+            'role_definition_name = "AcrPull"',
+            'scale_down_unneeded    = "60m"',
         ):
             self.assertIn(required, source)
 
@@ -57,6 +60,13 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("kubectl get secret ghcr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
+        self.assertEqual(1, deploy.count("for profile in socketless container-build"))
+        self.assertIn("nodeProfiles[1]=compute", deploy)
+        self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
+        mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")
+        self.assertLess(
+            mirror.index("az acr login"), mirror.index('if [[ "$mode" == copy ]]')
+        )
         self.assertIn('"runner-image-cache-$profile"', deploy)
         prepull = (ROOT / "arc/prepull/templates/daemonset.yaml").read_text(
             encoding="utf-8"

@@ -24,13 +24,24 @@ spec:
         - name: {{ . | quote }}
         {{- end }}
       {{- end }}
-      nodeSelector:
-        runner-profile: {{ .Values.profile }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: runner-profile
+                    operator: In
+                    values:
+                      {{- range .Values.nodeProfiles }}
+                      - {{ . | quote }}
+                      {{- end }}
       tolerations:
+        {{- range .Values.nodeProfiles }}
         - key: runner-profile
           operator: Equal
-          value: {{ .Values.profile }}
+          value: {{ . | quote }}
           effect: NoSchedule
+        {{- end }}
       {{- if .Values.additionalImages }}
       initContainers:
         {{- range $index, $image := .Values.additionalImages }}

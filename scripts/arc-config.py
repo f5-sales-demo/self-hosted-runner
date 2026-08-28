@@ -9,7 +9,8 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-PROFILES = {"socketless", "container-build"}
+PROFILES = {"socketless", "container-build", "compute"}
+REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
     "profile",
@@ -80,7 +81,7 @@ MANAGED_SHARED_LABELS = {
 }
 EXPECTED_CAPS = {
     "https://github.com/f5-sales-demo/self-hosted-runner": (20, 5),
-    "https://github.com/f5-sales-demo/xcsh": (10, 3),
+    "https://github.com/f5-sales-demo/xcsh": (10, 3, 5),
     "https://github.com/f5-sales-demo/docs": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
     "https://github.com/f5-sales-demo/docs-icons": (3, 1),
@@ -145,8 +146,10 @@ def load_config(path: Path, repository_root: Path):
     if repository not in EXPECTED_CAPS:
         raise ConfigError(f"repository is outside the exact ARC fleet: {repository}")
     scale_sets = raw["scale_sets"]
-    if not isinstance(scale_sets, list) or len(scale_sets) != 2:
-        raise ConfigError("scale_sets must contain exactly two entries")
+    if not isinstance(scale_sets, list) or len(scale_sets) not in (2, 3):
+        raise ConfigError(
+            "scale_sets must contain two required entries and at most one optional entry"
+        )
 
     normalized = []
     unique = {"namespace": set(), "release": set(), "runner_scale_set_name": set()}
@@ -162,11 +165,16 @@ def load_config(path: Path, repository_root: Path):
                 f"{context}.profile must uniquely select a supported profile"
             )
         seen_profiles.add(profile)
-        for field in unique:
+        if (
+            profile == "compute"
+            and repository != "https://github.com/f5-sales-demo/xcsh"
+        ):
+            raise ConfigError("compute profile is approved only for f5-sales-demo/xcsh")
+        for field, seen_values in unique.items():
             value = validate_name(spec[field], f"{context}.{field}")
-            if value in unique[field]:
+            if value in seen_values:
                 raise ConfigError(f"{field} values must be unique")
-            unique[field].add(value)
+            seen_values.add(value)
         minimum = spec["min_runners"]
         maximum = spec["max_runners"]
         if not isinstance(minimum, int) or isinstance(minimum, bool) or minimum < 0:
@@ -192,7 +200,7 @@ def load_config(path: Path, repository_root: Path):
         if values != expected_values:
             raise ConfigError(f"{context}.values must equal {expected_values}")
         normalized.append(dict(spec))
-    if seen_profiles != PROFILES:
+    if not REQUIRED_PROFILES.issubset(seen_profiles):
         raise ConfigError(
             "scale_sets must define socketless and container-build exactly once"
         )
@@ -206,7 +214,9 @@ def load_config(path: Path, repository_root: Path):
             (MANAGED_COHORT, MANAGED_SHARED_LABELS, "managed"),
         )
         for cohort, shared_labels, name in contracts:
-            expected = shared_labels[spec["profile"]]
+            if spec["profile"] == "compute":
+                continue
+            expected = shared_labels.get(spec["profile"])
             if repository in cohort and label != expected:
                 raise ConfigError(
                     f"{repository} {spec['profile']} runner scale set name must equal {expected}"
@@ -229,9 +239,15 @@ def load_config(path: Path, repository_root: Path):
                 )
             if minimum != 0:
                 raise ConfigError(f"{repository} min_runners must equal zero")
-        expected_maximum = EXPECTED_CAPS[repository][
-            0 if spec["profile"] == "socketless" else 1
+        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[
+            spec["profile"]
         ]
+        caps = EXPECTED_CAPS[repository]
+        if cap_index >= len(caps):
+            raise ConfigError(
+                f"{repository} is not approved for the {spec['profile']} profile"
+            )
+        expected_maximum = caps[cap_index]
         if maximum != expected_maximum:
             raise ConfigError(
                 f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
@@ -261,7 +277,7 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                     observed[value] = repository
                     continue
                 shared_label_collision = field == "runner_scale_set_name" and any(
-                    value == labels[spec["profile"]]
+                    value == labels.get(spec["profile"])
                     and previous in cohort
                     and repository in cohort
                     for cohort, labels in (

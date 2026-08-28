@@ -2,12 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["profile", "image", "additionalImages"],
+  "required": ["profile", "nodeProfiles", "image", "additionalImages"],
   "properties": {
     "profile": {"type": "string", "enum": ["socketless", "container-build"]},
+    "nodeProfiles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["socketless", "compute", "container-build"]}},
     "image": {
       "type": "string",
-      "pattern": "^ghcr\\.io/f5-sales-demo/self-hosted-runner@sha256:[0-9a-f]{64}$"
+      "pattern": "^(ghcr\\.io/f5-sales-demo|f5salesdemoarcca\\.azurecr\\.io)/self-hosted-runner@sha256:[0-9a-f]{64}$"
     },
     "additionalImages": {
       "type": "array",
