@@ -45,24 +45,134 @@ PROFILE_REQUIRED = {
 }
 
 
+def _integer_map(value: object, name: str) -> dict:
+    if not isinstance(value, dict) or not all(
+        isinstance(key, str)
+        and isinstance(counter, int)
+        and not isinstance(counter, bool)
+        and counter >= 0
+        for key, counter in value.items()
+    ):
+        raise TypeError(f"{name} must contain nonnegative integer counters")
+    return value
+
+
 def validate_workload_profile(profile: object) -> dict:
     if not isinstance(profile, dict) or profile.get("schema_version") != 1:
         raise ValueError("unsupported workload profile")
     if set(profile) != PROFILE_REQUIRED:
         raise ValueError("workload profile fields do not match schema version 1")
+    nullable_strings = (
+        "repository",
+        "commit",
+        "run_id",
+        "run_attempt",
+        "job_id",
+        "runner_name",
+        "runner_profile",
+        "image_digest",
+        "pair_id",
+        "output_digest",
+    )
+    if any(
+        profile[key] is not None and not isinstance(profile[key], str)
+        for key in nullable_strings
+    ):
+        raise TypeError("workload identity fields must be strings or null")
+    if any(
+        not isinstance(profile[key], str) or not profile[key]
+        for key in ("phase", "variant", "started_at", "completed_at")
+    ):
+        raise TypeError(
+            "workload phase, variant, and timestamps must be nonempty strings"
+        )
+    parse_time(profile["started_at"])
+    parse_time(profile["completed_at"])
+    if profile["cache_state"] not in {"cold", "warm", "unknown"}:
+        raise ValueError("invalid cache state")
+    duration = profile["duration_seconds"]
     if (
-        not isinstance(profile["duration_seconds"], (int, float))
-        or profile["duration_seconds"] < 0
+        isinstance(duration, bool)
+        or not isinstance(duration, (int, float))
+        or duration < 0
     ):
         raise ValueError("invalid workload duration")
-    if not all(
-        isinstance(profile[key], dict) for key in ("cpu", "memory", "io", "exit")
+    sample_count = profile["sample_count"]
+    if (
+        isinstance(sample_count, bool)
+        or not isinstance(sample_count, int)
+        or sample_count < 1
     ):
-        raise TypeError("workload counter sections must be objects")
-    if not isinstance(profile["memory"].get("events"), dict):
-        raise TypeError("workload memory events must be an object")
-    if not isinstance(profile["exit"].get("code"), int):
+        raise ValueError("invalid sample count")
+    timings = profile["phase_timings"]
+    if not isinstance(timings, list) or any(
+        not isinstance(timing, dict)
+        or set(timing) != {"name", "duration_seconds"}
+        or not isinstance(timing["name"], str)
+        or not timing["name"]
+        or isinstance(timing["duration_seconds"], bool)
+        or not isinstance(timing["duration_seconds"], (int, float))
+        or timing["duration_seconds"] < 0
+        for timing in timings
+    ):
+        raise TypeError("invalid phase timings")
+    cpu = profile["cpu"]
+    cpu_keys = {
+        "usage_usec",
+        "user_usec",
+        "system_usec",
+        "utilization_ratio",
+        "nr_periods",
+        "nr_throttled",
+        "throttled_usec",
+    }
+    if not isinstance(cpu, dict) or set(cpu) != cpu_keys:
+        raise TypeError("invalid CPU counters")
+    _integer_map(
+        {key: value for key, value in cpu.items() if key != "utilization_ratio"}, "CPU"
+    )
+    utilization = cpu["utilization_ratio"]
+    if (
+        isinstance(utilization, bool)
+        or not isinstance(utilization, (int, float))
+        or utilization < 0
+    ):
+        raise TypeError("invalid CPU utilization")
+    memory = profile["memory"]
+    if not isinstance(memory, dict) or set(memory) != {
+        "current_bytes",
+        "peak_bytes",
+        "limit_bytes",
+        "peak_limit_ratio",
+        "events",
+    }:
+        raise TypeError("invalid memory counters")
+    for key in ("current_bytes", "peak_bytes", "limit_bytes"):
+        value = memory[key]
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise TypeError(f"invalid memory counter: {key}")
+    ratio = memory["peak_limit_ratio"]
+    if ratio is not None and (
+        isinstance(ratio, bool) or not isinstance(ratio, (int, float)) or ratio < 0
+    ):
+        raise TypeError("invalid peak memory ratio")
+    _integer_map(memory["events"], "memory events")
+    _integer_map(profile["io"], "I/O")
+    exit_status = profile["exit"]
+    if not isinstance(exit_status, dict) or set(exit_status) != {"code", "signal"}:
         raise TypeError("invalid workload exit status")
+    code = exit_status["code"]
+    observed_signal = exit_status["signal"]
+    if isinstance(code, bool) or not isinstance(code, int) or not 0 <= code <= 255:
+        raise TypeError("invalid workload exit code")
+    if observed_signal is not None and (
+        isinstance(observed_signal, bool)
+        or not isinstance(observed_signal, int)
+        or observed_signal < 1
+    ):
+        raise TypeError("invalid workload signal")
     return profile
 
 
