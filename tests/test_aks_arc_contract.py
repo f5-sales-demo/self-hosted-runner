@@ -38,6 +38,15 @@ class AksArcContractTests(unittest.TestCase):
         ):
             self.assertIn(required, source)
 
+    def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
+        source = (ROOT / "terraform/runner-fleet/main.tf").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "ignore_changes = [default_node_pool[0].node_count]", source
+        )
+        self.assertEqual(2, source.count("ignore_changes = ["))
+
     def test_arc_artifacts_and_images_are_pinned(self) -> None:
         controller = (ROOT / "arc/controller-values.yaml").read_text(encoding="utf-8")
         build = (ROOT / "arc/container-build-values.yaml").read_text(encoding="utf-8")
