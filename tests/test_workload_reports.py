@@ -64,11 +64,34 @@ class WorkloadReportTests(unittest.TestCase):
             MODULE.validate_workload_profile({"schema_version": 1})
         with self.assertRaises(ValueError):
             MODULE.validate_workload_profile({"schema_version": 2})
-        invalid = profile("baseline", "1", 1)
-        invalid["schema_version"] = 1
-        invalid["run_id"] = "1"
-        invalid["cpu"] = {}
-        invalid["io"] = {}
+        invalid = {
+            "schema_version": 1,
+            "repository": "example/repo",
+            "commit": None,
+            "run_id": "1",
+            "run_attempt": "1",
+            "job_id": "test",
+            "runner_name": None,
+            "runner_profile": "socketless",
+            "image_digest": None,
+            "phase": "test",
+            "variant": "baseline",
+            "pair_id": "1",
+            "cache_state": "warm",
+            "started_at": "2026-08-28T00:00:00Z",
+            "completed_at": "2026-08-28T00:00:01Z",
+            "duration_seconds": 1,
+            "sample_count": 1,
+            "phase_timings": [],
+            "cpu": {},
+            "memory": None,
+            "io": {},
+            "output_digest": None,
+            "exit": {"code": 0},
+        }
+        with self.assertRaises(TypeError):
+            MODULE.validate_workload_profile(invalid)
+        invalid["memory"] = {"events": {}}
         invalid["exit"]["code"] = "zero"
         with self.assertRaises(TypeError):
             MODULE.validate_workload_profile(invalid)

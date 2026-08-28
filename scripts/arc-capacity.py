@@ -21,12 +21,26 @@ DEFAULT_POLICY = ROOT / "config/arc-capacity.json"
 PROFILE_REQUIRED = {
     "schema_version",
     "repository",
+    "commit",
     "run_id",
+    "run_attempt",
+    "job_id",
+    "runner_name",
+    "runner_profile",
+    "image_digest",
     "phase",
+    "variant",
+    "pair_id",
+    "cache_state",
+    "started_at",
+    "completed_at",
     "duration_seconds",
+    "sample_count",
+    "phase_timings",
     "cpu",
     "memory",
     "io",
+    "output_digest",
     "exit",
 }
 
@@ -34,16 +48,20 @@ PROFILE_REQUIRED = {
 def validate_workload_profile(profile: object) -> dict:
     if not isinstance(profile, dict) or profile.get("schema_version") != 1:
         raise ValueError("unsupported workload profile")
-    if not PROFILE_REQUIRED.issubset(profile):
-        raise ValueError("incomplete workload profile")
+    if set(profile) != PROFILE_REQUIRED:
+        raise ValueError("workload profile fields do not match schema version 1")
     if (
         not isinstance(profile["duration_seconds"], (int, float))
         or profile["duration_seconds"] < 0
     ):
         raise ValueError("invalid workload duration")
-    if not isinstance(profile["exit"], dict) or not isinstance(
-        profile["exit"].get("code"), int
+    if not all(
+        isinstance(profile[key], dict) for key in ("cpu", "memory", "io", "exit")
     ):
+        raise TypeError("workload counter sections must be objects")
+    if not isinstance(profile["memory"].get("events"), dict):
+        raise TypeError("workload memory events must be an object")
+    if not isinstance(profile["exit"].get("code"), int):
         raise TypeError("invalid workload exit status")
     return profile
 

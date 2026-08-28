@@ -11,6 +11,8 @@ class PullSecretCopyTests(unittest.TestCase):
         self.assertIn("datetime.timedelta(hours=24)", script)
         self.assertIn('{"ghcr.io", "f5salesdemoarcca.azurecr.io"}', script)
         self.assertIn("chmod 0600", script)
+        self.assertIn('kubectl apply -f "$manifest_dir"', script)
+        self.assertNotIn('kubectl apply -f "$tmpdir"', script)
         self.assertNotIn("set -x", script)
         self.assertNotIn('auths")', script)
 
