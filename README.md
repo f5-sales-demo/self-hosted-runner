@@ -74,3 +74,11 @@ namespaces do not carry duplicate cache releases.
 See [terraform/README.md](terraform/README.md) for the backend, AKS, ARC, and
 pilot procedure. Runtime image digests, GitHub App material, Terraform inputs,
 plans, state, and kubeconfig are never committed.
+
+Every runner is treated as eligible to execute multi-customer xcsh work. Before
+reading its registration token or contacting GitHub, the image queries the live
+host kernel and requires Landlock ABI 2 or newer. A missing or blocked syscall,
+invalid result, or ABI 1 denies admission with an operator diagnostic. Move the
+workload to Ubuntu HWE or another newer kernel/host instead of accepting
+scanner-only containment. The check runs inside the runner pod, so it verifies
+the kernel that actually governs the job rather than the image build host.

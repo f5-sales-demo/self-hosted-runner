@@ -6,6 +6,8 @@ set -euo pipefail
 : "${RUNNER_LABELS:?RUNNER_LABELS is required}"
 : "${RUNNER_RUNTIME_DIR:?RUNNER_RUNTIME_DIR is required}"
 
+/usr/local/bin/require-landlock-abi
+
 IFS= read -r registration_token
 if [[ -z "$registration_token" ]]; then
   echo "runner registration token was not supplied on standard input" >&2
