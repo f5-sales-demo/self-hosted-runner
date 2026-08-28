@@ -16,6 +16,16 @@ jobs:
           persist-credentials: false
       - name: Verify complete socketless tool contract
         run: verify-runner-tools standard
+      - name: Profile runner smoke
+        run: runner-profile --name runner-smoke --output "$RUNNER_TEMP/workload-profile.json" -- true
+      - name: Upload workload profile
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: workload-profile-socketless-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/workload-profile.json
+          if-no-files-found: error
+          retention-days: 30
       - name: Prove Docker is unavailable
         run: |
           set -euo pipefail

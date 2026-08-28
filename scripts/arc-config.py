@@ -81,7 +81,7 @@ MANAGED_SHARED_LABELS = {
 }
 EXPECTED_CAPS = {
     "https://github.com/f5-sales-demo/self-hosted-runner": (20, 5),
-    "https://github.com/f5-sales-demo/xcsh": (10, 3, 5),
+    "https://github.com/f5-sales-demo/xcsh": (10, 3, 2),
     "https://github.com/f5-sales-demo/docs": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
     "https://github.com/f5-sales-demo/docs-icons": (3, 1),
@@ -94,8 +94,8 @@ EXPECTED_CAPS = {
         for name, limits in {
             "docs-control": (8, 2),
             "api-specs": (6, 2),
-            "api-specs-enriched": (6, 2),
-            "terraform-provider-xcsh": (6, 2),
+            "api-specs-enriched": (6, 2, 2),
+            "terraform-provider-xcsh": (6, 2, 2),
             "devcontainer": (4, 2),
             "console": (4, 1),
             "marketplace": (4, 1),
@@ -165,11 +165,13 @@ def load_config(path: Path, repository_root: Path):
                 f"{context}.profile must uniquely select a supported profile"
             )
         seen_profiles.add(profile)
-        if (
-            profile == "compute"
-            and repository != "https://github.com/f5-sales-demo/xcsh"
-        ):
-            raise ConfigError("compute profile is approved only for f5-sales-demo/xcsh")
+        compute_allowlist = {
+            "https://github.com/f5-sales-demo/xcsh",
+            "https://github.com/f5-sales-demo/api-specs-enriched",
+            "https://github.com/f5-sales-demo/terraform-provider-xcsh",
+        }
+        if profile == "compute" and repository not in compute_allowlist:
+            raise ConfigError("compute profile is outside the exact approved allowlist")
         for field, seen_values in unique.items():
             value = validate_name(spec[field], f"{context}.{field}")
             if value in seen_values:

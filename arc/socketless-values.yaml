@@ -37,6 +37,11 @@ template:
         image: RUNNER_IMAGE_REQUIRED
         imagePullPolicy: IfNotPresent
         command: [/home/runner/run.sh]
+        env:
+          - name: RUNNER_PROFILE
+            value: socketless
+          - name: RUNNER_IMAGE_DIGEST
+            value: RUNNER_IMAGE_REQUIRED
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

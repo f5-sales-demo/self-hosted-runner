@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/f5-sales-demo/self-hosted-runner/schemas/workload-profile.schema.json",
+  "title": "Workload profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "repository", "commit", "run_id", "run_attempt", "job_id", "runner_name", "runner_profile", "image_digest", "phase", "variant", "pair_id", "cache_state", "started_at", "completed_at", "duration_seconds", "sample_count", "phase_timings", "cpu", "memory", "io", "output_digest", "exit"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "repository": {"type": ["string", "null"]},
+    "commit": {"type": ["string", "null"]},
+    "run_id": {"type": ["string", "null"]},
+    "run_attempt": {"type": ["string", "null"]},
+    "job_id": {"type": ["string", "null"]},
+    "runner_name": {"type": ["string", "null"]},
+    "runner_profile": {"type": ["string", "null"]},
+    "image_digest": {"type": ["string", "null"]},
+    "phase": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "minLength": 1},
+    "pair_id": {"type": ["string", "null"]},
+    "cache_state": {"enum": ["cold", "warm", "unknown"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "sample_count": {"type": "integer", "minimum": 1},
+    "phase_timings": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["name", "duration_seconds"], "properties": {"name": {"type": "string"}, "duration_seconds": {"type": "number", "minimum": 0}}}},
+    "cpu": {"$ref": "#/$defs/counters"},
+    "memory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["current_bytes", "peak_bytes", "limit_bytes", "peak_limit_ratio", "events"],
+      "properties": {
+        "current_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "peak_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "limit_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "peak_limit_ratio": {"type": ["number", "null"], "minimum": 0},
+        "events": {"$ref": "#/$defs/integerMap"}
+      }
+    },
+    "io": {"$ref": "#/$defs/integerMap"},
+    "output_digest": {"type": ["string", "null"]},
+    "exit": {"type": "object", "additionalProperties": false, "required": ["code", "signal"], "properties": {"code": {"type": "integer", "minimum": 0, "maximum": 255}, "signal": {"type": ["integer", "null"], "minimum": 1}}}
+  },
+  "$defs": {
+    "integerMap": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "counters": {
+      "type": "object", "additionalProperties": false,
+      "required": ["usage_usec", "user_usec", "system_usec", "utilization_ratio", "nr_periods", "nr_throttled", "throttled_usec"],
+      "properties": {
+        "usage_usec": {"type": "integer", "minimum": 0},
+        "user_usec": {"type": "integer", "minimum": 0},
+        "system_usec": {"type": "integer", "minimum": 0},
+        "utilization_ratio": {"type": "number", "minimum": 0},
+        "nr_periods": {"type": "integer", "minimum": 0},
+        "nr_throttled": {"type": "integer", "minimum": 0},
+        "throttled_usec": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

@@ -51,7 +51,7 @@ class ArcConfigTests(unittest.TestCase):
                     "arc-runners-xcsh-compute",
                     "xcsh-compute",
                     0,
-                    5,
+                    2,
                 ),
             },
         }
@@ -163,6 +163,17 @@ class ArcConfigTests(unittest.TestCase):
                     )
                     self.assertEqual(0, item["min_runners"])
                     self.assertEqual(maximum, item["max_runners"])
+
+    def test_managed_compute_profiles_are_exact(self) -> None:
+        for repository in ("api-specs-enriched", "terraform-provider-xcsh"):
+            config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
+            compute = next(
+                item for item in config["scale_sets"] if item["profile"] == "compute"
+            )
+            self.assertEqual(f"arc-runners-{repository}-compute", compute["namespace"])
+            self.assertEqual(f"{repository}-compute", compute["release"])
+            self.assertEqual(f"{repository}-compute", compute["runner_scale_set_name"])
+            self.assertEqual((0, 2), (compute["min_runners"], compute["max_runners"]))
 
     def test_config_directory_exactly_covers_catalog_plus_controller_repo(self) -> None:
         catalog = json.loads(
@@ -289,7 +300,7 @@ class ArcConfigTests(unittest.TestCase):
                 with self.subTest(config=config), self.assertRaises(MODULE.ConfigError):
                     MODULE.load_config(path, ROOT)
 
-    def test_compute_profile_is_xcsh_only_and_socketless(self) -> None:
+    def test_compute_profile_allowlist_is_exact_and_socketless(self) -> None:
         xcsh = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
         compute = next(
             item for item in xcsh["scale_sets"] if item["profile"] == "compute"
@@ -303,13 +314,16 @@ class ArcConfigTests(unittest.TestCase):
         self.assertIn("memory: 56Gi", values)
         self.assertNotIn("privileged: true", values)
         self.assertNotIn("DOCKER_HOST", values)
+        self.assertIn("name: RUNNER_PROFILE", values)
+        self.assertIn("name: RUNNER_IMAGE_DIGEST", values)
+        self.assertEqual(2, compute["max_runners"])
 
         unapproved = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
         unapproved["scale_sets"].append(copy.deepcopy(compute))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"
             path.write_text(json.dumps(unapproved), encoding="utf-8")
-            with self.assertRaisesRegex(MODULE.ConfigError, "approved only"):
+            with self.assertRaisesRegex(MODULE.ConfigError, "approved allowlist"):
                 MODULE.load_config(path, ROOT)
 
     def test_duplicate_json_keys_fail_closed(self) -> None:
