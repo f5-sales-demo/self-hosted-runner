@@ -100,7 +100,7 @@ RUN rm -f /etc/apt/sources.list.d/* \
       php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 \
       python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
       sqlite3 sudo swig unzip wget xz-utils zip zstd \
-      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick \
+      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && ln -s /usr/bin/convert /usr/local/bin/magick \
     && rm -rf /var/lib/apt/lists/* \

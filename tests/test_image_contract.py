@@ -134,7 +134,7 @@ class ImageContractTests(unittest.TestCase):
         for package in (
             "clang", "libcairo2-dev", "libpango1.0-dev", "libjpeg-dev", "libgif-dev",
             "librsvg2-dev", "fd-find", "ripgrep", "imagemagick", "rustup",
-            "gcc-aarch64-linux-gnu", "libc6-dev-arm64-cross",
+            "gcc-aarch64-linux-gnu", "libc6-dev-arm64-cross", "xvfb", "xauth",
         ):
             self.assertIn(package, dockerfile)
         self.assertIn("aarch64-linux-gnu-gcc -x c - -o /tmp/runner-arm64-libc-smoke", verifier)
@@ -150,6 +150,9 @@ class ImageContractTests(unittest.TestCase):
         self.assertEqual("18.1.3", clang["version"])
         self.assertEqual("clang --version", clang["command"])
         self.assertEqual("clang++ --version", clangxx["command"])
+        xvfb = next(tool for tool in catalog["tools"] if tool["name"] == "xvfb-run")
+        self.assertEqual("xvfb-run --help", xvfb["command"])
+        self.assertEqual(["standard", "container-build"], xvfb["profiles"])
 
 if __name__ == "__main__":
     unittest.main()
