@@ -16,6 +16,8 @@ cd "$repo_root"
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 chmod 0700 "$tmpdir"
+manifest_dir="$tmpdir/manifests"
+mkdir -m 0700 "$manifest_dir"
 source_secret="$tmpdir/source.json"
 kubectl get secret ghcr-pull -n "$source_namespace" -o json >"$source_secret"
 chmod 0600 "$source_secret"
@@ -47,10 +49,10 @@ while IFS= read -r namespace; do
   jq --arg namespace "$namespace" '
     .metadata = {name:"ghcr-pull", namespace:$namespace} |
     del(.metadata.creationTimestamp,.metadata.resourceVersion,.metadata.uid,.metadata.managedFields)
-  ' "$source_secret" >"$tmpdir/$namespace.json"
-  chmod 0600 "$tmpdir/$namespace.json"
+  ' "$source_secret" >"$manifest_dir/$namespace.json"
+  chmod 0600 "$manifest_dir/$namespace.json"
 done <"$targets"
-kubectl apply -f "$tmpdir" >/dev/null
+kubectl apply -f "$manifest_dir" >/dev/null
 while IFS= read -r namespace; do
   kubectl get secret ghcr-pull -n "$namespace" -o jsonpath='{.metadata.namespace}{"/"}{.metadata.name}{"\n"}'
 done <"$targets"
