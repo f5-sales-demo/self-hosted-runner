@@ -3,6 +3,11 @@
   "timezone": "America/Toronto",
   "service_window": {"start_hour": 6, "end_hour": 22},
   "history_days": 30,
+  "baseline_not_before": {
+    "f5-sales-demo/api-specs-enriched": "2026-08-27T00:00:00Z",
+    "f5-sales-demo/api-specs": "2026-08-27T00:00:00Z",
+    "f5-sales-demo/terraform-provider-xcsh": "2026-08-27T00:00:00Z"
+  },
   "sample_minutes": 5,
   "consecutive_slo_breaches": 2,
   "slo_seconds": {"warm_assignment_p95": 20, "cold_assignment_p95": 180},

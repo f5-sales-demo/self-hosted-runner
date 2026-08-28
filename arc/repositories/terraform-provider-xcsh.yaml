@@ -18,6 +18,15 @@
       "values": "arc/container-build-values.yaml",
       "min_runners": 0,
       "max_runners": 2
+    },
+    {
+      "profile": "compute",
+      "namespace": "arc-runners-terraform-provider-xcsh-compute",
+      "release": "terraform-provider-xcsh-compute",
+      "runner_scale_set_name": "terraform-provider-xcsh-compute",
+      "values": "arc/compute-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
     }
   ]
 }

@@ -72,6 +72,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertEqual(1, deploy.count("for profile in socketless container-build"))
         self.assertIn("nodeProfiles[1]=compute", deploy)
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
+        self.assertTrue((ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111)
         mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")
         self.assertLess(
             mirror.index("az acr login"), mirror.index('if [[ "$mode" == copy ]]')
