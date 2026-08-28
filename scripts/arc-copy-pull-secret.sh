@@ -21,7 +21,7 @@ mkdir -m 0700 "$manifest_dir"
 source_secret="$tmpdir/source.json"
 kubectl get secret ghcr-pull -n "$source_namespace" -o json >"$source_secret"
 chmod 0600 "$source_secret"
-python3 - "$source_secret" <<'PY'
+acr_expiry=$(python3 - "$source_secret" <<'PY'
 import base64, datetime, json, pathlib, sys
 secret = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 if secret.get("type") != "kubernetes.io/dockerconfigjson":
@@ -32,11 +32,14 @@ required = {"ghcr.io", "f5salesdemoarcca.azurecr.io"}
 if not required.issubset(config.get("auths", {})):
     raise SystemExit("pull secret is not the approved combined GHCR/ACR credential")
 expiry = secret.get("metadata", {}).get("annotations", {}).get("f5.sales-demo/acr-expires-at")
-if expiry:
-    instant = datetime.datetime.fromisoformat(expiry.replace("Z", "+00:00"))
-    if instant - datetime.datetime.now(datetime.timezone.utc) < datetime.timedelta(hours=24):
-        raise SystemExit("ACR token expires within 24 hours; rotate it before deployment")
+if not expiry:
+    raise SystemExit("ACR token expiry annotation is required")
+instant = datetime.datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+if instant - datetime.datetime.now(datetime.timezone.utc) < datetime.timedelta(hours=24):
+    raise SystemExit("ACR token expires within 24 hours; rotate it before deployment")
+print(expiry)
 PY
+)
 
 targets="$tmpdir/targets"
 : >"$targets"
@@ -46,9 +49,12 @@ done
 sort -u -o "$targets" "$targets"
 while IFS= read -r namespace; do
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  jq --arg namespace "$namespace" '
-    .metadata = {name:"ghcr-pull", namespace:$namespace} |
-    del(.metadata.creationTimestamp,.metadata.resourceVersion,.metadata.uid,.metadata.managedFields)
+  jq --arg namespace "$namespace" --arg expiry "$acr_expiry" '
+    .metadata = {
+      name:"ghcr-pull",
+      namespace:$namespace,
+      annotations:{"f5.sales-demo/acr-expires-at":$expiry}
+    }
   ' "$source_secret" >"$manifest_dir/$namespace.json"
   chmod 0600 "$manifest_dir/$namespace.json"
 done <"$targets"
