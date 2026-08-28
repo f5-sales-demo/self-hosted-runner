@@ -236,10 +236,15 @@ RUN set -eux; \
     tar --extract --gzip --file /tmp/ruff.tar.gz --directory "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64" --strip-components=1; \
     touch "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64.complete"; \
     rm -f /tmp/ruff.tar.gz
+COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
+COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
 COPY --chown=root:root scripts/runner-entrypoint.sh /usr/local/bin/runner-entrypoint
 COPY --chown=root:root scripts/verify-tools.py /usr/local/bin/verify-runner-tools
 COPY --chown=root:root catalog/tool-catalog.json /usr/local/share/runner-catalog/tool-catalog.json
-RUN chmod 0555 /usr/local/bin/runner-entrypoint /usr/local/bin/verify-runner-tools
+RUN cc -O2 -Wall -Wextra -Werror /tmp/landlock-abi.c -o /usr/local/bin/landlock-abi \
+    && rm -f /tmp/landlock-abi.c \
+    && chmod 0555 /usr/local/bin/landlock-abi /usr/local/bin/require-landlock-abi \
+      /usr/local/bin/runner-entrypoint /usr/local/bin/verify-runner-tools
 
 WORKDIR /runner-runtime
 
