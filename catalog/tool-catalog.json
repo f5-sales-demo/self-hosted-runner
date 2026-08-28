@@ -835,6 +835,14 @@
       ],
       "command": "GOVULNDB=off govulncheck -version",
       "expected": "1.6.0"
+    },
+    {
+      "name": "xvfb-run",
+      "version": "21.1.12",
+      "source": "ubuntu snapshot 20260810T000000Z package xvfb with xauth",
+      "profiles": ["standard", "container-build"],
+      "command": "xvfb-run --help",
+      "expected": "Usage: xvfb-run"
     }
   ]
 }
