@@ -104,6 +104,8 @@ for config in "$@"; do
     grep -Fq "$github_url" "$rendered_manifest"
     grep -Fq "$scale_set_name" "$rendered_manifest"
     grep -Fq "runner-profile: $profile" "$rendered_manifest"
+    grep -Fq 'name: RUNNER_PROFILE' "$rendered_manifest"
+    grep -Fq 'name: RUNNER_IMAGE_DIGEST' "$rendered_manifest"
     grep -Fq 'name: ghcr-pull' "$rendered_manifest"
     if [[ "$profile" == socketless || "$profile" == compute ]]; then
       if grep -Fq 'privileged: true' "$rendered_manifest"; then

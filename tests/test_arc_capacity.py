@@ -56,14 +56,14 @@ class ArcCapacityTests(unittest.TestCase):
                 "job_id": 1,
                 "queued_at": "2026-08-28T14:00:00Z",
                 "started_at": "2026-08-28T14:00:30Z",
-                "queue_seconds": 30,
+                "assignment_seconds": 30,
                 "warm": True,
             },
             {
                 "job_id": 2,
                 "queued_at": "2026-08-28T14:05:00Z",
                 "started_at": "2026-08-28T14:05:25Z",
-                "queue_seconds": 25,
+                "assignment_seconds": 25,
                 "warm": True,
             },
         ]
@@ -229,7 +229,7 @@ class ArcCapacityTests(unittest.TestCase):
                 "queued_at": "2026-08-28T14:15:00Z",
                 "started_at": "2026-08-28T14:20:00Z",
                 "warm": None,
-                "queue_seconds": 700,
+                "assignment_seconds": 700,
             },
         ]
         result = MODULE.evaluate(

@@ -38,6 +38,11 @@ template:
         imagePullPolicy: IfNotPresent
         command: [/bin/bash, -c]
         args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
+        env:
+          - name: RUNNER_PROFILE
+            value: compute
+          - name: RUNNER_IMAGE_DIGEST
+            value: RUNNER_IMAGE_REQUIRED
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

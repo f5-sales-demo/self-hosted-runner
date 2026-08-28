@@ -18,6 +18,15 @@
       "values": "arc/container-build-values.yaml",
       "min_runners": 0,
       "max_runners": 2
+    },
+    {
+      "profile": "compute",
+      "namespace": "arc-runners-api-specs-enriched-compute",
+      "release": "api-specs-enriched-compute",
+      "runner_scale_set_name": "api-specs-enriched-compute",
+      "values": "arc/compute-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
     }
   ]
 }
