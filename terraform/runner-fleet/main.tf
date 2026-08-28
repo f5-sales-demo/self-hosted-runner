@@ -92,6 +92,11 @@ resource "azurerm_kubernetes_cluster" "runner" {
     }
   }
 
+  # Cluster autoscaler owns the live count within the declared 1-3 range.
+  lifecycle {
+    ignore_changes = [default_node_pool[0].node_count]
+  }
+
   api_server_access_profile {
     authorized_ip_ranges = sort(tolist(var.operator_ipv4_cidrs))
   }
