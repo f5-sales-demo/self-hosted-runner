@@ -34,6 +34,7 @@ class LandlockAdmissionTests(unittest.TestCase):
                 result = self.run_policy(f"printf '{abi}\\n'")
                 self.assertEqual(0, result.returncode, result.stderr)
                 self.assertEqual("", result.stderr)
+                self.assertEqual(f"runner admission accepted: Landlock ABI {abi}\n", result.stdout)
 
     def test_rejects_landlock_abi_one_with_actionable_diagnostic(self) -> None:
         result = self.run_policy("printf '1\\n'")
@@ -62,6 +63,19 @@ class LandlockAdmissionTests(unittest.TestCase):
         registration = entrypoint.index("./config.sh")
         self.assertLess(policy_call, token_read)
         self.assertLess(policy_call, registration)
+
+    def test_every_arc_runner_checks_landlock_before_registration(self) -> None:
+        for profile in ("socketless", "compute", "container-build"):
+            with self.subTest(profile=profile):
+                values = (ROOT / f"arc/{profile}-values.yaml").read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("command: [/bin/bash, -c]", values)
+                self.assertIn(
+                    'args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]',
+                    values,
+                )
+                self.assertNotIn("command: [/home/runner/run.sh]", values)
 
     def test_image_builds_and_installs_probe_and_policy(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

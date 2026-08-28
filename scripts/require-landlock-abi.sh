@@ -21,3 +21,5 @@ if ((observed < minimum_abi)); then
     "$observed" "$remediation" >&2
   exit 78
 fi
+
+printf 'runner admission accepted: Landlock ABI %d\n' "$observed"
