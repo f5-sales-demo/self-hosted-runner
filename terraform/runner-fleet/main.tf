@@ -3,10 +3,18 @@ locals {
     socketless = {
       name         = "socketless"
       vm_size      = "Standard_D8ads_v5"
-      minimum      = 1
-      maximum      = 20
+      minimum      = 0
+      maximum      = 30
       os_disk_size = 128
       profile      = "socketless"
+    }
+    compute = {
+      name         = "compute"
+      vm_size      = "Standard_D16ads_v5"
+      minimum      = 0
+      maximum      = 5
+      os_disk_size = 128
+      profile      = "compute"
     }
     container_build = {
       name         = "build"
@@ -17,6 +25,12 @@ locals {
       profile      = "container-build"
     }
   }
+
+  # 30*8 + 5*16 + 5*16 plus 3*4 system vCPUs. The quota request deliberately
+  # targets 600 to retain at least 20% regional and family headroom.
+  maximum_runner_vcpus = 30 * 8 + 5 * 16 + 5 * 16
+  maximum_system_vcpus = 3 * 4
+  required_vcpu_quota  = 600
 }
 
 resource "azurerm_resource_group" "runner" {
@@ -46,6 +60,12 @@ resource "azurerm_kubernetes_cluster" "runner" {
   local_account_disabled    = false
   oidc_issuer_enabled       = true
   workload_identity_enabled = true
+
+  auto_scaler_profile {
+    scan_interval          = "10s"
+    new_pod_scale_up_delay = "0s"
+    scale_down_unneeded    = "60m"
+  }
 
   default_node_pool {
     name                         = "system"
@@ -98,6 +118,33 @@ resource "azurerm_kubernetes_cluster" "runner" {
   }
 
   tags = var.tags
+}
+
+resource "azurerm_container_registry" "runner" {
+  name                          = "f5salesdemoarcca"
+  resource_group_name           = azurerm_resource_group.runner.name
+  location                      = azurerm_resource_group.runner.location
+  sku                           = "Premium"
+  admin_enabled                 = false
+  public_network_access_enabled = true
+  zone_redundancy_enabled       = true
+  anonymous_pull_enabled        = false
+  data_endpoint_enabled         = false
+  tags                          = var.tags
+}
+
+resource "azurerm_role_assignment" "kubelet_acr_pull" {
+  scope                = azurerm_container_registry.runner.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_kubernetes_cluster.runner.kubelet_identity[0].object_id
+  principal_type       = "ServicePrincipal"
+}
+
+check "quota_headroom" {
+  assert {
+    condition     = local.required_vcpu_quota >= ceil((local.maximum_runner_vcpus + local.maximum_system_vcpus) / 0.8)
+    error_message = "The requested regional and DADSv5 quota must retain at least 20% headroom at maximum fleet capacity."
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "runner" {

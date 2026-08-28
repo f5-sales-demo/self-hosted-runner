@@ -47,6 +47,12 @@ class ArcConfigTests(unittest.TestCase):
                     0,
                     3,
                 ),
+                "compute": (
+                    "arc-runners-xcsh-compute",
+                    "xcsh-compute",
+                    0,
+                    5,
+                ),
             },
         }
         for filename, contract in expected.items():
@@ -54,7 +60,9 @@ class ArcConfigTests(unittest.TestCase):
                 config = MODULE.load_config(ROOT / "arc/repositories" / filename, ROOT)
                 self.assertEqual(contract["repository"], config["repository"])
                 profiles = {item["profile"]: item for item in config["scale_sets"]}
-                for profile in MODULE.PROFILES:
+                expected_profiles = set(contract) - {"repository"}
+                self.assertEqual(expected_profiles, set(profiles))
+                for profile in expected_profiles:
                     item = profiles[profile]
                     self.assertEqual(
                         contract[profile],
@@ -280,6 +288,29 @@ class ArcConfigTests(unittest.TestCase):
                 path.write_text(json.dumps(config), encoding="utf-8")
                 with self.subTest(config=config), self.assertRaises(MODULE.ConfigError):
                     MODULE.load_config(path, ROOT)
+
+    def test_compute_profile_is_xcsh_only_and_socketless(self) -> None:
+        xcsh = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
+        compute = next(
+            item for item in xcsh["scale_sets"] if item["profile"] == "compute"
+        )
+        self.assertEqual("arc-runners-xcsh-compute", compute["namespace"])
+        values = (ROOT / compute["values"]).read_text(encoding="utf-8")
+        self.assertIn("runner-profile: compute", values)
+        self.assertIn('cpu: "14"', values)
+        self.assertIn("memory: 48Gi", values)
+        self.assertIn('cpu: "15"', values)
+        self.assertIn("memory: 56Gi", values)
+        self.assertNotIn("privileged: true", values)
+        self.assertNotIn("DOCKER_HOST", values)
+
+        unapproved = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
+        unapproved["scale_sets"].append(copy.deepcopy(compute))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "bad.json"
+            path.write_text(json.dumps(unapproved), encoding="utf-8")
+            with self.assertRaisesRegex(MODULE.ConfigError, "approved only"):
+                MODULE.load_config(path, ROOT)
 
     def test_duplicate_json_keys_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

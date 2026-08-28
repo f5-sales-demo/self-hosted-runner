@@ -55,8 +55,11 @@ for profile in socketless container-build; do
     --set-string "profile=$profile"
     --set-string "image=$runner_image"
     --set-string 'imagePullSecrets[0]=ghcr-pull'
+    --set-string "nodeProfiles[0]=$profile"
   )
-  if [[ "$profile" == container-build ]]; then
+  if [[ "$profile" == socketless ]]; then
+    prepull_args+=(--set-string "nodeProfiles[1]=compute")
+  elif [[ "$profile" == container-build ]]; then
     prepull_args+=(--set-string "additionalImages[0]=$dind_image")
   fi
   helm lint arc/prepull "${prepull_args[@]}" >/dev/null
@@ -70,8 +73,8 @@ for config in "$@"; do
   config_json=$(python3 scripts/arc-config.py "$config")
   github_url=$(jq -er .repository <<<"$config_json")
   repository_name=${github_url##*/}
-  for profile in socketless container-build; do
-    spec=$(jq -cer --arg profile "$profile" '.scale_sets[] | select(.profile == $profile)' <<<"$config_json")
+  while IFS= read -r spec; do
+    profile=$(jq -er .profile <<<"$spec")
     namespace=$(jq -er .namespace <<<"$spec")
     release=$(jq -er .release <<<"$spec")
     scale_set_name=$(jq -er .runner_scale_set_name <<<"$spec")
@@ -102,7 +105,7 @@ for config in "$@"; do
     grep -Fq "$scale_set_name" "$rendered_manifest"
     grep -Fq "runner-profile: $profile" "$rendered_manifest"
     grep -Fq 'name: ghcr-pull' "$rendered_manifest"
-    if [[ "$profile" == socketless ]]; then
+    if [[ "$profile" == socketless || "$profile" == compute ]]; then
       if grep -Fq 'privileged: true' "$rendered_manifest"; then
         echo "$config socketless rendered a privileged container" >&2
         exit 1
@@ -117,5 +120,5 @@ for config in "$@"; do
       grep -Fq 'DOCKER_HOST' "$rendered_manifest"
     fi
 
-  done
+  done < <(jq -c '.scale_sets[]' <<<"$config_json")
 done

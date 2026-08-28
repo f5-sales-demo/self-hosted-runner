@@ -18,6 +18,15 @@
       "values": "arc/container-build-values.yaml",
       "min_runners": 0,
       "max_runners": 3
+    },
+    {
+      "profile": "compute",
+      "namespace": "arc-runners-xcsh-compute",
+      "release": "xcsh-compute",
+      "runner_scale_set_name": "xcsh-compute",
+      "values": "arc/compute-values.yaml",
+      "min_runners": 0,
+      "max_runners": 5
     }
   ]
 }
