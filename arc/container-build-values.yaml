@@ -73,7 +73,8 @@ template:
       - name: runner
         image: RUNNER_IMAGE_REQUIRED
         imagePullPolicy: IfNotPresent
-        command: [/home/runner/run.sh]
+        command: [/bin/bash, -c]
+        args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
         env:
           - name: DOCKER_HOST
             value: unix:///var/run/docker.sock
