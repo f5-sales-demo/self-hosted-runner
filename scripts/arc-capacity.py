@@ -661,12 +661,16 @@ def github_workload_profiles(
             )
             continue
         try:
+            artifact_profiles = []
             with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
                 for name in archive.namelist():
                     if not name.endswith(".json"):
                         continue
                     profile = validate_workload_profile(json.loads(archive.read(name)))
-                    profiles.append(profile)
+                    artifact_profiles.append(profile)
+            if not artifact_profiles:
+                raise ValueError("artifact contains no workload profiles")
+            profiles.extend(artifact_profiles)
         except (
             ValueError,
             TypeError,
@@ -771,9 +775,11 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                 for pair in pairs
                 for item in (baseline[pair], candidate[pair])
             )
-            memory_ok = all(
-                (candidate[pair].get("memory", {}).get("peak_limit_ratio") or 0) < 0.8
-                for pair in pairs
+            memory_ratios = [
+                candidate[pair]["memory"]["peak_limit_ratio"] for pair in pairs
+            ]
+            memory_ok = bool(memory_ratios) and all(
+                ratio is not None and ratio < 0.8 for ratio in memory_ratios
             )
             base_p95 = percentile95(base_values)
             candidate_p95 = percentile95(candidate_values)

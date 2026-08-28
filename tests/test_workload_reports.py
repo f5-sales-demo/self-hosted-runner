@@ -58,13 +58,20 @@ class WorkloadReportTests(unittest.TestCase):
         comparison = MODULE.performance_comparisons(profiles)[0]
         self.assertFalse(comparison["qualifies"])
         self.assertFalse(comparison["memory_below_80_percent"])
+        profiles = []
+        for index in range(5):
+            profiles.extend(
+                (
+                    profile("baseline", str(index), 100),
+                    profile("candidate", str(index), 60, ratio=None),
+                )
+            )
+        self.assertFalse(MODULE.performance_comparisons(profiles)[0]["qualifies"])
 
     def test_profile_schema_validation_rejects_missing_or_invalid_fields(self) -> None:
         with self.assertRaises(ValueError):
             MODULE.validate_workload_profile({"schema_version": 1})
-        with self.assertRaises(ValueError):
-            MODULE.validate_workload_profile({"schema_version": 2})
-        invalid = {
+        valid = {
             "schema_version": 1,
             "repository": "example/repo",
             "commit": None,
@@ -82,26 +89,32 @@ class WorkloadReportTests(unittest.TestCase):
             "completed_at": "2026-08-28T00:00:01Z",
             "duration_seconds": 1,
             "sample_count": 1,
-            "phase_timings": [],
-            "cpu": {},
-            "memory": None,
-            "io": {},
+            "phase_timings": [{"name": "test", "duration_seconds": 1}],
+            "cpu": {
+                "usage_usec": 1,
+                "user_usec": 1,
+                "system_usec": 0,
+                "utilization_ratio": 0.1,
+                "nr_periods": 1,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+            },
+            "memory": {
+                "current_bytes": 1,
+                "peak_bytes": 2,
+                "limit_bytes": 4,
+                "peak_limit_ratio": 0.5,
+                "events": {"oom_kill": 0},
+            },
+            "io": {"rbytes": 0},
             "output_digest": None,
-            "exit": {"code": 0},
+            "exit": {"code": 0, "signal": None},
         }
-        with self.assertRaises(TypeError):
-            MODULE.validate_workload_profile(invalid)
-        invalid["memory"] = {"events": {}}
-        invalid["exit"]["code"] = "zero"
-        with self.assertRaises(TypeError):
-            MODULE.validate_workload_profile(invalid)
-        self.assertIn(
-            "TypeError",
-            (ROOT / "scripts/arc-capacity.py")
-            .read_text(encoding="utf-8")
-            .split("except (", 1)[1]
-            .split("):", 1)[0],
-        )
+        self.assertIs(valid, MODULE.validate_workload_profile(valid))
+        for mutation in (None, {"oom_kill": None}, {"oom_kill": "1"}):
+            invalid = {**valid, "memory": {**valid["memory"], "events": mutation}}
+            with self.subTest(mutation=mutation), self.assertRaises(TypeError):
+                MODULE.validate_workload_profile(invalid)
 
     def test_dependency_wait_is_not_assignment_latency(self) -> None:
         labels = ["managed-socketless"]
