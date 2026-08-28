@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
 import unittest
+import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location(
@@ -115,6 +121,76 @@ class WorkloadReportTests(unittest.TestCase):
             invalid = {**valid, "memory": {**valid["memory"], "events": mutation}}
             with self.subTest(mutation=mutation), self.assertRaises(TypeError):
                 MODULE.validate_workload_profile(invalid)
+
+    def test_invalid_artifact_is_rejected_without_partial_profiles(self) -> None:
+        valid = {
+            "schema_version": 1,
+            "repository": "example/repo",
+            "commit": None,
+            "run_id": "1",
+            "run_attempt": "1",
+            "job_id": "test",
+            "runner_name": None,
+            "runner_profile": "socketless",
+            "image_digest": None,
+            "phase": "test",
+            "variant": "baseline",
+            "pair_id": "1",
+            "cache_state": "warm",
+            "started_at": "2026-08-28T00:00:00Z",
+            "completed_at": "2026-08-28T00:00:01Z",
+            "duration_seconds": 1,
+            "sample_count": 1,
+            "phase_timings": [{"name": "test", "duration_seconds": 1}],
+            "cpu": {
+                "usage_usec": 1,
+                "user_usec": 1,
+                "system_usec": 0,
+                "utilization_ratio": 0.1,
+                "nr_periods": 1,
+                "nr_throttled": 0,
+                "throttled_usec": 0,
+            },
+            "memory": {
+                "current_bytes": 1,
+                "peak_bytes": 2,
+                "limit_bytes": 4,
+                "peak_limit_ratio": 0.5,
+                "events": {"oom_kill": 0},
+            },
+            "io": {"rbytes": 0},
+            "output_digest": None,
+            "exit": {"code": 0, "signal": None},
+        }
+        payload = io.BytesIO()
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("first.json", json.dumps(valid))
+            archive.writestr("second.json", '{"schema_version":1}')
+        pages = [
+            {
+                "artifacts": [
+                    {
+                        "id": 7,
+                        "name": "workload-profile-test",
+                        "created_at": "2026-08-28T00:00:00Z",
+                        "expired": False,
+                    }
+                ]
+            }
+        ]
+        with (
+            mock.patch.object(MODULE, "command_json", return_value=pages),
+            mock.patch.object(
+                MODULE.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0, stdout=payload.getvalue()),
+            ),
+        ):
+            profiles, rejected = MODULE.github_workload_profiles(
+                "example/repo", datetime(2026, 8, 27, tzinfo=UTC)
+            )
+        self.assertEqual([], profiles)
+        self.assertEqual([{"artifact_id": 7, "reason": "invalid_profile"}], rejected)
 
     def test_dependency_wait_is_not_assignment_latency(self) -> None:
         labels = ["managed-socketless"]
