@@ -539,7 +539,13 @@ def github_workload_profiles(
                         continue
                     profile = validate_workload_profile(json.loads(archive.read(name)))
                     profiles.append(profile)
-        except (ValueError, KeyError, json.JSONDecodeError, zipfile.BadZipFile):
+        except (
+            ValueError,
+            TypeError,
+            KeyError,
+            json.JSONDecodeError,
+            zipfile.BadZipFile,
+        ):
             rejected.append(
                 {"artifact_id": artifact["id"], "reason": "invalid_profile"}
             )

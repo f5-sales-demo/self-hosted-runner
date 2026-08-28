@@ -57,6 +57,7 @@ class RunnerProfileTests(unittest.TestCase):
                 **os.environ,
                 "GITHUB_REPOSITORY": "f5-sales-demo/example",
                 "GITHUB_SHA": "a" * 40,
+                "RUNNER_IMAGE_DIGEST": "sha256:" + "b" * 64,
                 "SECRET_VALUE": "must-not-appear",
             }
             command = [
@@ -80,6 +81,7 @@ class RunnerProfileTests(unittest.TestCase):
             self.assertNotIn("must-not-appear", raw)
             profile = json.loads(raw)
             self.assertEqual(23, profile["exit"]["code"])
+            self.assertEqual("sha256:" + "b" * 64, profile["image_digest"])
             self.assertEqual(40, profile["io"]["rbytes"] - profile["io"]["rbytes"] + 40)
             schema = json.loads(
                 (ROOT / "schemas/workload-profile.schema.json").read_text(

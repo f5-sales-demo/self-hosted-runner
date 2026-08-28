@@ -142,7 +142,7 @@ def safe_metadata(args: argparse.Namespace) -> dict[str, str | None]:
         if explicit is not None:
             values[field] = explicit
     image = values["image_digest"]
-    if image and ":" in image:
+    if image and "@sha256:" in image:
         values["image_digest"] = image.rsplit("@", 1)[1]
     return values
 

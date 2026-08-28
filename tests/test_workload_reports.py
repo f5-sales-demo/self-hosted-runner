@@ -64,6 +64,21 @@ class WorkloadReportTests(unittest.TestCase):
             MODULE.validate_workload_profile({"schema_version": 1})
         with self.assertRaises(ValueError):
             MODULE.validate_workload_profile({"schema_version": 2})
+        invalid = profile("baseline", "1", 1)
+        invalid["schema_version"] = 1
+        invalid["run_id"] = "1"
+        invalid["cpu"] = {}
+        invalid["io"] = {}
+        invalid["exit"]["code"] = "zero"
+        with self.assertRaises(TypeError):
+            MODULE.validate_workload_profile(invalid)
+        self.assertIn(
+            "TypeError",
+            (ROOT / "scripts/arc-capacity.py")
+            .read_text(encoding="utf-8")
+            .split("except (", 1)[1]
+            .split("):", 1)[0],
+        )
 
     def test_dependency_wait_is_not_assignment_latency(self) -> None:
         labels = ["managed-socketless"]
