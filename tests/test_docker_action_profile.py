@@ -45,6 +45,8 @@ elif args[:1] == ["ps"]:
 elif args[:1] == ["events"]:
     def event(action, target, **attributes):
         print(json.dumps({{"Action": action, "id": target, "Actor": {{"Attributes": attributes}}}}), flush=True)
+    if mode == "delayed":
+        time.sleep(0.6)
     event("create", "d" * 64)
     event("create", container_id)
     if mode == "ambiguous":
@@ -140,6 +142,18 @@ else:
                 )
             )
             self.assertEqual(set(schema["required"]), set(profile))
+
+    def test_cpu_integration_excludes_wait_for_container_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "delayed.json"
+            result = subprocess.run(
+                self.command(self.fake_docker(root, "delayed"), output), check=False
+            )
+            self.assertEqual(0, result.returncode)
+            profile = json.loads(output.read_text(encoding="utf-8"))
+            self.assertGreater(profile["sample_count"], 0)
+            self.assertLess(profile["cpu"]["usage_seconds"], 0.2)
 
     def test_transient_stats_and_unwritable_summary_do_not_abort(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -375,6 +375,9 @@ def main(argv: list[str] | None = None) -> int:
                                 "matching event failed immutable image verification"
                             )
                         selected_id = container_id
+                        # CPU integration begins with the selected container,
+                        # excluding any time spent waiting for late creation.
+                        last_sample = time.monotonic()
                         wait_process = subprocess.Popen(
                             [args.docker, "wait", container_id],
                             stdout=subprocess.PIPE,
