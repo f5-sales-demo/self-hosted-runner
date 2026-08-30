@@ -424,7 +424,11 @@ def main(argv: list[str] | None = None) -> int:
                     cpu_peak = max(cpu_peak, cpu)
                     cpu_seconds += cpu * elapsed
                     memory_peak = max(memory_peak or 0, memory)
-                    memory_limit = limit
+                    # Docker reports an unbounded or unavailable memory limit as
+                    # 0B on some cgroup configurations. The profile contract uses
+                    # null for that state and positive integers for real limits.
+                    if limit > 0:
+                        memory_limit = limit
                     network_receive = max(network_receive, net_in)
                     network_transmit = max(network_transmit, net_out)
                     block_read = max(block_read, block_in)
