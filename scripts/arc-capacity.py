@@ -7,6 +7,7 @@ import argparse
 import io
 import json
 import math
+import re
 import subprocess
 import sys
 import zipfile
@@ -45,6 +46,37 @@ PROFILE_REQUIRED = {
 }
 
 
+DOCKER_PROFILE_REQUIRED = {
+    "schema_version",
+    "profile_kind",
+    "repository",
+    "commit",
+    "run_id",
+    "run_attempt",
+    "job_id",
+    "runner_name",
+    "runner_profile",
+    "runner_image_digest",
+    "phase",
+    "variant",
+    "pair_id",
+    "cache_state",
+    "started_at",
+    "completed_at",
+    "duration_seconds",
+    "sample_count",
+    "image",
+    "cpu",
+    "memory",
+    "block_io",
+    "network_io",
+    "pids",
+    "exit",
+    "observer",
+}
+SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+
+
 def _integer_map(value: object, name: str) -> dict:
     if not isinstance(value, dict) or not all(
         isinstance(key, str)
@@ -57,7 +89,133 @@ def _integer_map(value: object, name: str) -> dict:
     return value
 
 
+def _nonnegative_number(value: object, name: str) -> float | int:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
+        raise TypeError(f"{name} must be a nonnegative number")
+    return value
+
+
+def validate_docker_action_profile(profile: object) -> dict:
+    if not isinstance(profile, dict) or profile.get("schema_version") != 1:
+        raise ValueError("unsupported Docker action profile")
+    if set(profile) != DOCKER_PROFILE_REQUIRED:
+        raise ValueError("Docker action profile fields do not match schema version 1")
+    if profile.get("profile_kind") != "docker_action":
+        raise ValueError("invalid Docker action profile kind")
+    nullable_strings = (
+        "repository",
+        "commit",
+        "run_id",
+        "run_attempt",
+        "job_id",
+        "runner_name",
+        "runner_profile",
+        "runner_image_digest",
+        "pair_id",
+    )
+    if any(
+        profile[key] is not None and not isinstance(profile[key], str)
+        for key in nullable_strings
+    ):
+        raise TypeError("Docker action identity fields must be strings or null")
+    if any(
+        not isinstance(profile[key], str) or not profile[key]
+        for key in ("phase", "variant", "started_at", "completed_at")
+    ):
+        raise TypeError("Docker action phase, variant, and timestamps must be strings")
+    parse_time(profile["started_at"])
+    parse_time(profile["completed_at"])
+    if profile["cache_state"] not in {"cold", "warm", "unknown"}:
+        raise ValueError("invalid Docker image cache state")
+    _nonnegative_number(profile["duration_seconds"], "Docker action duration")
+    sample_count = profile["sample_count"]
+    if (
+        isinstance(sample_count, bool)
+        or not isinstance(sample_count, int)
+        or sample_count < 0
+    ):
+        raise TypeError("invalid Docker sample count")
+    image = profile["image"]
+    if not isinstance(image, dict) or set(image) != {"id", "digest", "size_bytes"}:
+        raise TypeError("invalid Docker image identity")
+    for key in ("id", "digest"):
+        value = image[key]
+        if value is not None and (
+            not isinstance(value, str) or not SHA256_PATTERN.fullmatch(value)
+        ):
+            raise TypeError(f"invalid Docker image {key}")
+    if image["size_bytes"] is not None:
+        _nonnegative_number(image["size_bytes"], "Docker image size")
+        if not isinstance(image["size_bytes"], int):
+            raise TypeError("Docker image size must be an integer")
+    cpu = profile["cpu"]
+    if not isinstance(cpu, dict) or set(cpu) != {
+        "usage_seconds",
+        "mean_utilization_ratio",
+        "peak_utilization_ratio",
+    }:
+        raise TypeError("invalid Docker CPU metrics")
+    for key, value in cpu.items():
+        _nonnegative_number(value, f"Docker CPU {key}")
+    memory = profile["memory"]
+    if not isinstance(memory, dict) or set(memory) != {
+        "peak_bytes",
+        "limit_bytes",
+        "peak_limit_ratio",
+        "oom",
+    }:
+        raise TypeError("invalid Docker memory metrics")
+    for key in ("peak_bytes", "limit_bytes"):
+        value = memory[key]
+        if value is not None and (
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+        ):
+            raise TypeError(f"invalid Docker memory {key}")
+    if memory["peak_limit_ratio"] is not None:
+        _nonnegative_number(memory["peak_limit_ratio"], "Docker memory ratio")
+    if not isinstance(memory["oom"], bool):
+        raise TypeError("invalid Docker OOM state")
+    for name in ("block_io", "network_io", "pids"):
+        _integer_map(profile[name], f"Docker {name}")
+    exit_status = profile["exit"]
+    if not isinstance(exit_status, dict) or set(exit_status) != {"code", "signal"}:
+        raise TypeError("invalid Docker action exit")
+    code = exit_status["code"]
+    observed_signal = exit_status["signal"]
+    if code is not None and (
+        isinstance(code, bool) or not isinstance(code, int) or not 0 <= code <= 255
+    ):
+        raise TypeError("invalid Docker action exit code")
+    if observed_signal is not None and (
+        isinstance(observed_signal, bool)
+        or not isinstance(observed_signal, int)
+        or observed_signal < 1
+    ):
+        raise TypeError("invalid Docker action signal")
+    observer = profile["observer"]
+    if not isinstance(observer, dict) or set(observer) != {"result", "detail"}:
+        raise TypeError("invalid Docker observer result")
+    results = {"completed", "cancelled", "timed_out", "ambiguous", "profiler_error"}
+    details = {
+        "container_exit_observed",
+        "observer_signal",
+        "container_exit_not_observed",
+        "multiple_matching_containers",
+        "initialization_failed",
+        "docker_observation_failed",
+    }
+    if observer["result"] not in results or observer["detail"] not in details:
+        raise ValueError("unknown Docker observer result")
+    if observer["result"] == "completed" and (
+        code is None or image["id"] is None or image["digest"] is None
+    ):
+        raise ValueError("completed Docker profile lacks immutable identity or exit")
+    return profile
+
+
 def validate_workload_profile(profile: object) -> dict:
+    if isinstance(profile, dict) and profile.get("profile_kind") == "docker_action":
+        return validate_docker_action_profile(profile)
     if not isinstance(profile, dict) or profile.get("schema_version") != 1:
         raise ValueError("unsupported workload profile")
     if set(profile) != PROFILE_REQUIRED:
@@ -625,6 +783,81 @@ def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
     return jobs
 
 
+def classify_step_timing(name: str) -> str:
+    normalized = name.strip().lower()
+    if normalized in {"set up job", "prepare all required actions"}:
+        return "action_preparation"
+    if "checkout" in normalized:
+        return "checkout"
+    if "pull" in normalized and any(
+        token in normalized for token in ("image", "docker", "super-linter")
+    ):
+        return "image_pull"
+    if "super-linter" in normalized or "super linter" in normalized:
+        return "super_linter"
+    if "spectral" in normalized:
+        return "spectral"
+    if "discover" in normalized and "file" in normalized:
+        return "file_discovery"
+    if normalized.startswith("post ") or any(
+        token in normalized
+        for token in ("upload artifact", "finalize profile", "post-processing")
+    ):
+        return "post_processing"
+    if any(
+        token in normalized
+        for token in (
+            "pii",
+            "repository hygiene",
+            "hardcoded locale",
+            "biome",
+            "mdx",
+            "markdown",
+            "native precheck",
+        )
+    ):
+        return "native_prechecks"
+    return "other"
+
+
+def aggregate_job_timings(jobs: list[dict]) -> list[dict]:
+    grouped: dict[tuple[str, str, str], list[float]] = {}
+    for job in jobs:
+        identity = (str(job.get("repository")), str(job.get("name")))
+        for phase, field in (
+            ("dependency_wait", "dependency_wait_seconds"),
+            ("runner_assignment", "assignment_seconds"),
+            ("total_job", "duration_seconds"),
+        ):
+            value = job.get(field)
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value >= 0
+            ):
+                grouped.setdefault((*identity, phase), []).append(float(value))
+        for step in job.get("steps", []):
+            value = step.get("duration_seconds")
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value >= 0
+            ):
+                phase = classify_step_timing(str(step.get("name", "")))
+                grouped.setdefault((*identity, phase), []).append(float(value))
+    return [
+        {
+            "repository": key[0],
+            "job": key[1],
+            "phase": key[2],
+            "runs": len(values),
+            "median_seconds": median(values),
+            "p95_seconds": percentile95(values),
+        }
+        for key, values in sorted(grouped.items())
+    ]
+
+
 def github_workload_profiles(
     repository: str, since: datetime, max_artifacts: int = 200
 ) -> tuple[list[dict], list[dict]]:
@@ -701,6 +934,9 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
     ):
         durations = [float(value["duration_seconds"]) for value in values]
         memory = [value.get("memory", {}).get("peak_limit_ratio") for value in values]
+        docker_values = [
+            value for value in values if value.get("profile_kind") == "docker_action"
+        ]
         reports.append(
             {
                 "repository": key[0],
@@ -715,11 +951,47 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                     (value for value in memory if value is not None), default=None
                 ),
                 "failures": sum(
-                    value.get("exit", {}).get("code") != 0 for value in values
+                    value.get("observer", {}).get("result") != "completed"
+                    if value.get("profile_kind") == "docker_action"
+                    else value.get("exit", {}).get("code") != 0
+                    for value in values
                 ),
                 "oom_events": sum(
-                    value.get("memory", {}).get("events", {}).get("oom_kill", 0)
+                    int(value.get("memory", {}).get("oom", False))
+                    if value.get("profile_kind") == "docker_action"
+                    else value.get("memory", {}).get("events", {}).get("oom_kill", 0)
                     for value in values
+                ),
+                "median_image_bytes": median(
+                    [
+                        value["image"]["size_bytes"]
+                        for value in docker_values
+                        if value["image"]["size_bytes"] is not None
+                    ]
+                )
+                if any(
+                    value["image"]["size_bytes"] is not None for value in docker_values
+                )
+                else None,
+                "median_cpu_seconds": median(
+                    [value["cpu"]["usage_seconds"] for value in docker_values]
+                )
+                if docker_values
+                else None,
+                "max_pids": max(
+                    (value["pids"]["peak"] for value in docker_values), default=None
+                ),
+                "block_read_bytes": sum(
+                    value["block_io"]["read_bytes"] for value in docker_values
+                ),
+                "block_write_bytes": sum(
+                    value["block_io"]["write_bytes"] for value in docker_values
+                ),
+                "network_receive_bytes": sum(
+                    value["network_io"]["receive_bytes"] for value in docker_values
+                ),
+                "network_transmit_bytes": sum(
+                    value["network_io"]["transmit_bytes"] for value in docker_values
                 ),
             }
         )
@@ -729,6 +1001,8 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
 def performance_comparisons(profiles: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
     for profile in profiles:
+        if profile.get("profile_kind") == "docker_action":
+            continue
         key = (
             profile.get("repository"),
             profile.get("phase"),
@@ -899,6 +1173,7 @@ def collect(args, policy: dict) -> dict:
         "samples": samples,
         "workload_profiles": profiles,
         "rejected_workload_profiles": rejected,
+        "job_timing_reports": aggregate_job_timings(jobs),
         "workload_reports": aggregate_workload_profiles(profiles),
         "performance_comparisons": performance_comparisons(profiles),
         "repository_cap_recommendations": cap_recommendations(
@@ -940,6 +1215,7 @@ def main(argv=None) -> int:
         )
         for key in (
             "repository_cap_recommendations",
+            "job_timing_reports",
             "workload_reports",
             "performance_comparisons",
             "rejected_workload_profiles",

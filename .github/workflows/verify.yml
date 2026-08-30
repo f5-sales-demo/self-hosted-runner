@@ -36,6 +36,42 @@ jobs:
           set -euo pipefail
           docker buildx build --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
+      - name: Smoke-test selected Docker action profiling
+        env:
+          SMOKE_DIGEST: sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+          SMOKE_IMAGE: docker.io/library/busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+        run: |
+          set -euo pipefail
+          docker run --rm --entrypoint docker-action-profile \
+            local/self-hosted-runner:container-build --help >/dev/null
+          docker pull "$SMOKE_IMAGE" >/dev/null
+          evidence=$(mktemp -d)
+          trap 'rm -rf "$evidence"' EXIT
+          scripts/docker-action-profile.py \
+            --name image-smoke \
+            --image "$SMOKE_IMAGE" \
+            --expected-digest "$SMOKE_DIGEST" \
+            --cache-state cold \
+            --output "$evidence/profile.json" \
+            --ready-file "$evidence/ready" \
+            --interval 0.1 \
+            --timeout 15 &
+          observer=$!
+          for _ in $(seq 1 100); do
+            [[ -f "$evidence/ready" ]] && break
+            sleep 0.05
+          done
+          [[ -f "$evidence/ready" ]]
+          sleep 0.25
+          docker run --rm "$SMOKE_IMAGE" sh -c 'sleep 3'
+          wait "$observer"
+          jq -e \
+            --arg digest "$SMOKE_DIGEST" \
+            '.observer.result == "completed" and .exit.code == 0 and
+             .sample_count > 0 and .cache_state == "cold" and
+             .image.digest == $digest' \
+            "$evidence/profile.json" >/dev/null
+
       - name: Prove standard target is socketless
         run: |
           set -euo pipefail

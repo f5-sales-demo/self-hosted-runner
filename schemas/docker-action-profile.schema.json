@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/f5-sales-demo/self-hosted-runner/schemas/docker-action-profile.schema.json",
+  "title": "Docker action workload profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "profile_kind", "repository", "commit", "run_id", "run_attempt", "job_id", "runner_name", "runner_profile", "runner_image_digest", "phase", "variant", "pair_id", "cache_state", "started_at", "completed_at", "duration_seconds", "sample_count", "image", "cpu", "memory", "block_io", "network_io", "pids", "exit", "observer"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "profile_kind": {"const": "docker_action"},
+    "repository": {"type": ["string", "null"]},
+    "commit": {"type": ["string", "null"]},
+    "run_id": {"type": ["string", "null"]},
+    "run_attempt": {"type": ["string", "null"]},
+    "job_id": {"type": ["string", "null"]},
+    "runner_name": {"type": ["string", "null"]},
+    "runner_profile": {"type": ["string", "null"]},
+    "runner_image_digest": {"type": ["string", "null"]},
+    "phase": {"type": "string", "minLength": 1},
+    "variant": {"type": "string", "minLength": 1},
+    "pair_id": {"type": ["string", "null"]},
+    "cache_state": {"enum": ["cold", "warm", "unknown"]},
+    "started_at": {"type": "string", "format": "date-time"},
+    "completed_at": {"type": "string", "format": "date-time"},
+    "duration_seconds": {"type": "number", "minimum": 0},
+    "sample_count": {"type": "integer", "minimum": 0},
+    "image": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "digest", "size_bytes"],
+      "properties": {
+        "id": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size_bytes": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "cpu": {
+      "type": "object", "additionalProperties": false,
+      "required": ["usage_seconds", "mean_utilization_ratio", "peak_utilization_ratio"],
+      "properties": {
+        "usage_seconds": {"type": "number", "minimum": 0},
+        "mean_utilization_ratio": {"type": "number", "minimum": 0},
+        "peak_utilization_ratio": {"type": "number", "minimum": 0}
+      }
+    },
+    "memory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["peak_bytes", "limit_bytes", "peak_limit_ratio", "oom"],
+      "properties": {
+        "peak_bytes": {"type": ["integer", "null"], "minimum": 0},
+        "limit_bytes": {"type": ["integer", "null"], "minimum": 1},
+        "peak_limit_ratio": {"type": ["number", "null"], "minimum": 0},
+        "oom": {"type": "boolean"}
+      }
+    },
+    "block_io": {
+      "type": "object", "additionalProperties": false,
+      "required": ["read_bytes", "write_bytes"],
+      "properties": {"read_bytes": {"type": "integer", "minimum": 0}, "write_bytes": {"type": "integer", "minimum": 0}}
+    },
+    "network_io": {
+      "type": "object", "additionalProperties": false,
+      "required": ["receive_bytes", "transmit_bytes"],
+      "properties": {"receive_bytes": {"type": "integer", "minimum": 0}, "transmit_bytes": {"type": "integer", "minimum": 0}}
+    },
+    "pids": {
+      "type": "object", "additionalProperties": false,
+      "required": ["peak"], "properties": {"peak": {"type": "integer", "minimum": 0}}
+    },
+    "exit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "signal"],
+      "properties": {"code": {"type": ["integer", "null"], "minimum": 0, "maximum": 255}, "signal": {"type": ["integer", "null"], "minimum": 1}}
+    },
+    "observer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result", "detail"],
+      "properties": {
+        "result": {"enum": ["completed", "cancelled", "timed_out", "ambiguous", "profiler_error"]},
+        "detail": {"enum": ["container_exit_observed", "observer_signal", "container_exit_not_observed", "multiple_matching_containers", "initialization_failed", "docker_observation_failed"]}
+      }
+    }
+  }
+}

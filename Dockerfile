@@ -239,14 +239,16 @@ RUN set -eux; \
 COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
 COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
 COPY --chown=root:root scripts/runner-profile.py /usr/local/bin/runner-profile
+COPY --chown=root:root scripts/docker-action-profile.py /usr/local/bin/docker-action-profile
 COPY --chown=root:root schemas/workload-profile.schema.json /usr/local/share/runner-profile/workload-profile.schema.json
+COPY --chown=root:root schemas/docker-action-profile.schema.json /usr/local/share/runner-profile/docker-action-profile.schema.json
 COPY --chown=root:root scripts/runner-entrypoint.sh /usr/local/bin/runner-entrypoint
 COPY --chown=root:root scripts/verify-tools.py /usr/local/bin/verify-runner-tools
 COPY --chown=root:root catalog/tool-catalog.json /usr/local/share/runner-catalog/tool-catalog.json
 RUN cc -O2 -Wall -Wextra -Werror /tmp/landlock-abi.c -o /usr/local/bin/landlock-abi \
     && rm -f /tmp/landlock-abi.c \
     && chmod 0555 /usr/local/bin/landlock-abi /usr/local/bin/require-landlock-abi \
-      /usr/local/bin/runner-entrypoint /usr/local/bin/runner-profile \
+      /usr/local/bin/runner-entrypoint /usr/local/bin/runner-profile /usr/local/bin/docker-action-profile \
       /usr/local/bin/verify-runner-tools
 
 WORKDIR /runner-runtime
