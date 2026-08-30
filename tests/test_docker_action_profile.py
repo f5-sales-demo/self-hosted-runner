@@ -65,9 +65,20 @@ elif args[:1] == ["stats"]:
     if mode == "malformed":
         print(json.dumps({{"CPUPerc": "--", "PIDs": "--"}}))
     else:
+        memory_limit = "2GiB"
+        if mode == "zero_limit":
+            memory_limit = "0B"
+        elif mode == "flapping_limit":
+            count_path = __file__ + ".stats-count"
+            try:
+                count = int(open(count_path, encoding="utf-8").read())
+            except (FileNotFoundError, ValueError):
+                count = 0
+            open(count_path, "w", encoding="utf-8").write(str(count + 1))
+            memory_limit = "2GiB" if count == 0 else "0B"
         print(json.dumps({{
             "CPUPerc": "125.5%",
-            "MemUsage": "128MiB / 2GiB",
+            "MemUsage": "128MiB / " + memory_limit,
             "MemPerc": "6.25%",
             "NetIO": "10MB / 20MB",
             "BlockIO": "3MB / 4MB",
@@ -172,6 +183,31 @@ else:
             profile = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual("completed", profile["observer"]["result"])
             self.assertEqual(0, profile["sample_count"])
+
+    def test_zero_memory_limit_is_normalized_to_null(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "profile.json"
+            result = subprocess.run(
+                self.command(self.fake_docker(root, "zero_limit"), output), check=False
+            )
+            self.assertEqual(0, result.returncode)
+            profile = json.loads(output.read_text(encoding="utf-8"))
+            self.assertIsNone(profile["memory"]["limit_bytes"])
+            self.assertIsNone(profile["memory"]["peak_limit_ratio"])
+
+    def test_zero_sample_does_not_erase_a_positive_memory_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "profile.json"
+            result = subprocess.run(
+                self.command(self.fake_docker(root, "flapping_limit"), output),
+                check=False,
+            )
+            self.assertEqual(0, result.returncode)
+            profile = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(2 * 1024**3, profile["memory"]["limit_bytes"])
+            self.assertEqual(0.0625, profile["memory"]["peak_limit_ratio"])
 
     def test_ambiguity_fails_closed_with_valid_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
