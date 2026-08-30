@@ -212,22 +212,27 @@ def write_summary(profile: dict) -> None:
     peak_text = "unknown" if peak is None else f"{peak / 1024 / 1024:.1f} MiB"
     if ratio is not None:
         peak_text += f" ({ratio:.1%})"
-    with Path(target).open("a", encoding="utf-8") as handle:
-        handle.write(f"### Docker action profile: {profile['phase']}\n\n")
-        handle.write(
-            "| Duration | Mean CPU | Peak memory | Image | Exit | Observer |\n"
-        )
-        handle.write("|---:|---:|---:|---:|---:|---|\n")
-        image_size = profile["image"]["size_bytes"]
-        image_text = (
-            "unknown" if image_size is None else f"{image_size / 1024 / 1024:.1f} MiB"
-        )
-        handle.write(
-            f"| {profile['duration_seconds']:.3f}s | "
-            f"{profile['cpu']['mean_utilization_ratio']:.3f} | {peak_text} | "
-            f"{image_text} | {profile['exit']['code']} | "
-            f"{profile['observer']['result']} |\n"
-        )
+    image_size = profile["image"]["size_bytes"]
+    image_text = (
+        "unknown" if image_size is None else f"{image_size / 1024 / 1024:.1f} MiB"
+    )
+    try:
+        with Path(target).open("a", encoding="utf-8") as handle:
+            handle.write(f"### Docker action profile: {profile['phase']}\n\n")
+            handle.write(
+                "| Duration | Mean CPU | Peak memory | Image | Exit | Observer |\n"
+            )
+            handle.write("|---:|---:|---:|---:|---:|---|\n")
+            handle.write(
+                f"| {profile['duration_seconds']:.3f}s | "
+                f"{profile['cpu']['mean_utilization_ratio']:.3f} | {peak_text} | "
+                f"{image_text} | {profile['exit']['code']} | "
+                f"{profile['observer']['result']} |\n"
+            )
+    except OSError:
+        # Evidence is authoritative; a best-effort GitHub summary must not
+        # replace the observer's result or prevent its artifact from uploading.
+        return
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -398,12 +403,18 @@ def main(argv: list[str] | None = None) -> int:
                 ):
                     stats = {}
                 if stats:
+                    try:
+                        cpu = parse_percent(str(stats["CPUPerc"]))
+                        memory, limit = parse_pair(str(stats["MemUsage"]))
+                        net_in, net_out = parse_pair(str(stats["NetIO"]))
+                        block_in, block_out = parse_pair(str(stats["BlockIO"]))
+                        pids = int(stats["PIDs"])
+                    except (KeyError, TypeError, ValueError):
+                        # Docker may emit transient "--" fields as a container
+                        # starts or exits. Skip only that sample, not the event stream.
+                        stats = {}
+                if stats:
                     now = time.monotonic()
-                    cpu = parse_percent(str(stats["CPUPerc"]))
-                    memory, limit = parse_pair(str(stats["MemUsage"]))
-                    net_in, net_out = parse_pair(str(stats["NetIO"]))
-                    block_in, block_out = parse_pair(str(stats["BlockIO"]))
-                    pids = int(stats["PIDs"])
                     elapsed = max(0.0, now - last_sample)
                     samples += 1
                     cpu_sum += cpu

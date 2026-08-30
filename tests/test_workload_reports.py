@@ -172,7 +172,12 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertEqual(8, report["max_pids"])
         self.assertEqual(30, report["network_receive_bytes"])
         self.assertEqual([], MODULE.performance_comparisons([valid]))
+        failed = {**valid, "exit": {"code": 23, "signal": None}}
+        self.assertEqual(1, MODULE.aggregate_workload_profiles([failed])[0]["failures"])
         invalid = {**valid, "image": {**valid["image"], "digest": "latest"}}
+        with self.assertRaises(TypeError):
+            MODULE.validate_workload_profile(invalid)
+        invalid = {**valid, "block_io": {"read_bytes": 10}}
         with self.assertRaises(TypeError):
             MODULE.validate_workload_profile(invalid)
 

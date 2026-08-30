@@ -175,8 +175,16 @@ def validate_docker_action_profile(profile: object) -> dict:
         _nonnegative_number(memory["peak_limit_ratio"], "Docker memory ratio")
     if not isinstance(memory["oom"], bool):
         raise TypeError("invalid Docker OOM state")
-    for name in ("block_io", "network_io", "pids"):
-        _integer_map(profile[name], f"Docker {name}")
+    counter_keys = {
+        "block_io": {"read_bytes", "write_bytes"},
+        "network_io": {"receive_bytes", "transmit_bytes"},
+        "pids": {"peak"},
+    }
+    for name, required_keys in counter_keys.items():
+        counters = profile[name]
+        if not isinstance(counters, dict) or set(counters) != required_keys:
+            raise TypeError(f"invalid Docker {name} counters")
+        _integer_map(counters, f"Docker {name}")
     exit_status = profile["exit"]
     if not isinstance(exit_status, dict) or set(exit_status) != {"code", "signal"}:
         raise TypeError("invalid Docker action exit")
@@ -951,7 +959,10 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                     (value for value in memory if value is not None), default=None
                 ),
                 "failures": sum(
-                    value.get("observer", {}).get("result") != "completed"
+                    (
+                        value.get("observer", {}).get("result") != "completed"
+                        or value.get("exit", {}).get("code") != 0
+                    )
                     if value.get("profile_kind") == "docker_action"
                     else value.get("exit", {}).get("code") != 0
                     for value in values

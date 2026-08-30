@@ -60,14 +60,17 @@ elif args[:1] == ["events"]:
 elif args[:2] == ["container", "inspect"]:
     print(json.dumps({{"Image": image_id, "State": {{"OOMKilled": False}}}}))
 elif args[:1] == ["stats"]:
-    print(json.dumps({{
-        "CPUPerc": "125.5%",
-        "MemUsage": "128MiB / 2GiB",
-        "MemPerc": "6.25%",
-        "NetIO": "10MB / 20MB",
-        "BlockIO": "3MB / 4MB",
-        "PIDs": "37",
-    }}))
+    if mode == "malformed":
+        print(json.dumps({{"CPUPerc": "--", "PIDs": "--"}}))
+    else:
+        print(json.dumps({{
+            "CPUPerc": "125.5%",
+            "MemUsage": "128MiB / 2GiB",
+            "MemPerc": "6.25%",
+            "NetIO": "10MB / 20MB",
+            "BlockIO": "3MB / 4MB",
+            "PIDs": "37",
+        }}))
 elif args[:1] == ["wait"]:
     if mode in {{"ambiguous", "cancel"}}:
         time.sleep(30)
@@ -137,6 +140,24 @@ else:
                 )
             )
             self.assertEqual(set(schema["required"]), set(profile))
+
+    def test_transient_stats_and_unwritable_summary_do_not_abort(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "profile.json"
+            env = {
+                **os.environ,
+                "GITHUB_STEP_SUMMARY": str(root / "missing" / "summary.md"),
+            }
+            result = subprocess.run(
+                self.command(self.fake_docker(root, "malformed"), output),
+                env=env,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode)
+            profile = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual("completed", profile["observer"]["result"])
+            self.assertEqual(0, profile["sample_count"])
 
     def test_ambiguity_fails_closed_with_valid_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
