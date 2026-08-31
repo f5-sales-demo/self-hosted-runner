@@ -15,6 +15,7 @@ concurrency:
 jobs:
   source-and-image:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -43,12 +44,12 @@ jobs:
       - name: Build and verify socketless target without cache
         run: |
           set -euo pipefail
-          docker buildx build --no-cache --load --target standard --tag local/self-hosted-runner:standard .
+          docker buildx build --progress=plain --no-cache --load --target standard --tag local/self-hosted-runner:standard .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
       - name: Build and verify container-build target without cache
         run: |
           set -euo pipefail
-          docker buildx build --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
+          docker buildx build --progress=plain --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
       - name: Smoke-test selected Docker action profiling
         env:
