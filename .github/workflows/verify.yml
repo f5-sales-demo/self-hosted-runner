@@ -15,11 +15,10 @@ concurrency:
 jobs:
   source-and-image:
     runs-on: ubuntu-24.04
-    # A cold validation performs two complete, deliberately no-cache runner
-    # builds.  Ubuntu Snapshot may serialise its hundreds of immutable package
-    # downloads, so keep the job bounded without turning transient mirror
-    # latency into a false CI failure.
-    timeout-minutes: 120
+    # Ubuntu Snapshot may serialise hundreds of immutable package downloads.
+    # Keep the cold build bounded without treating transient mirror latency as
+    # a false CI failure.
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -50,6 +49,21 @@ jobs:
           set -euo pipefail
           docker buildx build --progress=plain --no-cache --load --target standard --tag local/self-hosted-runner:standard .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
+      - name: Prove standard target is socketless
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint sh local/self-hosted-runner:standard -c "command -v docker"; then
+            echo "standard target unexpectedly contains Docker" >&2
+            exit 1
+          fi
+
+  container-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Build and verify container-build target without cache
         run: |
           set -euo pipefail
@@ -90,11 +104,3 @@ jobs:
              .sample_count > 0 and .cache_state == "cold" and
              .image.digest == $digest' \
             "$evidence/profile.json" >/dev/null
-
-      - name: Prove standard target is socketless
-        run: |
-          set -euo pipefail
-          if docker run --rm --entrypoint sh local/self-hosted-runner:standard -c "command -v docker"; then
-            echo "standard target unexpectedly contains Docker" >&2
-            exit 1
-          fi
