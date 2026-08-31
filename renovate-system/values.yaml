@@ -1,0 +1,5 @@
+image: f5salesdemoarcca.azurecr.io/renovate@sha256:f3af0e38b415d50c881139c721c13956bd4a11b804f7198275bcc3c501dea6c1
+appId: "REPLACE_WITH_GITHUB_APP_ID"
+installationId: "REPLACE_WITH_INSTALLATION_ID"
+botId: "REPLACE_WITH_BOT_ID"
+suspend: true

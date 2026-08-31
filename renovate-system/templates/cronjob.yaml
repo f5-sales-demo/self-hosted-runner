@@ -1,0 +1,46 @@
+{{- if not (regexMatch "^f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64}$" .Values.image) }}{{ fail "image must be an immutable ACR digest" }}{{ end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: renovate
+spec:
+  schedule: "20 5 * * *"
+  timeZone: America/Toronto
+  suspend: {{ .Values.suspend }}
+  concurrencyPolicy: Forbid
+  failedJobsHistoryLimit: 3
+  successfulJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 2700
+      template:
+        spec:
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext: {runAsNonRoot: true, runAsUser: 1001, seccompProfile: {type: RuntimeDefault}}
+          containers:
+          - name: renovate
+            image: {{ .Values.image | quote }}
+            imagePullPolicy: IfNotPresent
+            args: ["--config-file=/config/renovate.json"]
+            env:
+            - {name: RENOVATE_GITHUB_APP_ID, valueFrom: {configMapKeyRef: {name: renovate-github-app, key: app-id}}}
+            - {name: RENOVATE_GITHUB_INSTALLATION_ID, valueFrom: {configMapKeyRef: {name: renovate-github-app, key: installation-id}}}
+            - {name: RENOVATE_JOB_DEADLINE_SECONDS, value: "2700"}
+            - {name: RENOVATE_GITHUB_APP_KEY_PATH, value: /github-app/private-key.pem}
+            securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+            volumeMounts:
+            - {name: config, mountPath: /config, readOnly: true}
+            - {name: github-app, mountPath: /github-app, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            - {name: cache, mountPath: /home/ubuntu/.cache/renovate}
+          volumes:
+          - name: config
+            configMap: {name: renovate-config}
+          - name: github-app
+            secret: {secretName: renovate-github-app}
+          - name: tmp
+            emptyDir: {}
+          - name: cache
+            emptyDir: {}
