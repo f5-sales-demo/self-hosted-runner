@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "version": "44.52.1",
+    "image": "renovate/renovate@sha256:6922c734849f2ed1c01e3a7924bd60e25e0ea904731a67bad72b02d563c0c3c3"
+  },
+  "derived": {
+    "ghcr": "ghcr.io/f5-sales-demo/renovate@sha256:9b8551c5c4f9fe344b3c7f52fbc9f23b1b66846bd66b36ae4465df582163963d",
+    "acr": "f5salesdemoarcca.azurecr.io/renovate@sha256:9b8551c5c4f9fe344b3c7f52fbc9f23b1b66846bd66b36ae4465df582163963d",
+    "source_commit": "3b14ee91b12050fd830588f7475932bf4e0089a6",
+    "manifest_receipt": "sha256:9b8551c5c4f9fe344b3c7f52fbc9f23b1b66846bd66b36ae4465df582163963d"
+  },
+  "github_app": {
+    "app_id": "4784604",
+    "installation_id": "158048037",
+    "bot_id": "323309767",
+    "bot_login": "f5-renovate-aks[bot]"
+  }
+}
