@@ -70,6 +70,9 @@ class RenovateContractTests(unittest.TestCase):
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn("^f5salesdemoarcca\\.azurecr\\.io/renovate@", deploy)
         self.assertNotIn("renovate:latest", deploy)
+        promotion = promote.read_text()
+        self.assertIn("gh attestation verify", promotion)
+        self.assertIn("--deny-self-hosted-runners", promotion)
 
     def test_socketless_prepull_accepts_only_acr_renovate_digest(self):
         schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())

@@ -27,6 +27,11 @@ export DOCKER_CONFIG="$config"
 gh auth token | docker login ghcr.io --username "$(gh api user --jq .login)" --password-stdin >/dev/null
 az acr login --name f5salesdemoarcca --expose-token --output json | jq -r .accessToken |
   docker login "$registry" --username 00000000-0000-0000-0000-000000000000 --password-stdin >/dev/null
+gh attestation verify "oci://${source_image}" \
+  --repo f5-sales-demo/self-hosted-runner \
+  --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish-renovate.yml@refs/heads/main \
+  --source-digest "$source_commit" \
+  --deny-self-hosted-runners >/dev/null
 tag="$registry/renovate:approved-${digest:7:16}"
 docker buildx imagetools create --tag "$tag" "$source_image" >/dev/null
 observed=$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' | jq -er .digest)
