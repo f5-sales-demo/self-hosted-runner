@@ -1,0 +1,53 @@
+name: Publish derived Renovate image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - renovate-system/Dockerfile
+      - renovate-system/app-token-init.mjs
+      - renovate-system/github-app.mjs
+      - renovate-system/token-entrypoint.mjs
+      - renovate-system/image-source.json
+      - .github/workflows/publish-renovate.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
+concurrency:
+  group: publish-derived-renovate
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with: {persist-credentials: false}
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+      - name: Authenticate to GHCR
+        env: {TOKEN: "${{ github.token }}"}
+        run: printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and publish the derived image
+        id: image
+        run: |
+          set -euo pipefail
+          image=ghcr.io/f5-sales-demo/renovate
+          tag="sha-${GITHUB_SHA}"
+          docker buildx build --no-cache --platform linux/amd64 --provenance=mode=max --push \
+            --label "org.opencontainers.image.source=https://github.com/f5-sales-demo/self-hosted-runner" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" --tag "$image:$tag" renovate-system
+          digest=$(docker buildx imagetools inspect "$image:$tag" --format '{{json .Manifest}}' | jq -er .digest)
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
+          echo "reference=$image@$digest" >>"$GITHUB_OUTPUT"
+          echo "\`$image@$digest\`" >>"$GITHUB_STEP_SUMMARY"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        with:
+          subject-name: ghcr.io/f5-sales-demo/renovate
+          subject-digest: "${{ steps.image.outputs.digest }}"
+          push-to-registry: true

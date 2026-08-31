@@ -82,3 +82,24 @@ invalid result, or ABI 1 denies admission with an operator diagnostic. Move the
 workload to Ubuntu HWE or another newer kernel/host instead of accepting
 scanner-only containment. The check runs inside the runner pod, so it verifies
 the kernel that actually governs the job rather than the image build host.
+
+## Self-hosted Renovate
+
+`renovate-system/` is the isolated build context for the organization-owned Renovate bot. The
+upstream receipt pins Renovate 44.52.1 by manifest digest; a path-scoped GitHub-hosted workflow
+publishes the derived GHCR image with provenance. `scripts/promote-renovate-image.sh` copies that
+exact manifest to ACR and writes the lock receipt consumed by `scripts/renovate-deploy.sh`. Tags,
+upstream images, digest disagreement, and unlocked runtime references are rejected.
+
+The suspended CronJob uses a PEM-reading init container to validate exact App metadata,
+permissions, bot identity, and 39-repository selected scope. It hands a short-lived token through a
+memory-backed volume to the main container, which immediately unlinks it; the main container never
+mounts the PEM. The workload has no RBAC or service-account token, and its Cilium policy denies
+ingress and every egress destination except inspected DNS and the five declared HTTPS hosts.
+
+Regenerate or verify the single global configuration with:
+
+```bash
+scripts/repository-inventory.py
+scripts/repository-inventory.py --check
+```

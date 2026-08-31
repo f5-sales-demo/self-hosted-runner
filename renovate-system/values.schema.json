@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["image", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources"],
+  "properties": {
+    "image": {"type": "string", "pattern": "^f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64}$"},
+    "suspend": {"const": true},
+    "schedule": {"const": "20 5 * * *"},
+    "timeZone": {"const": "America/Toronto"},
+    "activeDeadlineSeconds": {"const": 2700},
+    "tokenSafetyMarginSeconds": {"type": "integer", "minimum": 1, "maximum": 899},
+    "githubApp": {"type": "object", "additionalProperties": false, "required": ["appId", "installationId", "botId", "botLogin", "secretName"], "properties": {
+      "appId": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+      "installationId": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+      "botId": {"type": "string", "pattern": "^[1-9][0-9]*$"},
+      "botLogin": {"type": "string", "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\\[bot\\]$"},
+      "secretName": {"const": "renovate-github-app"}
+    }},
+    "nodeSelector": {"const": {"runner-profile": "socketless"}},
+    "resources": {"type": "object", "additionalProperties": false, "required": ["init", "renovate"], "properties": {
+      "init": {"$ref": "#/$defs/resources"}, "renovate": {"$ref": "#/$defs/resources"}
+    }}
+  },
+  "$defs": {"resources": {"type": "object", "additionalProperties": false, "required": ["requests", "limits"], "properties": {
+    "requests": {"type": "object", "required": ["cpu", "memory"]}, "limits": {"type": "object", "required": ["cpu", "memory"]}
+  }}}
+}

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["profile", "nodeProfiles", "image", "additionalImages"],
+  "required": ["profile", "nodeProfiles", "image", "additionalImages", "renovateImage"],
   "properties": {
     "profile": {"type": "string", "enum": ["socketless", "container-build"]},
     "nodeProfiles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["socketless", "compute", "container-build"]}},
@@ -13,6 +13,10 @@
     "additionalImages": {
       "type": "array",
       "items": {"type": "string", "pattern": "^[a-z0-9.-]+/.+@sha256:[0-9a-f]{64}$"}
+    },
+    "renovateImage": {
+      "type": "string",
+      "pattern": "^(|f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64})$"
     },
     "imagePullSecrets": {
       "type": "array",

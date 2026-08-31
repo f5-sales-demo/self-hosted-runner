@@ -42,7 +42,8 @@ spec:
           value: {{ . | quote }}
           effect: NoSchedule
         {{- end }}
-      {{- if .Values.additionalImages }}
+      {{- if and .Values.renovateImage (ne .Values.profile "socketless") }}{{ fail "Renovate may only be pre-pulled onto socketless nodes" }}{{ end }}
+      {{- if or .Values.additionalImages .Values.renovateImage }}
       initContainers:
         {{- range $index, $image := .Values.additionalImages }}
         - name: pull-additional-{{ $index }}
@@ -53,6 +54,21 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+        {{- end }}
+        {{- if .Values.renovateImage }}
+        - name: pull-renovate
+          image: {{ .Values.renovateImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command: [node, -e, "process.exit(0)"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 1001
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 64Mi}
         {{- end }}
       {{- end }}
       containers:
