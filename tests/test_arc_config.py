@@ -23,21 +23,6 @@ CONFIG_DIR = ROOT / "arc/repositories"
 class ArcConfigTests(unittest.TestCase):
     def test_repository_configs_are_exact(self) -> None:
         expected = {
-            "self-hosted-runner.yaml": {
-                "repository": "https://github.com/f5-sales-demo/self-hosted-runner",
-                "socketless": (
-                    "arc-runners-socketless",
-                    "self-hosted-runner-socketless",
-                    0,
-                    20,
-                ),
-                "container-build": (
-                    "arc-runners-container-build",
-                    "self-hosted-runner-container-build",
-                    0,
-                    5,
-                ),
-            },
             "xcsh.yaml": {
                 "repository": "https://github.com/f5-sales-demo/xcsh",
                 "socketless": ("arc-runners-xcsh-socketless", "xcsh-socketless", 0, 10),
@@ -175,16 +160,15 @@ class ArcConfigTests(unittest.TestCase):
             self.assertEqual(f"{repository}-compute", compute["runner_scale_set_name"])
             self.assertEqual((0, 2), (compute["min_runners"], compute["max_runners"]))
 
-    def test_config_directory_exactly_covers_catalog_plus_controller_repo(self) -> None:
+    def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(
             (ROOT / "catalog/governed-repositories.json").read_text(encoding="utf-8")
         )
         expected = {
             repository.split("/", 1)[1] for repository in catalog["repositories"]
         }
-        expected.add("self-hosted-runner")
         self.assertEqual(expected, {path.stem for path in CONFIG_DIR.glob("*.yaml")})
-        self.assertEqual(40, len(expected))
+        self.assertEqual(39, len(expected))
 
     def test_all_configs_have_globally_safe_identities(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -200,7 +184,7 @@ class ArcConfigTests(unittest.TestCase):
             if config["repository"] in MODULE.MANAGED_COHORT
         ]
         self.assertEqual(32, len(managed))
-        self.assertEqual(40, len(configs))
+        self.assertEqual(39, len(configs))
 
     def test_complete_config_set_rejects_missing_repository(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -208,7 +192,7 @@ class ArcConfigTests(unittest.TestCase):
             MODULE.validate_complete_config_set(paths[:-1], ROOT)
 
     def test_cross_config_collisions_fail_closed(self) -> None:
-        first = MODULE.load_config(CONFIG_DIR / "self-hosted-runner.yaml", ROOT)
+        first = MODULE.load_config(CONFIG_DIR / "docs-icons.yaml", ROOT)
         second = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
         mutations = []
         for field in ("namespace", "release", "runner_scale_set_name"):

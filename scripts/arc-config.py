@@ -80,7 +80,6 @@ MANAGED_SHARED_LABELS = {
     "container-build": "managed-container-build",
 }
 EXPECTED_CAPS = {
-    "https://github.com/f5-sales-demo/self-hosted-runner": (20, 5),
     "https://github.com/f5-sales-demo/xcsh": (10, 3, 2),
     "https://github.com/f5-sales-demo/docs": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
@@ -299,7 +298,10 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     """Require the checked-in configuration set to cover the exact ARC fleet."""
     configs = validate_config_set(paths, repository_root)
     observed = {config["repository"] for config in configs}
-    expected = set(EXPECTED_CAPS)
+    catalog = json.loads((repository_root / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
+    expected = {f"https://github.com/{repository}" for repository in catalog["repositories"]}
+    if len(expected) != 39 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
+        raise ConfigError("governed repository catalog must contain exactly 39 unique f5-sales-demo repositories")
     if observed != expected:
         raise ConfigError(
             "ARC configuration coverage mismatch: "

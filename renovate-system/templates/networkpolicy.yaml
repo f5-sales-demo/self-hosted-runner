@@ -1,0 +1,9 @@
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata: {name: renovate-egress}
+spec:
+  endpointSelector: {matchLabels: {job-name: renovate}}
+  egress:
+  - toEndpoints: [{}]
+    toPorts: [{ports: [{port: "53", protocol: UDP}, {port: "53", protocol: TCP}]}]
+  - toFQDNs: [{matchName: api.github.com}, {matchName: github.com}, {matchName: codeload.github.com}, {matchName: registry.npmjs.org}, {matchName: f5salesdemoarcca.azurecr.io}]
