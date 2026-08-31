@@ -121,14 +121,25 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("ln -s pip3 /opt/python-${PYTHON313_VERSION}/bin/pip", dockerfile)
         self.assertIn("cache PATH did not resolve its python and pip entrypoints", verifier)
 
-    def test_pnpm_and_spectral_are_immutable_image_tools(self) -> None:
+    def test_pnpm_spectral_and_actionlint_are_immutable_image_tools(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         tools = {tool["name"]: tool for tool in catalog["tools"]}
         self.assertEqual("11.3.0", tools["pnpm"]["version"])
         self.assertEqual("6.16.3", tools["spectral"]["version"])
+        self.assertEqual("1.7.12", tools["actionlint"]["version"])
+        self.assertEqual(
+            "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+            tools["actionlint"]["sha256"],
+        )
+        self.assertEqual(["standard", "container-build"], tools["actionlint"]["profiles"])
+        self.assertEqual("actionlint -version", tools["actionlint"]["command"])
         self.assertEqual(["11.3.0"], catalog["setup_actions"]["pnpm/action-setup"]["versions"])
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn("ARG PNPM_VERSION=11.3.0", dockerfile)
+        self.assertIn("ARG ACTIONLINT_VERSION=1.7.12", dockerfile)
+        self.assertIn("ARG ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8", dockerfile)
+        self.assertIn("actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz", dockerfile)
+        self.assertIn("install -m 0555 /tmp/actionlint /usr/local/bin/actionlint", dockerfile)
         self.assertIn("exec node /opt/pnpm/package/bin/pnpm.cjs", dockerfile)
         self.assertIn("npm ci --omit=dev --ignore-scripts --no-audit --no-fund", dockerfile)
 

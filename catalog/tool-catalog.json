@@ -36,6 +36,7 @@
     "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"},
     "pnpm": {"strategy": "npm", "package": "pnpm"},
     "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"},
+    "actionlint": {"strategy": "github-release", "repository": "rhysd/actionlint"},
     "semantic-release": {"strategy": "npm", "package": "semantic-release"}
   },
   "setup_actions": {
@@ -237,6 +238,18 @@
       ],
       "command": "spectral --version",
       "expected": "6.16.3"
+    },
+    {
+      "name": "actionlint",
+      "version": "1.7.12",
+      "source": "https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz",
+      "sha256": "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "actionlint -version",
+      "expected": "1.7.12"
     },
     {
       "name": "semantic-release",

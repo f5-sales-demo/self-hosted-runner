@@ -38,6 +38,8 @@ ARG UV_VERSION=0.8.24
 ARG UV_SHA256=db8179fffd97b7557b9a519bae82eaa4f499b02ef546f738a35e74e26c47e6b7
 ARG BIOME_VERSION=2.5.6
 ARG BIOME_SHA256=3cc9a0c3fa26ac26a89e8a3b203c010c9ae88e36f69a2679e79981f267ce9d57
+ARG ACTIONLINT_VERSION=1.7.12
+ARG ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
 ARG RUFF_VERSION=0.16.0
 ARG RUFF_SHA256=98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865
 ARG GCLOUD_VERSION=579.0.0
@@ -137,6 +139,8 @@ RUN set -eux; \
     echo "${UV_SHA256}  /tmp/uv.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/uv.tar.gz --directory /tmp && install -m 0555 /tmp/uv-x86_64-unknown-linux-gnu/uv /tmp/uv-x86_64-unknown-linux-gnu/uvx /usr/local/bin/; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/biome "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%40${BIOME_VERSION}/biome-linux-x64"; \
     echo "${BIOME_SHA256}  /tmp/biome" | sha256sum --check --strict; install -m 0555 /tmp/biome /usr/local/bin/biome; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; \
+    echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/actionlint.tar.gz --directory /tmp actionlint && install -m 0555 /tmp/actionlint /usr/local/bin/actionlint; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/gcloud.tar.gz "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz"; \
     echo "${GCLOUD_SHA256}  /tmp/gcloud.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/gcloud.tar.gz --directory /opt && ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"; \
@@ -187,7 +191,7 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp && install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
-    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
+    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
     chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
