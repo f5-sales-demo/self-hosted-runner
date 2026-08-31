@@ -15,7 +15,11 @@ concurrency:
 jobs:
   source-and-image:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # A cold validation performs two complete, deliberately no-cache runner
+    # builds.  Ubuntu Snapshot may serialise its hundreds of immutable package
+    # downloads, so keep the job bounded without turning transient mirror
+    # latency into a false CI failure.
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
