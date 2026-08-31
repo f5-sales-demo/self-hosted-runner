@@ -41,29 +41,41 @@
     "f5-sales-demo/xcsh-action",
     "f5-sales-demo/xcsh-chrome-extension"
   ],
+  "requireConfig": "ignored",
   "onboarding": false,
   "dependencyDashboard": false,
   "labels": [],
   "prConcurrentLimit": 10,
+  "timezone": "America/Toronto",
   "minimumReleaseAge": "7 days",
+  "internalChecksFilter": "strict",
+  "allowScripts": false,
+  "allowPlugins": false,
+  "ignoreScripts": true,
+  "allowedCommands": [
+    "^node scripts/prepare-generated-artifact-release\\.mjs prepare$"
+  ],
   "packageRules": [
     {
+      "description": "Process npm updates daily",
       "matchManagers": [
         "npm"
       ],
       "schedule": [
-        "* * * * *"
+        "after 5am and before 6am"
       ]
     },
     {
+      "description": "Process GitHub Actions updates on Mondays",
       "matchManagers": [
         "github-actions"
       ],
       "schedule": [
-        "* * * * 1"
+        "after 5am and before 6am on Monday"
       ]
     },
     {
+      "groupName": "npm-minor-patch",
       "matchManagers": [
         "npm"
       ],
@@ -71,12 +83,12 @@
         "minor",
         "patch"
       ],
-      "groupName": "npm minor and patch",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
+      "groupName": "actions-minor-patch",
       "matchManagers": [
         "github-actions"
       ],
@@ -84,25 +96,27 @@
         "minor",
         "patch"
       ],
-      "groupName": "GitHub Actions minor and patch",
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
     },
     {
-      "matchManagers": [
-        "npm"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
+      "description": "Regenerate docs-icons release artifacts on npm branches",
       "matchRepositories": [
         "f5-sales-demo/docs-icons"
+      ],
+      "matchManagers": [
+        "npm"
       ],
       "postUpgradeTasks": {
         "commands": [
           "node scripts/prepare-generated-artifact-release.mjs prepare"
+        ],
+        "executionMode": "branch",
+        "fileFilters": [
+          "package-lock.json",
+          "packages/*/package.json",
+          "packages/*/icons.json"
         ]
       }
     }

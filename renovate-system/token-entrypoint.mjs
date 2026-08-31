@@ -1,15 +1,17 @@
-import { createSign } from 'node:crypto';
-const required = ['RENOVATE_GITHUB_APP_ID', 'RENOVATE_GITHUB_INSTALLATION_ID', 'RENOVATE_GITHUB_APP_KEY_PATH'];
-for (const key of required) if (!process.env[key]) throw new Error(`${key} is required`);
-if (Number(process.env.RENOVATE_JOB_DEADLINE_SECONDS || 2700) >= 3600) throw new Error('job deadline may outlive GitHub App token');
-const now = Math.floor(Date.now() / 1000);
-const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
-const input = `${b64({alg:'RS256',typ:'JWT'})}.${b64({iat:now-60,exp:now+540,iss:process.env.RENOVATE_GITHUB_APP_ID})}`;
-const signer = createSign('RSA-SHA256'); signer.update(input); signer.end();
-const jwt = `${input}.${signer.sign(await (await import('node:fs/promises')).readFile(process.env.RENOVATE_GITHUB_APP_KEY_PATH), 'base64url')}`;
-const response = await fetch(`https://api.github.com/app/installations/${process.env.RENOVATE_GITHUB_INSTALLATION_ID}/access_tokens`, {method:'POST',headers:{Authorization:`Bearer ${jwt}`,Accept:'application/vnd.github+json','User-Agent':'f5-renovate-aks'}});
-if (!response.ok) throw new Error(`GitHub App token request failed: ${response.status}`);
-const {token, expires_at} = await response.json();
-if (Date.parse(expires_at) - Date.now() <= Number(process.env.RENOVATE_JOB_DEADLINE_SECONDS || 2700) * 1000) throw new Error('issued token expires before job deadline');
-const child = (await import('node:child_process')).spawn('renovate', process.argv.slice(2), {stdio:'inherit',env:{...process.env,RENOVATE_TOKEN:token}});
-child.on('exit', code => process.exit(code ?? 1));
+import { readFile, unlink } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
+
+const tokenPath = process.env.RENOVATE_TOKEN_FILE ?? '/token/installation-token';
+const token = await readFile(tokenPath, 'utf8');
+await unlink(tokenPath);
+if (!/^ghs_[A-Za-z0-9]{20,}$/.test(token)) throw new Error('token handoff is malformed');
+const childEnv = { ...process.env, RENOVATE_TOKEN: token };
+delete childEnv.RENOVATE_TOKEN_FILE;
+delete childEnv.RENOVATE_GITHUB_APP_KEY_PATH;
+const child = spawn('renovate', process.argv.slice(2), { stdio: 'inherit', env: childEnv });
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => child.kill(signal));
+child.on('error', (error) => { throw error; });
+child.on('exit', (code, signal) => {
+  if (signal) process.kill(process.pid, signal);
+  else process.exit(code ?? 1);
+});

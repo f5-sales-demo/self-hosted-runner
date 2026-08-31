@@ -1,9 +1,30 @@
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
-metadata: {name: renovate-egress}
+metadata:
+  name: renovate-deny-by-default
 spec:
-  endpointSelector: {matchLabels: {job-name: renovate}}
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: renovate
+  ingress: []
   egress:
-  - toEndpoints: [{}]
-    toPorts: [{ports: [{port: "53", protocol: UDP}, {port: "53", protocol: TCP}]}]
-  - toFQDNs: [{matchName: api.github.com}, {matchName: github.com}, {matchName: codeload.github.com}, {matchName: registry.npmjs.org}, {matchName: f5salesdemoarcca.azurecr.io}]
+    - toEndpoints:
+        - matchLabels:
+            k8s:io.kubernetes.pod.namespace: kube-system
+            k8s:k8s-app: kube-dns
+      toPorts:
+        - ports:
+            - {port: "53", protocol: UDP}
+            - {port: "53", protocol: TCP}
+          rules:
+            dns:
+              - {matchPattern: "*"}
+    - toFQDNs:
+        - {matchName: api.github.com}
+        - {matchName: github.com}
+        - {matchName: codeload.github.com}
+        - {matchName: objects.githubusercontent.com}
+        - {matchName: registry.npmjs.org}
+      toPorts:
+        - ports:
+            - {port: "443", protocol: TCP}

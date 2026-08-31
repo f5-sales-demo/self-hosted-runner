@@ -32,3 +32,25 @@ Migrate managed workflow templates first, then remaining governed repositories i
 7. Record two complete 06:00-22:00 America/Toronto business-day peak windows before acceptance. Warm assignment p95 must be at most 20 seconds and cold assignment p95 at most 180 seconds.
 
 Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore the last verified GHCR digest references, and set compute maximum capacity to zero. Do not remove the pool or mirror evidence until correctness, security, and latency are stable again.
+
+## Renovate security handoff
+
+1. After the source PR merges, wait for `Publish derived Renovate image`, verify its provenance, and
+   promote its immutable GHCR digest with `scripts/promote-renovate-image.sh`. Commit the generated
+   image lock plus the non-secret App ID, installation ID, bot login, and numeric bot ID in a second
+   linked PR. Never commit the PEM or installation token.
+2. The organization owner creates `f5-renovate-aks` with webhooks and events disabled and exactly
+   metadata-read, contents-write, pull-requests-write, and workflows-write, then selects the exact
+   39-repository catalog. The token init helper verifies App metadata, permissions, selected scope,
+   bot identity, token lifetime, and repository equality.
+3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must contain only
+   `private-key.pem`. After verified new scope, disable and uninstall the hosted Renovate App.
+4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It re-verifies byte-identical
+   GHCR/ACR manifests, the one-key Secret, suspended chart, exact ACR digest, and socketless
+   pre-puller. Confirm there are no Role or RoleBinding objects before unsuspending.
+5. On Monday, create one Job from the CronJob and wait for success. Logs must contain the 39-scope
+   receipt and no token/key material. Confirm minor/patch PRs can request GitHub-native squash
+   automerge only after required checks, while a natural or temporary-branch major remains manual.
+
+Renovate rollback is intentionally limited to suspending the CronJob and disabling the new App.
+Dependabot and the hosted Renovate installation are not restored.

@@ -25,7 +25,21 @@ jobs:
           python3 -m json.tool catalog/tool-catalog.json >/dev/null
           python3 -m json.tool catalog/governed-repositories.json >/dev/null
           python3 -m py_compile scripts/*.py tests/*.py
+          scripts/repository-inventory.py --check
           python3 -m unittest discover --start-directory tests --pattern "test_*.py"
+          node --test renovate-system/github-app.test.mjs
+      - name: Validate hardened Renovate chart and derived image
+        run: |
+          set -euo pipefail
+          image=f5salesdemoarcca.azurecr.io/renovate@sha256:0000000000000000000000000000000000000000000000000000000000000000
+          app=(--set-string image="$image" --set-string githubApp.appId=1 --set-string githubApp.installationId=2 --set-string githubApp.botId=3 --set-string 'githubApp.botLogin=f5-renovate-aks[bot]')
+          helm lint renovate-system "${app[@]}"
+          helm template renovate renovate-system --namespace renovate-system "${app[@]}" >/dev/null
+          docker buildx build --no-cache --load --tag local/renovate:test renovate-system
+          docker run --rm --entrypoint node local/renovate:test --version
+          docker run --rm --entrypoint renovate-config-validator \
+            --volume "$PWD/renovate-system/generated/renovate.json:/config.json:ro" \
+            local/renovate:test /config.json
       - name: Build and verify socketless target without cache
         run: |
           set -euo pipefail

@@ -16,6 +16,7 @@ controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c
 scale_set_chart_digest=sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
 runner_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
 dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+renovate_image=f5salesdemoarcca.azurecr.io/renovate@sha256:1111111111111111111111111111111111111111111111111111111111111111
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
@@ -59,6 +60,7 @@ for profile in socketless container-build; do
   )
   if [[ "$profile" == socketless ]]; then
     prepull_args+=(--set-string "nodeProfiles[1]=compute")
+    prepull_args+=(--set-string "renovateImage=$renovate_image")
   elif [[ "$profile" == container-build ]]; then
     prepull_args+=(--set-string "additionalImages[0]=$dind_image")
   fi
@@ -67,6 +69,10 @@ for profile in socketless container-build; do
   grep -Fq 'namespace: arc-runner-cache' "$tmpdir/prepull-$profile.yaml"
   grep -Fq "name: runner-image-prepull-$profile" "$tmpdir/prepull-$profile.yaml"
   grep -Fq 'name: "ghcr-pull"' "$tmpdir/prepull-$profile.yaml"
+  if [[ "$profile" == socketless ]]; then
+    grep -Fq "$renovate_image" "$tmpdir/prepull-$profile.yaml"
+    grep -Fq 'name: pull-renovate' "$tmpdir/prepull-$profile.yaml"
+  fi
 done
 
 for config in "$@"; do

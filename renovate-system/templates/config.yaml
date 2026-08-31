@@ -1,13 +1,23 @@
 apiVersion: v1
 kind: ConfigMap
-metadata: {name: renovate-github-app}
+metadata:
+  name: {{ include "renovate.appName" . }}
+  labels: {app.kubernetes.io/name: renovate}
 immutable: true
-data: {app-id: {{ .Values.appId | quote }}, installation-id: {{ .Values.installationId | quote }}, bot-id: {{ .Values.botId | quote }}}
+data:
+  app-id: {{ .Values.githubApp.appId | quote }}
+  installation-id: {{ .Values.githubApp.installationId | quote }}
+  bot-id: {{ .Values.githubApp.botId | quote }}
+  bot-login: {{ .Values.githubApp.botLogin | quote }}
 ---
 apiVersion: v1
 kind: ConfigMap
-metadata: {name: renovate-config}
+metadata:
+  name: {{ include "renovate.configName" . }}
+  labels: {app.kubernetes.io/name: renovate}
 immutable: true
 data:
-  renovate.json: {{ (.Files.Get "generated/renovate.json") | quote }}
-  repositories.json: {{ (.Files.Get "generated/repositories.json") | quote }}
+  renovate.json: |
+{{ include "renovate.config" . | indent 4 }}
+  repositories.json: |
+{{ ((include "renovate.config" . | fromJson).repositories | toPrettyJson) | indent 4 }}

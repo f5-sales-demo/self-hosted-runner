@@ -2,4 +2,5 @@ profile: ""
 nodeProfiles: []
 image: ""
 additionalImages: []
+renovateImage: ""
 imagePullSecrets: []
