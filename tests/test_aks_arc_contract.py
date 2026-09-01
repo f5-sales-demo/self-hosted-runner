@@ -33,10 +33,12 @@ class AksArcContractTests(unittest.TestCase):
             "oms_agent",
             'name                          = "f5salesdemoarcca"',
             'sku                           = "Premium"',
-            'role_definition_name = "AcrPull"',
+            "anonymous_pull_enabled        = true",
             'scale_down_unneeded    = "60m"',
         ):
             self.assertIn(required, source)
+        self.assertNotIn("azurerm_role_assignment", source)
+        self.assertNotIn("AcrPull", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/runner-fleet/main.tf").read_text(

@@ -23,10 +23,10 @@ Migrate managed workflow templates first, then remaining governed repositories i
 
 ## ARC capacity and compute rollout
 
-1. Confirm the two Canada Central quota requests are approved at 600 or more and that the Terraform plan contains only the Premium ACR, its kubelet `AcrPull` assignment, the compute pool, the socketless 0-30 change, and the 60-minute autoscaler setting.
+1. Confirm the two Canada Central quota requests are approved at 600 or more and inspect the complete Terraform plan. The dedicated Premium ACR intentionally permits anonymous pull for every current and future repository; pushes remain authenticated and the admin account remains disabled. Anonymous clients share one ACR throttling identity, so include pull-rate monitoring in the rollout.
 2. Apply the saved plan. Mirror the approved standard/container-build GHCR digests into ACR and verify byte-identical manifests.
 3. Deploy the two cache releases. The socketless release must be Ready on both socketless and compute nodes; the container-build release remains confined to build nodes.
-4. Use `scripts/arc-copy-pull-secret.sh` to copy the existing combined GHCR/ACR pull secret into new namespaces. The script rejects a token annotated to expire within 24 hours; rotate first when rejected. Deploy each approved compute scale set at 0-2, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
+4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at 0-2, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
 5. Benchmark the identical xcsh commit on D8 and D16 nodes, with cold and warm image/package caches, five runs for lifecycle-script limits 4, 8, and 16. Keep 8 only when it has the lowest median without peak memory reaching 80% or instability.
 6. Burst two xcsh, two enriched-spec, and two provider compute jobs together. Confirm the shared pool never exceeds five compute nodes, each repository stays at two runners, and the sixth request queues cleanly. Then burst 30 socketless and 5 container-build jobs. Prove unique ephemeral pods, exact namespaces, no avoidable pending state, and node scale-down after 60 minutes.
 7. Record two complete 06:00-22:00 America/Toronto business-day peak windows before acceptance. Warm assignment p95 must be at most 20 seconds and cold assignment p95 at most 180 seconds.
@@ -46,11 +46,14 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
 3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must contain only
    `private-key.pem`. After verified new scope, disable and uninstall the hosted Renovate App.
 4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It re-verifies byte-identical
-   GHCR/ACR manifests, the one-key Secret, suspended chart, exact ACR digest, and socketless
-   pre-puller. Confirm there are no Role or RoleBinding objects before unsuspending.
+   GHCR/ACR manifests, the one-key App Secret, suspended chart, exact anonymous ACR digest, and
+   socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
+   `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
+   before unsuspending.
 5. On Monday, create one Job from the CronJob and wait for success. Logs must contain the 39-scope
    receipt and no token/key material. Confirm minor/patch PRs can request GitHub-native squash
    automerge only after required checks, while a natural or temporary-branch major remains manual.
 
-Renovate rollback is intentionally limited to suspending the CronJob and disabling the new App.
-Dependabot and the hosted Renovate installation are not restored.
+Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
+workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment
+fallback is retained. Dependabot and the hosted Renovate installation are not restored.

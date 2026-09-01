@@ -133,16 +133,9 @@ resource "azurerm_container_registry" "runner" {
   admin_enabled                 = false
   public_network_access_enabled = true
   zone_redundancy_enabled       = true
-  anonymous_pull_enabled        = false
+  anonymous_pull_enabled        = true
   data_endpoint_enabled         = false
   tags                          = var.tags
-}
-
-resource "azurerm_role_assignment" "kubelet_acr_pull" {
-  scope                = azurerm_container_registry.runner.id
-  role_definition_name = "AcrPull"
-  principal_id         = azurerm_kubernetes_cluster.runner.kubelet_identity[0].object_id
-  principal_type       = "ServicePrincipal"
 }
 
 check "quota_headroom" {

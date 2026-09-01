@@ -28,12 +28,6 @@ spec:
         spec:
           serviceAccountName: renovate
           automountServiceAccountToken: false
-          {{- with .Values.imagePullSecrets }}
-          imagePullSecrets:
-            {{- range . }}
-            - name: {{ . | quote }}
-            {{- end }}
-          {{- end }}
           restartPolicy: Never
           enableServiceLinks: false
           securityContext:
