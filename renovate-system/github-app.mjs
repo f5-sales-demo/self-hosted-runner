@@ -53,6 +53,15 @@ export function validateExpiry(expiresAt, deadline, margin, now = Date.now()) {
   }
 }
 
+export function validateInstallationToken(value) {
+  // GitHub installation tokens use the ghs_ prefix. Newer token encodings are
+  // structured and can include base64url punctuation, so do not assume the
+  // legacy alphanumeric-only representation.
+  if (!/^ghs_[A-Za-z0-9._-]{20,}$/.test(value ?? ''))
+    throw new Error('GitHub returned a malformed installation token');
+  return value;
+}
+
 export function validateAppMetadata(app, appId, botLogin) {
   if (app?.id !== appId || `${app?.slug}[bot]`.toLowerCase() !== botLogin.toLowerCase()) {
     throw new Error('GitHub App metadata does not match the configured identity');

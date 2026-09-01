@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { generateKeyPairSync, verify } from 'node:crypto';
-import { appJwt, exactPermissions, positiveId, validateAppMetadata, validateBot, validateDeadline, validateExpiry, validateInstallation, validateObservedScope, validateRepositoryNames } from './github-app.mjs';
+import { appJwt, exactPermissions, positiveId, validateAppMetadata, validateBot, validateDeadline, validateExpiry, validateInstallation, validateInstallationToken, validateObservedScope, validateRepositoryNames } from './github-app.mjs';
 
 test('IDs and the deadline are strict positive integers', () => {
   assert.equal(42, positiveId('42', 'id'));
@@ -19,6 +19,13 @@ test('token must outlive the deadline and safety margin', () => {
   const now = Date.parse('2026-08-31T12:00:00Z');
   validateExpiry('2026-08-31T12:47:00Z', 2700, 120, now);
   assert.throws(() => validateExpiry('2026-08-31T12:46:59Z', 2700, 120, now));
+});
+
+test('installation token validation accepts GitHub token encodings and rejects malformed values', () => {
+  assert.equal('ghs_legacyToken0123456789', validateInstallationToken('ghs_legacyToken0123456789'));
+  assert.equal('ghs_structured.token-0123456789', validateInstallationToken('ghs_structured.token-0123456789'));
+  for (const value of ['', 'ghp_not-an-installation-token', 'ghs_short', 'ghs_invalid/token'])
+    assert.throws(() => validateInstallationToken(value));
 });
 
 test('repository scope is exact and excludes self-hosted-runner', () => {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile, stat, writeFile, chmod } from 'node:fs/promises';
-import { appJwt, positiveId, validateAppMetadata, validateBot, validateDeadline, validateExpiry, validateInstallation, validateObservedScope, validateRepositoryNames } from './github-app.mjs';
+import { appJwt, positiveId, validateAppMetadata, validateBot, validateDeadline, validateExpiry, validateInstallation, validateInstallationToken, validateObservedScope, validateRepositoryNames } from './github-app.mjs';
 
 const env = process.env;
 const appId = positiveId(env.RENOVATE_GITHUB_APP_ID, 'RENOVATE_GITHUB_APP_ID');
@@ -28,7 +28,7 @@ validateAppMetadata(app, appId, botLogin);
 const installation = await request(`/app/installations/${installationId}`, bearer);
 validateInstallation(installation, installationId, appId);
 const issued = await request(`/app/installations/${installationId}/access_tokens`, bearer, { method: 'POST', body: JSON.stringify({ repositories: repositories.map((repository) => repository.split('/')[1]) }), headers: { 'Content-Type': 'application/json' } });
-if (!/^ghs_[A-Za-z0-9]{20,}$/.test(issued.token ?? '')) throw new Error('GitHub returned a malformed installation token');
+validateInstallationToken(issued.token);
 validateExpiry(issued.expires_at, deadline, margin);
 const observed = await request('/installation/repositories?per_page=100', `Bearer ${issued.token}`);
 validateObservedScope(observed, repositories);

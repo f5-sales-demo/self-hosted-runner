@@ -15,6 +15,10 @@ concurrency:
 jobs:
   source-and-image:
     runs-on: ubuntu-24.04
+    # Ubuntu Snapshot may serialise hundreds of immutable package downloads.
+    # Keep the cold build bounded without treating transient mirror latency as
+    # a false CI failure.
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -43,12 +47,27 @@ jobs:
       - name: Build and verify socketless target without cache
         run: |
           set -euo pipefail
-          docker buildx build --no-cache --load --target standard --tag local/self-hosted-runner:standard .
+          docker buildx build --progress=plain --no-cache --load --target standard --tag local/self-hosted-runner:standard .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
+      - name: Prove standard target is socketless
+        run: |
+          set -euo pipefail
+          if docker run --rm --entrypoint sh local/self-hosted-runner:standard -c "command -v docker"; then
+            echo "standard target unexpectedly contains Docker" >&2
+            exit 1
+          fi
+
+  container-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
       - name: Build and verify container-build target without cache
         run: |
           set -euo pipefail
-          docker buildx build --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
+          docker buildx build --progress=plain --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
           docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
       - name: Smoke-test selected Docker action profiling
         env:
@@ -85,11 +104,3 @@ jobs:
              .sample_count > 0 and .cache_state == "cold" and
              .image.digest == $digest' \
             "$evidence/profile.json" >/dev/null
-
-      - name: Prove standard target is socketless
-        run: |
-          set -euo pipefail
-          if docker run --rm --entrypoint sh local/self-hosted-runner:standard -c "command -v docker"; then
-            echo "standard target unexpectedly contains Docker" >&2
-            exit 1
-          fi
