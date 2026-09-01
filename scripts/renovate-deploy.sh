@@ -7,6 +7,7 @@ lock=$1
 case "$(stat -c '%a' "$KUBECONFIG")" in 400|600) ;; *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1;; esac
 for command in base64 git helm jq kubectl; do command -v "$command" >/dev/null; done
 [[ "$(helm version --short)" == v3.21.3+g1ad6e68 ]]
+deploy_timeout=15m
 kubectl get secret ghcr-pull -n arc-runner-cache -o json |
   jq -e '.type == "kubernetes.io/dockerconfigjson" and (.data | keys == [".dockerconfigjson"])' >/dev/null || {
     echo "required GHCR pull secret is invalid or missing in arc-runner-cache" >&2
@@ -50,11 +51,11 @@ bot_login=$(jq -er .github_app.bot_login "$lock")
 helm upgrade --install renovate renovate-system --namespace renovate-system --create-namespace \
   --set-string image="$image" --set-string githubApp.appId="$app_id" \
   --set-string githubApp.installationId="$installation_id" --set-string githubApp.botId="$bot_id" \
-  --set-string githubApp.botLogin="$bot_login" --wait --timeout 10m
+  --set-string githubApp.botLogin="$bot_login" --wait --timeout "$deploy_timeout"
 helm upgrade --install runner-image-cache-socketless arc/prepull --namespace arc-runner-cache \
   --set-string profile=socketless --set-string image="${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE is required}" \
   --set-string nodeProfiles[0]=socketless --set-string nodeProfiles[1]=compute \
-  --set-string renovateImage="$image" --set-string 'imagePullSecrets[0]=ghcr-pull' --wait --timeout 10m
-kubectl rollout status daemonset/runner-image-prepull-socketless -n arc-runner-cache --timeout=10m
+  --set-string renovateImage="$image" --set-string 'imagePullSecrets[0]=ghcr-pull' --wait --timeout "$deploy_timeout"
+kubectl rollout status daemonset/runner-image-prepull-socketless -n arc-runner-cache --timeout="$deploy_timeout"
 kubectl get cronjob renovate -n renovate-system -o json | jq -e --arg image "$image" '.spec.suspend == true and .spec.jobTemplate.spec.template.spec.containers[0].image == $image and .spec.jobTemplate.spec.template.spec.initContainers[0].image == $image' >/dev/null
 printf 'deployed suspended Renovate CronJob and pre-pull at %s\n' "$image"

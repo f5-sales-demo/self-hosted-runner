@@ -114,6 +114,13 @@ class RenovateContractTests(unittest.TestCase):
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertNotIn("imagePullSecrets[1]", deploy)
 
+    def test_renovate_deployment_timeout_covers_serial_node_rollout(self):
+        deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
+        self.assertIn("deploy_timeout=15m", deploy)
+        self.assertEqual(3, deploy.count('"$deploy_timeout"'))
+        self.assertNotIn("--timeout 10m", deploy)
+        self.assertNotIn("--timeout=10m", deploy)
+
     def test_token_entrypoint_reuses_structured_installation_token_validator(self):
         entrypoint = (ROOT / "renovate-system/token-entrypoint.mjs").read_text()
         self.assertIn("validateInstallationToken", entrypoint)
