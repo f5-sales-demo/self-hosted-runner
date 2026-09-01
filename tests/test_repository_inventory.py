@@ -48,6 +48,10 @@ class RepositoryInventoryTests(unittest.TestCase):
             [r"^node scripts/prepare-generated-artifact-release\.mjs prepare$"],
             config["allowedCommands"],
         )
+        self.assertFalse(
+            any("schedule" in rule for rule in config["packageRules"]),
+            "pre-release managers must be eligible on every production run",
+        )
         groups = {rule.get("groupName"): rule for rule in config["packageRules"]}
         self.assertEqual({"minor", "patch"}, set(groups["npm-minor-patch"]["matchUpdateTypes"]))
         self.assertEqual({"minor", "patch"}, set(groups["actions-minor-patch"]["matchUpdateTypes"]))

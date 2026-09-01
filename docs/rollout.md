@@ -50,9 +50,12 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
    before unsuspending.
-5. On Monday, create one Job from the CronJob and wait for success. Logs must contain the 39-scope
-   receipt and no token/key material. Confirm minor/patch PRs can request GitHub-native squash
-   automerge only after required checks, while a natural or temporary-branch major remains manual.
+5. Before release, create one Job from the suspended CronJob and wait for success. The clean-break
+   configuration intentionally has no manager-level time schedules, so the production run must
+   immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
+   must contain the 39-scope receipt and no token/key material. Confirm minor/patch PRs can request
+   GitHub-native squash automerge only after required checks, while a natural or temporary-branch
+   major remains manual.
 
 Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
 workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment
