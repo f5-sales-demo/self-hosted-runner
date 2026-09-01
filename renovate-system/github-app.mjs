@@ -1,9 +1,11 @@
 import { createSign } from 'node:crypto';
 
 export const EXACT_PERMISSIONS = Object.freeze({
+  checks: 'write',
   contents: 'write',
   metadata: 'read',
   pull_requests: 'write',
+  statuses: 'write',
   workflows: 'write',
 });
 

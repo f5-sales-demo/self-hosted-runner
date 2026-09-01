@@ -40,9 +40,10 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    image lock plus the non-secret App ID, installation ID, bot login, and numeric bot ID in a second
    linked PR. Never commit the PEM or installation token.
 2. The organization owner creates `f5-renovate-aks` with webhooks and events disabled and exactly
-   metadata-read, contents-write, pull-requests-write, and workflows-write, then selects the exact
-   39-repository catalog. The token init helper verifies App metadata, permissions, selected scope,
-   bot identity, token lifetime, and repository equality.
+   checks-write, commit-statuses-write, metadata-read, contents-write, pull-requests-write, and
+   workflows-write, then selects the exact 39-repository catalog. Checks and commit statuses are
+   required for the release-age and observed-CI gates. The token init helper verifies App metadata,
+   permissions, selected scope, bot identity, token lifetime, and repository equality.
 3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must contain only
    `private-key.pem`. After verified new scope, disable and uninstall the hosted Renovate App.
 4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It re-verifies byte-identical
