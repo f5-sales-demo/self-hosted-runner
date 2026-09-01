@@ -11,8 +11,13 @@ test('IDs and the deadline are strict positive integers', () => {
 });
 
 test('permissions must equal the minimal App permission set', () => {
-  assert.equal(true, exactPermissions({ metadata: 'read', contents: 'write', pull_requests: 'write', workflows: 'write' }));
-  assert.equal(false, exactPermissions({ metadata: 'read', contents: 'write', pull_requests: 'write', workflows: 'write', issues: 'read' }));
+  const permissions = {
+    checks: 'write', contents: 'write', metadata: 'read', pull_requests: 'write',
+    statuses: 'write', workflows: 'write',
+  };
+  assert.equal(true, exactPermissions(permissions));
+  assert.equal(false, exactPermissions({ ...permissions, checks: 'read' }));
+  assert.equal(false, exactPermissions({ ...permissions, issues: 'read' }));
 });
 
 test('token must outlive the deadline and safety margin', () => {
@@ -45,7 +50,10 @@ test('JWT has bounded claims and a valid RS256 signature', () => {
 });
 
 test('App, installation, bot, and repository API mismatches fail closed', () => {
-  const permissions = { metadata: 'read', contents: 'write', pull_requests: 'write', workflows: 'write' };
+  const permissions = {
+    checks: 'write', contents: 'write', metadata: 'read', pull_requests: 'write',
+    statuses: 'write', workflows: 'write',
+  };
   validateAppMetadata({ id: 1, slug: 'f5-renovate-aks' }, 1, 'f5-renovate-aks[bot]');
   assert.throws(() => validateAppMetadata({ id: 2, slug: 'f5-renovate-aks' }, 1, 'f5-renovate-aks[bot]'));
   validateInstallation({ id: 2, app_id: 1, repository_selection: 'selected', permissions }, 2, 1);
