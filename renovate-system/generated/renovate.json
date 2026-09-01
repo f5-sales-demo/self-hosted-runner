@@ -70,7 +70,7 @@
       ],
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": true
+      "platformAutomerge": false
     },
     {
       "groupName": "actions-minor-patch",
@@ -83,7 +83,7 @@
       ],
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": true
+      "platformAutomerge": false
     },
     {
       "description": "Regenerate docs-icons release artifacts on npm branches",

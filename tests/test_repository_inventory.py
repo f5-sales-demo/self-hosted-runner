@@ -57,6 +57,14 @@ class RepositoryInventoryTests(unittest.TestCase):
         groups = {rule.get("groupName"): rule for rule in config["packageRules"]}
         self.assertEqual({"minor", "patch"}, set(groups["npm-minor-patch"]["matchUpdateTypes"]))
         self.assertEqual({"minor", "patch"}, set(groups["actions-minor-patch"]["matchUpdateTypes"]))
+        for group_name in ("npm-minor-patch", "actions-minor-patch"):
+            rule = groups[group_name]
+            self.assertTrue(rule["automerge"])
+            self.assertEqual("pr", rule["automergeType"])
+            self.assertFalse(
+                rule["platformAutomerge"],
+                "Renovate must observe passing CI before squash-merging",
+            )
         self.assertNotIn("major", json.dumps(groups))
         task = next(
             rule
