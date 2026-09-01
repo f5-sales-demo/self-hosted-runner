@@ -5,10 +5,10 @@
     "image": "renovate/renovate@sha256:6922c734849f2ed1c01e3a7924bd60e25e0ea904731a67bad72b02d563c0c3c3"
   },
   "derived": {
-    "ghcr": "ghcr.io/f5-sales-demo/renovate@sha256:0a1a1c8986290ededadbb59822a3c53a15f40b3723f44a68b6835622c5325dcb",
-    "acr": "f5salesdemoarcca.azurecr.io/renovate@sha256:0a1a1c8986290ededadbb59822a3c53a15f40b3723f44a68b6835622c5325dcb",
-    "source_commit": "81c426aef2e65afeb8116c4f0a7a895bf3f98f9e",
-    "manifest_receipt": "sha256:0a1a1c8986290ededadbb59822a3c53a15f40b3723f44a68b6835622c5325dcb"
+    "ghcr": "ghcr.io/f5-sales-demo/renovate@sha256:2e7c7cdca54ed57c26183581d7420e08dbbfb8205c253928be51a5e32e3c29fa",
+    "acr": "f5salesdemoarcca.azurecr.io/renovate@sha256:2e7c7cdca54ed57c26183581d7420e08dbbfb8205c253928be51a5e32e3c29fa",
+    "source_commit": "e75faa1ca89a698b9a4ee8ad4b46c70b9dd7795f",
+    "manifest_receipt": "sha256:2e7c7cdca54ed57c26183581d7420e08dbbfb8205c253928be51a5e32e3c29fa"
   },
   "github_app": {
     "app_id": "4784604",
