@@ -70,6 +70,15 @@ class RenovateContractTests(unittest.TestCase):
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn("^f5salesdemoarcca\\.azurecr\\.io/renovate@", deploy)
         self.assertNotIn("renovate:latest", deploy)
+        self.assertIn("git diff --quiet \"$commit\" --", deploy)
+        for runtime_input in (
+            "renovate-system/Dockerfile",
+            "renovate-system/app-token-init.mjs",
+            "renovate-system/github-app.mjs",
+            "renovate-system/token-entrypoint.mjs",
+            "renovate-system/image-source.json",
+        ):
+            self.assertIn(runtime_input, deploy)
         promotion = promote.read_text()
         self.assertIn("gh attestation verify", promotion)
         self.assertIn("--deny-self-hosted-runners", promotion)
@@ -100,6 +109,11 @@ class RenovateContractTests(unittest.TestCase):
         self.assertEqual(["ghcr-pull"], schema["properties"]["imagePullSecrets"]["const"])
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertNotIn("imagePullSecrets[1]", deploy)
+
+    def test_token_entrypoint_reuses_structured_installation_token_validator(self):
+        entrypoint = (ROOT / "renovate-system/token-entrypoint.mjs").read_text()
+        self.assertIn("validateInstallationToken", entrypoint)
+        self.assertNotIn("/^ghs_", entrypoint)
 
 
 if __name__ == "__main__":
