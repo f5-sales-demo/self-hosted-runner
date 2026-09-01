@@ -107,16 +107,6 @@ def global_config(repositories: list[str]) -> dict:
         ],
         "packageRules": [
             {
-                "description": "Process npm updates daily",
-                "matchManagers": ["npm"],
-                "schedule": ["after 5am and before 6am"],
-            },
-            {
-                "description": "Process GitHub Actions updates on Mondays",
-                "matchManagers": ["github-actions"],
-                "schedule": ["after 5am and before 6am on Monday"],
-            },
-            {
                 "groupName": "npm-minor-patch",
                 "matchManagers": ["npm"],
                 "matchUpdateTypes": ["minor", "patch"],
