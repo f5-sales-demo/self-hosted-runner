@@ -99,7 +99,10 @@ def global_config(repositories: list[str]) -> dict:
         "timezone": "America/Toronto",
         "minimumReleaseAge": "7 days",
         "internalChecksFilter": "strict",
-        "force": {"prCreation": "immediate"},
+        "force": {
+            "prCreation": "immediate",
+            "platformAutomerge": False,
+        },
         "allowScripts": False,
         "allowPlugins": False,
         "ignoreScripts": True,

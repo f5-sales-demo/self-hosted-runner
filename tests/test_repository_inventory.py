@@ -45,7 +45,10 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertFalse(config["onboarding"])
         self.assertEqual("7 days", config["minimumReleaseAge"])
         self.assertEqual("strict", config["internalChecksFilter"])
-        self.assertEqual({"prCreation": "immediate"}, config["force"])
+        self.assertEqual(
+            {"prCreation": "immediate", "platformAutomerge": False},
+            config["force"],
+        )
         self.assertEqual(
             [r"^node scripts/prepare-generated-artifact-release\.mjs prepare$"],
             config["allowedCommands"],
