@@ -25,7 +25,8 @@ another version, region, zone, SKU, disk type, or capacity when preflight fails.
 The separately bootstrapped Azure Storage backend uses HTTPS, a private
 container, versioning, soft delete, and a deny-by-default firewall. It permits
 shared-key access because the operator lacks Blob data-plane and
-role-assignment permissions. Terraform creates only one workload role assignment: pull-only `AcrPull` on the dedicated runner ACR for the AKS kubelet identity. It creates no operator or secret-management role assignments.
+role-assignment permissions. Terraform creates no workload, operator, or
+secret-management role assignments.
 
 Copy each backend.hcl.example to its ignored backend.hcl peer. Derive the key
 only inside the interactive shell running Terraform:
@@ -50,8 +51,8 @@ names, operator CIDRs, pod CIDR, service CIDR, and DNS service IP. Then run:
     scripts/check-committed-artifacts.sh
 
 Initialize the real backend, save a binary plan in the ignored worktree, and
-inspect it completely. Reject unexpected deletes or replacements, explicit
-role assignments, public node IPs, secrets, or anything outside the AKS graph.
+inspect it completely. Reject unexpected deletes or replacements, role
+assignments, public node IPs, secrets, or anything outside the AKS graph.
 Apply only that saved plan and remove it immediately.
 
 Obtain admin credentials into an ignored mode-0600 kubeconfig on the Ubuntu
@@ -107,11 +108,21 @@ docs-container-build.
 
 Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/5/5 worker fleet plus three system nodes consumes 412 vCPUs, leaving more than 20% headroom at that quota.
 
-The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains the publication authority. Copy and verify each approved source digest, then deploy only the returned equal digest:
+The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains
+the publication authority. Anonymous pull is intentionally enabled for the
+entire registry, so `renovate`, `self-hosted-runner`, and every future ACR
+repository are publicly readable without credentials. Push remains
+authenticated and the admin account remains disabled. Azure treats all
+anonymous clients as one throttling identity, so monitor registry limits during
+bursts. See the Azure documentation for
+[anonymous pull](https://learn.microsoft.com/azure/container-registry/anonymous-pull-access)
+and [ACR limits](https://learn.microsoft.com/azure/container-registry/container-registry-skus).
+Copy and verify each approved source digest, then deploy only the returned equal
+digest:
 
     scripts/mirror-runner-image.sh copy ghcr.io/f5-sales-demo/self-hosted-runner@sha256:<digest>
 
-For ACR deployment, pass the two ACR digest references in `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE`, and their equal GHCR references in `SOCKETLESS_SOURCE_IMAGE` and `CONTAINER_BUILD_SOURCE_IMAGE`. `arc-deploy.sh` refuses an ACR deployment unless both manifests are byte-identical. Tags are never accepted.
+For ACR deployment, pass the two ACR digest references in `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE`, and their equal GHCR references in `SOCKETLESS_SOURCE_IMAGE` and `CONTAINER_BUILD_SOURCE_IMAGE`. `arc-deploy.sh` refuses an ACR deployment unless both manifests are byte-identical. Tags are never accepted. The `ghcr-pull` Kubernetes secret contains exactly the private `ghcr.io` credential; it is not used for ACR.
 
 Capture a 30-day GitHub baseline and the live Kubernetes scheduling/metrics state from the protected workstation kubeconfig:
 

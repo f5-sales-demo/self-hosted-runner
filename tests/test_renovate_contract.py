@@ -81,25 +81,25 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIsNone(pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}"))
         self.assertIsNone(pattern.fullmatch("f5salesdemoarcca.azurecr.io/renovate:latest"))
 
-    def test_repository_scoped_acr_pull_secret_fallback_is_strictly_wired(self):
+    def test_anonymous_acr_pull_has_no_renovate_secret_interface(self):
         schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
-        self.assertIn("imagePullSecrets", schema["required"])
-        secret_pattern = re.compile(schema["properties"]["imagePullSecrets"]["items"]["pattern"])
-        self.assertIsNotNone(secret_pattern.fullmatch("renovate-acr-pull"))
-        self.assertIsNone(secret_pattern.fullmatch("RenovatePull"))
+        self.assertNotIn("imagePullSecrets", schema["required"])
+        self.assertNotIn("imagePullSecrets", schema["properties"])
         chart = (ROOT / "renovate-system/templates/cronjob.yaml").read_text()
-        self.assertIn("imagePullSecrets:", chart)
+        self.assertNotIn("imagePullSecrets", chart)
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
-        self.assertIn("RENOVATE_ACR_PULL_SECRET", deploy)
-        self.assertIn("kubernetes.io/dockerconfigjson", deploy)
+        self.assertNotIn("RENOVATE_ACR_PULL_SECRET", deploy)
+        self.assertNotIn("renovate-acr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
-        self.assertIn('imagePullSecrets[1]=$pull_secret', deploy)
+        self.assertIn('.auths | keys == ["ghcr.io"]', deploy)
         helper = ROOT / "scripts/renovate-acr-pull-secret.sh"
-        source = helper.read_text()
-        self.assertTrue(helper.stat().st_mode & 0o111)
-        self.assertIn("repositories/renovate/content/read", source)
-        self.assertNotIn("_repositories_pull", source)
-        self.assertIn("--expiration-in-days", source)
+        self.assertFalse(helper.exists())
+
+    def test_socketless_prepuller_uses_only_private_ghcr_secret(self):
+        schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
+        self.assertEqual(["ghcr-pull"], schema["properties"]["imagePullSecrets"]["const"])
+        deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
+        self.assertNotIn("imagePullSecrets[1]", deploy)
 
 
 if __name__ == "__main__":
