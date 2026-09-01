@@ -92,6 +92,8 @@ class RenovateContractTests(unittest.TestCase):
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn("RENOVATE_ACR_PULL_SECRET", deploy)
         self.assertIn("kubernetes.io/dockerconfigjson", deploy)
+        self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
+        self.assertIn('imagePullSecrets[1]=$pull_secret', deploy)
         helper = ROOT / "scripts/renovate-acr-pull-secret.sh"
         source = helper.read_text()
         self.assertTrue(helper.stat().st_mode & 0o111)
