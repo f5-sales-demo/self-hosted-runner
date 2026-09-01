@@ -81,6 +81,24 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIsNone(pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}"))
         self.assertIsNone(pattern.fullmatch("f5salesdemoarcca.azurecr.io/renovate:latest"))
 
+    def test_repository_scoped_acr_pull_secret_fallback_is_strictly_wired(self):
+        schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
+        self.assertIn("imagePullSecrets", schema["required"])
+        secret_pattern = re.compile(schema["properties"]["imagePullSecrets"]["items"]["pattern"])
+        self.assertIsNotNone(secret_pattern.fullmatch("renovate-acr-pull"))
+        self.assertIsNone(secret_pattern.fullmatch("RenovatePull"))
+        chart = (ROOT / "renovate-system/templates/cronjob.yaml").read_text()
+        self.assertIn("imagePullSecrets:", chart)
+        deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
+        self.assertIn("RENOVATE_ACR_PULL_SECRET", deploy)
+        self.assertIn("kubernetes.io/dockerconfigjson", deploy)
+        helper = ROOT / "scripts/renovate-acr-pull-secret.sh"
+        source = helper.read_text()
+        self.assertTrue(helper.stat().st_mode & 0o111)
+        self.assertIn("repositories/renovate/content/read", source)
+        self.assertNotIn("_repositories_pull", source)
+        self.assertIn("--expiration-in-days", source)
+
 
 if __name__ == "__main__":
     unittest.main()
