@@ -55,9 +55,10 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
    must contain the 39-scope receipt and no token/key material. Confirm minor/patch PRs can request
    GitHub-native squash automerge only after required checks, while a natural or temporary-branch
-   major remains manual. The seven-day release-age gate remains strict, but every eligible update
-   explicitly uses immediate PR creation: fleet CI starts on `pull_request`, so leaving an eligible
-   update as a bare branch would leave its checks pending indefinitely.
+   major remains manual. The seven-day release-age gate remains strict, but the self-hosted
+   administrator configuration forces immediate PR creation after that gate passes. Fleet CI starts
+   on `pull_request`, so a package rule merged into grouped branch configuration cannot be allowed
+   to leave an eligible update as a bare branch with indefinitely pending checks.
 
 Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
 workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment

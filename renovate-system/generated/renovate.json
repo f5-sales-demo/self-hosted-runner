@@ -49,6 +49,9 @@
   "timezone": "America/Toronto",
   "minimumReleaseAge": "7 days",
   "internalChecksFilter": "strict",
+  "force": {
+    "prCreation": "immediate"
+  },
   "allowScripts": false,
   "allowPlugins": false,
   "ignoreScripts": true,
@@ -101,13 +104,6 @@
           "packages/*/icons.json"
         ]
       }
-    },
-    {
-      "description": "Create PRs immediately after release-age checks pass so pull-request-only CI can run",
-      "matchPackageNames": [
-        "/.*/"
-      ],
-      "prCreation": "immediate"
     }
   ]
 }
