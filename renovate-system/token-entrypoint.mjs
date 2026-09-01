@@ -1,8 +1,13 @@
-import { readFile, unlink } from 'node:fs/promises';
+import { cp, readFile, unlink } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { validateInstallationToken } from './github-app.mjs';
 
 const tokenPath = process.env.RENOVATE_TOKEN_FILE ?? '/token/installation-token';
+await cp('/opt/f5-renovate/containerbase', '/tmp/containerbase', {
+  recursive: true,
+  force: false,
+  errorOnExist: true,
+});
 const token = await readFile(tokenPath, 'utf8');
 await unlink(tokenPath);
 validateInstallationToken(token);
