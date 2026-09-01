@@ -5,7 +5,7 @@ set -euo pipefail
 lock=$1
 : "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
 case "$(stat -c '%a' "$KUBECONFIG")" in 400|600) ;; *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1;; esac
-for command in base64 helm jq kubectl; do command -v "$command" >/dev/null; done
+for command in base64 git helm jq kubectl; do command -v "$command" >/dev/null; done
 [[ "$(helm version --short)" == v3.21.3+g1ad6e68 ]]
 kubectl get secret ghcr-pull -n arc-runner-cache -o json |
   jq -e '.type == "kubernetes.io/dockerconfigjson" and (.data | keys == [".dockerconfigjson"])' >/dev/null || {
@@ -26,6 +26,18 @@ pattern='^f5salesdemoarcca\.azurecr\.io/renovate@(sha256:[0-9a-f]{64})$'
 digest=${BASH_REMATCH[1]}
 [[ "$source_image" == "ghcr.io/f5-sales-demo/renovate@$digest" && "$receipt" == "$digest" && "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "Renovate image receipt is inconsistent" >&2; exit 2; }
 [[ "$(jq -er .upstream renovate-system/image-source.json | jq -cS .)" == "$(jq -er .upstream "$lock" | jq -cS .)" ]] || { echo "upstream source receipt differs from lock" >&2; exit 2; }
+runtime_inputs=(
+  renovate-system/Dockerfile
+  renovate-system/app-token-init.mjs
+  renovate-system/github-app.mjs
+  renovate-system/token-entrypoint.mjs
+  renovate-system/image-source.json
+)
+git cat-file -e "$commit^{commit}" 2>/dev/null || { echo "Renovate image source commit is unavailable" >&2; exit 2; }
+git diff --quiet "$commit" -- "${runtime_inputs[@]}" || {
+  echo "Renovate image lock is stale for the current runtime inputs" >&2
+  exit 2
+}
 verification_receipt=$(mktemp)
 trap 'rm -f -- "$verification_receipt"' EXIT
 scripts/promote-renovate-image.sh "$source_image" "$commit" "$verification_receipt" >/dev/null
