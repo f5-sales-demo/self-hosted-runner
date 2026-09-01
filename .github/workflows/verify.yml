@@ -41,6 +41,7 @@ jobs:
           helm template renovate renovate-system --namespace renovate-system "${app[@]}" >/dev/null
           docker buildx build --no-cache --load --tag local/renovate:test renovate-system
           docker run --rm --entrypoint node local/renovate:test --version
+          scripts/verify-renovate-runtime.sh local/renovate:test
           docker run --rm --entrypoint renovate-config-validator \
             --volume "$PWD/renovate-system/generated/renovate.json:/config.json:ro" \
             local/renovate:test /config.json

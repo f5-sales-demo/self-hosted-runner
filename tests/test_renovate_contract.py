@@ -57,10 +57,14 @@ class RenovateContractTests(unittest.TestCase):
         dockerfile = (ROOT / "renovate-system/Dockerfile").read_text()
         self.assertEqual("44.52.1", source["upstream"]["version"])
         self.assertIn(source["upstream"]["image"].replace("renovate/renovate@", "renovate/renovate:44.52.1@"), dockerfile)
-        self.assertIn("USER 1001:1001", dockerfile)
+        self.assertIn("USER 12021:0", dockerfile)
+        self.assertIn("/opt/f5-renovate/containerbase", dockerfile)
+        self.assertNotIn("USER 1001:1001", dockerfile)
         workflow = (ROOT / ".github/workflows/publish-renovate.yml").read_text()
         self.assertIn("--tag \"$image:$tag\" renovate-system", workflow)
         self.assertIn("attest-build-provenance", workflow)
+        verify = (ROOT / ".github/workflows/verify.yml").read_text()
+        self.assertIn("scripts/verify-renovate-runtime.sh local/renovate:test", verify)
 
     def test_promotion_and_deployment_reject_tags_and_non_acr_runtime(self):
         promote = ROOT / "scripts/promote-renovate-image.sh"
@@ -114,6 +118,16 @@ class RenovateContractTests(unittest.TestCase):
         entrypoint = (ROOT / "renovate-system/token-entrypoint.mjs").read_text()
         self.assertIn("validateInstallationToken", entrypoint)
         self.assertNotIn("/^ghs_", entrypoint)
+        self.assertIn("/opt/f5-renovate/containerbase", entrypoint)
+        self.assertIn("/tmp/containerbase", entrypoint)
+
+    def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
+        rendered = self.render()
+        self.assertIn("runAsUser: 12021", rendered)
+        self.assertIn("runAsGroup: 0", rendered)
+        self.assertIn("name: RENOVATE_CONFIG_FILE", rendered)
+        self.assertIn("value: /config/renovate.json", rendered)
+        self.assertNotIn("--config-file=/config/renovate.json", rendered)
 
 
 if __name__ == "__main__":
