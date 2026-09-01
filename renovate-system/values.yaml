@@ -1,4 +1,5 @@
 image: ""
+imagePullSecrets: []
 suspend: true
 schedule: "20 5 * * *"
 timeZone: America/Toronto

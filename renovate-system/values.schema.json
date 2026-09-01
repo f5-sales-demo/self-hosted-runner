@@ -2,9 +2,10 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["image", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources"],
+  "required": ["image", "imagePullSecrets", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources"],
   "properties": {
     "image": {"type": "string", "pattern": "^f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64}$"},
+    "imagePullSecrets": {"type": "array", "items": {"type": "string", "pattern": "^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$"}},
     "suspend": {"const": true},
     "schedule": {"const": "20 5 * * *"},
     "timeZone": {"const": "America/Toronto"},

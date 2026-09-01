@@ -7,6 +7,19 @@ lock=$1
 case "$(stat -c '%a' "$KUBECONFIG")" in 400|600) ;; *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1;; esac
 for command in helm jq kubectl; do command -v "$command" >/dev/null; done
 [[ "$(helm version --short)" == v3.21.3+g1ad6e68 ]]
+pull_secret=${RENOVATE_ACR_PULL_SECRET:-}
+pull_secret_args=()
+if [[ -n "$pull_secret" ]]; then
+  [[ "$pull_secret" =~ ^[a-z0-9]([-.a-z0-9]*[a-z0-9])?$ ]] || { echo "RENOVATE_ACR_PULL_SECRET is not a valid Kubernetes secret name" >&2; exit 2; }
+  for namespace in renovate-system arc-runner-cache; do
+    kubectl get secret "$pull_secret" -n "$namespace" -o json |
+      jq -e '.type == "kubernetes.io/dockerconfigjson" and (.data | keys == [".dockerconfigjson"])' >/dev/null || {
+        echo "required ACR pull secret is invalid or missing in $namespace" >&2
+        exit 1
+      }
+  done
+  pull_secret_args+=(--set-string "imagePullSecrets[0]=$pull_secret")
+fi
 image=$(jq -er .derived.acr "$lock")
 source_image=$(jq -er .derived.ghcr "$lock")
 receipt=$(jq -er .derived.manifest_receipt "$lock")
@@ -28,11 +41,11 @@ bot_login=$(jq -er .github_app.bot_login "$lock")
 helm upgrade --install renovate renovate-system --namespace renovate-system --create-namespace \
   --set-string image="$image" --set-string githubApp.appId="$app_id" \
   --set-string githubApp.installationId="$installation_id" --set-string githubApp.botId="$bot_id" \
-  --set-string githubApp.botLogin="$bot_login" --wait --timeout 10m
+  --set-string githubApp.botLogin="$bot_login" "${pull_secret_args[@]}" --wait --timeout 10m
 helm upgrade --install runner-image-cache-socketless arc/prepull --namespace arc-runner-cache \
   --set-string profile=socketless --set-string image="${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE is required}" \
   --set-string nodeProfiles[0]=socketless --set-string nodeProfiles[1]=compute \
-  --set-string renovateImage="$image" --wait --timeout 10m
+  --set-string renovateImage="$image" "${pull_secret_args[@]}" --wait --timeout 10m
 kubectl rollout status daemonset/runner-image-prepull-socketless -n arc-runner-cache --timeout=10m
 kubectl get cronjob renovate -n renovate-system -o json | jq -e --arg image "$image" '.spec.suspend == true and .spec.jobTemplate.spec.template.spec.containers[0].image == $image and .spec.jobTemplate.spec.template.spec.initContainers[0].image == $image' >/dev/null
 printf 'deployed suspended Renovate CronJob and pre-pull at %s\n' "$image"
