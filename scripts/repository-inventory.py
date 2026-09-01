@@ -113,7 +113,7 @@ def global_config(repositories: list[str]) -> dict:
                 "matchUpdateTypes": ["minor", "patch"],
                 "automerge": True,
                 "automergeType": "pr",
-                "platformAutomerge": True,
+                "platformAutomerge": False,
             },
             {
                 "groupName": "actions-minor-patch",
@@ -121,7 +121,7 @@ def global_config(repositories: list[str]) -> dict:
                 "matchUpdateTypes": ["minor", "patch"],
                 "automerge": True,
                 "automergeType": "pr",
-                "platformAutomerge": True,
+                "platformAutomerge": False,
             },
             {
                 "description": "Regenerate docs-icons release artifacts on npm branches",

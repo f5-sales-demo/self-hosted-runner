@@ -53,9 +53,11 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
 5. Before release, create one Job from the suspended CronJob and wait for success. The clean-break
    configuration intentionally has no manager-level time schedules, so the production run must
    immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
-   must contain the 39-scope receipt and no token/key material. Confirm minor/patch PRs can request
-   GitHub-native squash automerge only after required checks, while a natural or temporary-branch
-   major remains manual. The seven-day release-age gate remains strict, but the self-hosted
+   must contain the 39-scope receipt and no token/key material. Confirm Renovate observes passing
+   pull-request checks before squash-merging eligible minor/patch PRs, while a natural or
+   temporary-branch major remains manual. Platform-native automerge stays disabled because the
+   fleet does not enforce required status checks and GitHub could otherwise merge before CI starts.
+   The seven-day release-age gate remains strict, but the self-hosted
    administrator configuration forces immediate PR creation after that gate passes. Fleet CI starts
    on `pull_request`, so a package rule merged into grouped branch configuration cannot be allowed
    to leave an eligible update as a bare branch with indefinitely pending checks.
