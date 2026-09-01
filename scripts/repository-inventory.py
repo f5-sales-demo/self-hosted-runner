@@ -136,6 +136,14 @@ def global_config(repositories: list[str]) -> dict:
                     ],
                 },
             },
+            {
+                "description": (
+                    "Create PRs immediately after release-age checks pass so "
+                    "pull-request-only CI can run"
+                ),
+                "matchPackageNames": ["/.*/"],
+                "prCreation": "immediate",
+            },
         ],
     }
 
