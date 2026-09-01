@@ -59,6 +59,7 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn(source["upstream"]["image"].replace("renovate/renovate@", "renovate/renovate:44.52.1@"), dockerfile)
         self.assertIn("USER 12021:0", dockerfile)
         self.assertIn("/opt/f5-renovate/containerbase", dockerfile)
+        self.assertIn("/opt/f5-renovate/containerbase-runtime", dockerfile)
         self.assertNotIn("USER 1001:1001", dockerfile)
         workflow = (ROOT / ".github/workflows/publish-renovate.yml").read_text()
         self.assertIn("--tag \"$image:$tag\" renovate-system", workflow)
@@ -126,7 +127,19 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn("validateInstallationToken", entrypoint)
         self.assertNotIn("/^ghs_", entrypoint)
         self.assertIn("/opt/f5-renovate/containerbase", entrypoint)
+        self.assertIn("/opt/f5-renovate/containerbase-runtime", entrypoint)
+        self.assertIn("/opt/containerbase", entrypoint)
         self.assertIn("/tmp/containerbase", entrypoint)
+
+    def test_rendered_runtime_seeds_writable_containerbase_state(self):
+        rendered = self.render()
+        main = rendered.split("containers:\n", 2)[-1].split("volumes:\n", 1)[0]
+        self.assertIn("mountPath: /opt/containerbase", main)
+        self.assertIn("name: containerbase", main)
+        self.assertIn("sizeLimit: 1Gi", rendered)
+        verifier = (ROOT / "scripts/verify-renovate-runtime.sh").read_text()
+        self.assertIn("install-tool node 24.20.0", verifier)
+        self.assertIn("Install tool node succeeded", verifier)
 
     def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
         rendered = self.render()

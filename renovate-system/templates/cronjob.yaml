@@ -85,6 +85,7 @@ spec:
                 - {name: work, mountPath: /work}
                 - {name: cache, mountPath: /cache}
                 - {name: tmp, mountPath: /tmp}
+                - {name: containerbase, mountPath: /opt/containerbase}
           volumes:
             - name: app-key
               secret:
@@ -96,3 +97,4 @@ spec:
             - {name: work, emptyDir: {medium: Memory, sizeLimit: 2Gi}}
             - {name: cache, emptyDir: {medium: Memory, sizeLimit: 1Gi}}
             - {name: tmp, emptyDir: {medium: Memory, sizeLimit: 256Mi}}
+            - {name: containerbase, emptyDir: {medium: Memory, sizeLimit: 1Gi}}

@@ -96,6 +96,9 @@ permissions, bot identity, and 39-repository selected scope. It hands a short-li
 memory-backed volume to the main container, which immediately unlinks it; the main container never
 mounts the PEM. The workload has no RBAC or service-account token, and its Cilium policy denies
 ingress and every egress destination except inspected DNS and the five declared HTTPS hosts.
+The image seeds upstream containerbase metadata into a dedicated memory-backed
+`/opt/containerbase` volume so lockfile tools can install exact project runtimes without making the
+image root writable. CI exercises Node provisioning under that deployed filesystem contract.
 
 Regenerate or verify the single global configuration with:
 

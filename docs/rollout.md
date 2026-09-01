@@ -50,7 +50,9 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    GHCR/ACR manifests, the one-key App Secret, suspended chart, exact anonymous ACR digest, and
    socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
-   before unsuspending.
+   before unsuspending. Keep the root filesystem read-only; the main container's scoped,
+   memory-backed `/opt/containerbase` volume is the only executable tool-state surface and is
+   seeded from the immutable image before Renovate starts.
 5. Before release, create one Job from the suspended CronJob and wait for success. The clean-break
    configuration intentionally has no manager-level time schedules, so the production run must
    immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
