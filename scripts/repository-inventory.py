@@ -99,6 +99,7 @@ def global_config(repositories: list[str]) -> dict:
         "timezone": "America/Toronto",
         "minimumReleaseAge": "7 days",
         "internalChecksFilter": "strict",
+        "force": {"prCreation": "immediate"},
         "allowScripts": False,
         "allowPlugins": False,
         "ignoreScripts": True,
@@ -135,14 +136,6 @@ def global_config(repositories: list[str]) -> dict:
                         "packages/*/icons.json",
                     ],
                 },
-            },
-            {
-                "description": (
-                    "Create PRs immediately after release-age checks pass so "
-                    "pull-request-only CI can run"
-                ),
-                "matchPackageNames": ["/.*/"],
-                "prCreation": "immediate",
             },
         ],
     }
