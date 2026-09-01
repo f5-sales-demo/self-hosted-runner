@@ -43,6 +43,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         config = MODULE.global_config(repositories)
         self.assertEqual("ignored", config["requireConfig"])
         self.assertFalse(config["onboarding"])
+        self.assertEqual("7 days", config["minimumReleaseAge"])
         self.assertEqual("strict", config["internalChecksFilter"])
         self.assertEqual(
             [r"^node scripts/prepare-generated-artifact-release\.mjs prepare$"],
@@ -56,10 +57,18 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual({"minor", "patch"}, set(groups["npm-minor-patch"]["matchUpdateTypes"]))
         self.assertEqual({"minor", "patch"}, set(groups["actions-minor-patch"]["matchUpdateTypes"]))
         self.assertNotIn("major", json.dumps(groups))
-        task = config["packageRules"][-1]
+        task = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("matchRepositories") == ["f5-sales-demo/docs-icons"]
+        )
         self.assertEqual(["f5-sales-demo/docs-icons"], task["matchRepositories"])
         self.assertEqual(["npm"], task["matchManagers"])
         self.assertEqual("branch", task["postUpgradeTasks"]["executionMode"])
+        immediate = config["packageRules"][-1]
+        self.assertEqual(["/.*/"], immediate["matchPackageNames"])
+        self.assertEqual("immediate", immediate["prCreation"])
+        self.assertIn("pull-request-only CI", immediate["description"])
 
     def test_rejects_duplicate_foreign_and_self_repository(self):
         for value in (
