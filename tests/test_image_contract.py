@@ -66,6 +66,17 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
 
+    def test_snapshot_packages_are_verified_and_fetched_concurrently(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("apt-get --print-uris --yes --no-install-recommends install $packages", dockerfile)
+        self.assertIn("/usr/lib/apt/apt-helper", dockerfile)
+        self.assertIn("download-file", dockerfile)
+        self.assertIn("xargs -r -n3 -P16", dockerfile)
+        self.assertIn('"$0" "/var/cache/apt/archives/partial/$1" "$2"', dockerfile)
+        self.assertIn("apt-get --no-download --yes --no-install-recommends install $packages", dockerfile)
+        self.assertIn("/var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*", dockerfile)
+        self.assertIn("for attempt in 1 2 3 4 5 6 7 8", dockerfile)
+
     def test_pr_image_validation_is_cancellable_without_affecting_publication(self) -> None:
         verify = (ROOT / ".github/workflows/verify.yml").read_text(encoding="utf-8")
         publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
