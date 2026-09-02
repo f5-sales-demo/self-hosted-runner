@@ -98,7 +98,9 @@ mounts the PEM. The workload has no RBAC or service-account token, and its Ciliu
 ingress and every egress destination except inspected DNS and the five declared HTTPS hosts.
 The image seeds upstream containerbase metadata into a dedicated memory-backed
 `/opt/containerbase` volume so lockfile tools can install exact project runtimes without making the
-image root writable. CI exercises Node provisioning under that deployed filesystem contract.
+image root writable. A bounded 4 GiB memory-backed `/tmp` volume provides the executable transient
+space required by upstream tool installers. CI exercises Node provisioning under that deployed
+filesystem contract.
 
 Regenerate or verify the single global configuration with:
 
