@@ -68,6 +68,9 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    forces both immediate PR creation and Renovate-managed automerge after that gate passes. Fleet CI starts
    on `pull_request`, so a package rule merged into grouped branch configuration cannot be allowed
    to leave an eligible update as a bare branch with indefinitely pending checks.
+   npm dependency ranges use `bump` so a newer version already admitted by a caret range still
+   advances the reviewed lower bound and triggers any repository artifact task. The later,
+   dependency-type-specific overrides rule remains `pin` for deterministic npm override installs.
 
 Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
 workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment

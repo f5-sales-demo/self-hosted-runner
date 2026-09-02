@@ -111,6 +111,11 @@ def global_config(repositories: list[str]) -> dict:
         ],
         "packageRules": [
             {
+                "description": "Bump npm dependency range lower bounds",
+                "matchManagers": ["npm"],
+                "rangeStrategy": "bump",
+            },
+            {
                 "description": "Pin npm overrides for artifact command compatibility",
                 "matchManagers": ["npm"],
                 "matchDepTypes": ["overrides"],

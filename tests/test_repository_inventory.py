@@ -67,8 +67,16 @@ class RepositoryInventoryTests(unittest.TestCase):
             self.assertFalse(
                 rule["platformAutomerge"],
                 "Renovate must observe passing CI before squash-merging",
-            )
+        )
         self.assertNotIn("major", json.dumps(groups))
+        npm_bump = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("description") == "Bump npm dependency range lower bounds"
+        )
+        self.assertEqual(["npm"], npm_bump["matchManagers"])
+        self.assertEqual("bump", npm_bump["rangeStrategy"])
+        self.assertNotIn("matchDepTypes", npm_bump)
         overrides = next(
             rule
             for rule in config["packageRules"]
@@ -76,6 +84,11 @@ class RepositoryInventoryTests(unittest.TestCase):
         )
         self.assertEqual("pin", overrides["rangeStrategy"])
         self.assertNotIn("groupName", overrides)
+        self.assertLess(
+            config["packageRules"].index(npm_bump),
+            config["packageRules"].index(overrides),
+            "the later overrides rule must win over the general npm bump strategy",
+        )
         task = next(
             rule
             for rule in config["packageRules"]
