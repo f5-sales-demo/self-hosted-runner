@@ -82,7 +82,10 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    `@rolldown/plugin-babel` release until its peer graph is intentionally migrated; it does not
    suppress other npm updates. The `docs-icons` artifact rule uses `recreateWhen: always` so a
    closed fail-closed validation PR can be regenerated during a clean-break retry without enabling
-   fleet-wide closed-PR recreation.
+   fleet-wide closed-PR recreation. The final package rule disables updates to the eight
+   docs-control-managed workflow callers in the other 38 repositories. Canonical dependency
+   updates remain enabled in docs-control and reach downstream repositories only through governed
+   blob-SHA reconciliation, so Renovate cannot create parallel mutable copies of protected files.
 
 Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
 workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment
