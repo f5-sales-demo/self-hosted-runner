@@ -110,6 +110,35 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual(["npm"], peer_pin["matchManagers"])
         self.assertEqual(["@rolldown/plugin-babel"], peer_pin["matchPackageNames"])
         self.assertFalse(peer_pin["enabled"])
+        managed_workflows = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("description")
+            == "Keep docs-control managed workflows canonical downstream"
+        )
+        self.assertEqual(
+            sorted(set(repositories) - {"f5-sales-demo/docs-control"}),
+            managed_workflows["matchRepositories"],
+        )
+        self.assertEqual(
+            [
+                ".github/workflows/antigravity-review.yml",
+                ".github/workflows/auto-merge.yml",
+                ".github/workflows/github-pages-deploy.yml",
+                ".github/workflows/require-linked-issue.yml",
+                ".github/workflows/semgrep.yml",
+                ".github/workflows/super-linter.yml",
+                ".github/workflows/translation-audit.yml",
+                ".github/workflows/workflow-security-audit.yml",
+            ],
+            managed_workflows["matchFileNames"],
+        )
+        self.assertFalse(managed_workflows["enabled"])
+        self.assertIs(
+            managed_workflows,
+            config["packageRules"][-1],
+            "the managed-file exclusion must override every update rule downstream",
+        )
         self.assertFalse(
             any("prCreation" in rule for rule in config["packageRules"]),
             "administrator force must remain the final effective override",

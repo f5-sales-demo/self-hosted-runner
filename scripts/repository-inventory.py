@@ -13,6 +13,17 @@ ROOT = Path(__file__).resolve().parent.parent
 EXPECTED_COUNT = 39
 REPOSITORY = re.compile(r"^f5-sales-demo/[a-z0-9][a-z0-9-]*$")
 OUTPUT = ROOT / "renovate-system/generated/renovate.json"
+DOCS_CONTROL = "f5-sales-demo/docs-control"
+MANAGED_DOWNSTREAM_WORKFLOWS = [
+    ".github/workflows/antigravity-review.yml",
+    ".github/workflows/auto-merge.yml",
+    ".github/workflows/github-pages-deploy.yml",
+    ".github/workflows/require-linked-issue.yml",
+    ".github/workflows/semgrep.yml",
+    ".github/workflows/super-linter.yml",
+    ".github/workflows/translation-audit.yml",
+    ".github/workflows/workflow-security-audit.yml",
+]
 
 
 class InventoryError(ValueError):
@@ -158,6 +169,16 @@ def global_config(repositories: list[str]) -> dict:
                         "packages/*/icons.json",
                     ],
                 },
+            },
+            {
+                "description": "Keep docs-control managed workflows canonical downstream",
+                "matchRepositories": [
+                    repository
+                    for repository in repositories
+                    if repository != DOCS_CONTROL
+                ],
+                "matchFileNames": MANAGED_DOWNSTREAM_WORKFLOWS,
+                "enabled": False,
             },
         ],
     }
