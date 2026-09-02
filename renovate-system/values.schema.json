@@ -19,7 +19,11 @@
     }},
     "nodeSelector": {"const": {"runner-profile": "socketless"}},
     "resources": {"type": "object", "additionalProperties": false, "required": ["init", "renovate"], "properties": {
-      "init": {"$ref": "#/$defs/resources"}, "renovate": {"$ref": "#/$defs/resources"}
+      "init": {"$ref": "#/$defs/resources"},
+      "renovate": {"const": {
+        "requests": {"cpu": "250m", "memory": "4Gi"},
+        "limits": {"cpu": "2", "memory": "8Gi"}
+      }}
     }}
   },
   "$defs": {"resources": {"type": "object", "additionalProperties": false, "required": ["requests", "limits"], "properties": {
