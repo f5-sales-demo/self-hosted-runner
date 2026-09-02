@@ -96,7 +96,20 @@ class RepositoryInventoryTests(unittest.TestCase):
         )
         self.assertEqual(["f5-sales-demo/docs-icons"], task["matchRepositories"])
         self.assertEqual(["npm"], task["matchManagers"])
+        self.assertEqual("always", task["recreateWhen"])
         self.assertEqual("branch", task["postUpgradeTasks"]["executionMode"])
+        peer_pin = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("description")
+            == "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin"
+        )
+        self.assertEqual(
+            ["f5-sales-demo/vscode-xcsh"], peer_pin["matchRepositories"]
+        )
+        self.assertEqual(["npm"], peer_pin["matchManagers"])
+        self.assertEqual(["@rolldown/plugin-babel"], peer_pin["matchPackageNames"])
+        self.assertFalse(peer_pin["enabled"])
         self.assertFalse(
             any("prCreation" in rule for rule in config["packageRules"]),
             "administrator force must remain the final effective override",

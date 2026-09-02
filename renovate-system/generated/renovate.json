@@ -78,6 +78,19 @@
       "rangeStrategy": "pin"
     },
     {
+      "description": "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin",
+      "matchRepositories": [
+        "f5-sales-demo/vscode-xcsh"
+      ],
+      "matchManagers": [
+        "npm"
+      ],
+      "matchPackageNames": [
+        "@rolldown/plugin-babel"
+      ],
+      "enabled": false
+    },
+    {
       "groupName": "npm-minor-patch",
       "matchManagers": [
         "npm"
@@ -111,6 +124,7 @@
       "matchManagers": [
         "npm"
       ],
+      "recreateWhen": "always",
       "postUpgradeTasks": {
         "commands": [
           "node scripts/prepare-generated-artifact-release.mjs prepare"

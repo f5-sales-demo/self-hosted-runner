@@ -73,6 +73,11 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    npm dependency ranges use `bump` so a newer version already admitted by a caret range still
    advances the reviewed lower bound and triggers any repository artifact task. The later,
    dependency-type-specific overrides rule remains `pin` for deterministic npm override installs.
+   A repository-scoped rule holds `vscode-xcsh` on the reviewed Babel 7-compatible
+   `@rolldown/plugin-babel` release until its peer graph is intentionally migrated; it does not
+   suppress other npm updates. The `docs-icons` artifact rule uses `recreateWhen: always` so a
+   closed fail-closed validation PR can be regenerated during a clean-break retry without enabling
+   fleet-wide closed-PR recreation.
 
 Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
 workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment

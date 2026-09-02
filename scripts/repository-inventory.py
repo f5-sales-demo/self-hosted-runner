@@ -122,6 +122,13 @@ def global_config(repositories: list[str]) -> dict:
                 "rangeStrategy": "pin",
             },
             {
+                "description": "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin",
+                "matchRepositories": ["f5-sales-demo/vscode-xcsh"],
+                "matchManagers": ["npm"],
+                "matchPackageNames": ["@rolldown/plugin-babel"],
+                "enabled": False,
+            },
+            {
                 "groupName": "npm-minor-patch",
                 "matchManagers": ["npm"],
                 "matchUpdateTypes": ["minor", "patch"],
@@ -141,6 +148,7 @@ def global_config(repositories: list[str]) -> dict:
                 "description": "Regenerate docs-icons release artifacts on npm branches",
                 "matchRepositories": ["f5-sales-demo/docs-icons"],
                 "matchManagers": ["npm"],
+                "recreateWhen": "always",
                 "postUpgradeTasks": {
                     "commands": [command],
                     "executionMode": "branch",
