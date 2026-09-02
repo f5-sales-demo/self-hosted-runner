@@ -58,7 +58,7 @@ helm upgrade --install runner-image-cache-socketless arc/prepull --namespace arc
   --set-string renovateImage="$image" --set-string 'imagePullSecrets[0]=ghcr-pull' --wait --timeout "$deploy_timeout"
 kubectl rollout status daemonset/runner-image-prepull-socketless -n arc-runner-cache --timeout="$deploy_timeout"
 kubectl get cronjob renovate -n renovate-system -o json | jq -e --arg image "$image" '
-  .spec.suspend == true and
+  .spec.suspend == false and
   .spec.jobTemplate.spec.template.spec.containers[0].image == $image and
   .spec.jobTemplate.spec.template.spec.containers[0].resources.requests.memory == "6Gi" and
   .spec.jobTemplate.spec.template.spec.containers[0].resources.limits.memory == "12Gi" and
@@ -70,4 +70,4 @@ kubectl get cronjob renovate -n renovate-system -o json | jq -e --arg image "$im
     select(.name == "containerbase") | .emptyDir.medium == "Memory" and .emptyDir.sizeLimit == "1Gi") and
   .spec.jobTemplate.spec.template.spec.initContainers[0].image == $image
 ' >/dev/null
-printf 'deployed suspended Renovate CronJob and pre-pull at %s\n' "$image"
+printf 'deployed active Renovate CronJob and pre-pull at %s\n' "$image"

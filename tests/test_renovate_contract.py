@@ -29,7 +29,7 @@ class RenovateContractTests(unittest.TestCase):
 
     def test_rendered_security_and_key_separation(self):
         rendered = self.render()
-        self.assertIn("suspend: true", rendered)
+        self.assertIn("suspend: false", rendered)
         self.assertIn("activeDeadlineSeconds: 2700", rendered)
         self.assertIn("backoffLimit: 0", rendered)
         self.assertIn("automountServiceAccountToken: false", rendered)
@@ -176,6 +176,16 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn('.emptyDir.sizeLimit == "4Gi"', deploy)
         self.assertIn('select(.name == "containerbase") |', deploy)
         self.assertIn('.emptyDir.sizeLimit == "1Gi"', deploy)
+
+    def test_release_contract_requires_active_production_schedule(self):
+        schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
+        self.assertFalse(schema["properties"]["suspend"]["const"])
+        values = (ROOT / "renovate-system/values.yaml").read_text()
+        self.assertIn("suspend: false", values)
+        self.assertIn('schedule: "20 5 * * *"', values)
+        deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
+        self.assertIn(".spec.suspend == false", deploy)
+        self.assertIn("deployed active Renovate CronJob", deploy)
 
     def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
         rendered = self.render()

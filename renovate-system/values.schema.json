@@ -5,7 +5,7 @@
   "required": ["image", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources"],
   "properties": {
     "image": {"type": "string", "pattern": "^f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64}$"},
-    "suspend": {"const": true},
+    "suspend": {"const": false},
     "schedule": {"const": "20 5 * * *"},
     "timeZone": {"const": "America/Toronto"},
     "activeDeadlineSeconds": {"const": 2700},

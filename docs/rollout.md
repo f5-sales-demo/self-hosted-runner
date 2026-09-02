@@ -47,10 +47,10 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
 3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must contain only
    `private-key.pem`. After verified new scope, disable and uninstall the hosted Renovate App.
 4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It re-verifies byte-identical
-   GHCR/ACR manifests, the one-key App Secret, suspended chart, exact anonymous ACR digest, and
+   GHCR/ACR manifests, the one-key App Secret, active chart, exact anonymous ACR digest, and
    socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
-   before unsuspending. Keep the root filesystem read-only; the main container's scoped,
+   in its namespace. Keep the root filesystem read-only; the main container's scoped,
    memory-backed `/opt/containerbase` volume is seeded from the immutable image before Renovate
    starts. Its bounded 2 GiB memory-backed `/cache` retains package-manager and containerbase
    downloads across serial repository processing, while the separate bounded 4 GiB memory-backed
@@ -59,14 +59,17 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    The Renovate container requests 6 GiB and is capped at 12 GiB. That limit covers Renovate and
    package-manager working memory plus cgroup-charged pages in the memory-backed work, cache, tmp,
    and containerbase volumes. Treat any OOM kill or volume-capacity failure as a failed production
-   gate: keep the CronJob suspended, retire partial PRs and branches, and repair the resource
-   contract before retrying.
-5. Before release, create one Job from the suspended CronJob and wait for success. The clean-break
-   configuration intentionally has no manager-level time schedules, so the production run must
-   immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
-   must contain the 39-scope receipt and no token/key material. Confirm Renovate observes passing
-   pull-request checks before squash-merging eligible minor/patch PRs, while a natural or
-   temporary-branch major remains manual. Platform-native automerge stays disabled because the
+   gate: suspend the CronJob, retire partial PRs and branches, and repair the resource contract
+   before retrying.
+5. Normal operation is scheduler-owned at `20 5 * * *` in `America/Toronto`, with `Forbid`
+   concurrency and a 2700-second deadline. For a pre-release scheduler proof without a calendar
+   wait, temporarily override only the live Helm `schedule` value to a near-term minute, allow
+   exactly one scheduler-created Job, and immediately redeploy the same chart with
+   `20 5 * * *` restored. Do not create the proof Job manually. The Job must exercise npm and
+   GitHub Actions across all 39 repositories without repository overrides; logs must contain the
+   exact scope receipt and no token/key material. Renovate observes passing pull-request checks
+   before squash-merging eligible minor/patch PRs, while major updates remain manual.
+   Platform-native automerge stays disabled because the
    fleet does not enforce required status checks and GitHub could otherwise merge before CI starts.
    The seven-day release-age gate remains strict, but the self-hosted administrator configuration
    forces both immediate PR creation and Renovate-managed automerge after that gate passes. Fleet CI starts

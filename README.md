@@ -91,7 +91,8 @@ publishes the derived GHCR image with provenance. `scripts/promote-renovate-imag
 exact manifest to ACR and writes the lock receipt consumed by `scripts/renovate-deploy.sh`. Tags,
 upstream images, digest disagreement, and unlocked runtime references are rejected.
 
-The suspended CronJob uses a PEM-reading init container to validate exact App metadata,
+The active CronJob runs at `20 5 * * *` in `America/Toronto` and uses a PEM-reading init container
+to validate exact App metadata,
 permissions, bot identity, and 39-repository selected scope. It hands a short-lived token through a
 memory-backed volume to the main container, which immediately unlinks it; the main container never
 mounts the PEM. The workload has no RBAC or service-account token, and its Cilium policy denies
