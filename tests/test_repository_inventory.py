@@ -67,7 +67,7 @@ class RepositoryInventoryTests(unittest.TestCase):
             self.assertFalse(
                 rule["platformAutomerge"],
                 "Renovate must observe passing CI before squash-merging",
-        )
+            )
         self.assertNotIn("major", json.dumps(groups))
         npm_bump = next(
             rule

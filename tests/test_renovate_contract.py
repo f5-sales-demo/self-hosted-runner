@@ -144,22 +144,26 @@ class RenovateContractTests(unittest.TestCase):
     def test_renovate_memory_budget_covers_memory_backed_working_sets(self):
         rendered = self.render()
         main = rendered.split("containers:\n", 2)[-1].split("volumes:\n", 1)[0]
+        self.assertIn(
+            "name: tmp, emptyDir: {medium: Memory, sizeLimit: 4Gi}", rendered
+        )
         self.assertRegex(
             main,
-            r"resources:\s*\n\s+limits:\n\s+cpu: \"2\"\n\s+memory: 8Gi"
-            r"\n\s+requests:\n\s+cpu: 250m\n\s+memory: 4Gi",
+            r"resources:\s*\n\s+limits:\n\s+cpu: \"2\"\n\s+memory: 12Gi"
+            r"\n\s+requests:\n\s+cpu: 250m\n\s+memory: 6Gi",
         )
         schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
         self.assertEqual(
             {
-                "requests": {"cpu": "250m", "memory": "4Gi"},
-                "limits": {"cpu": "2", "memory": "8Gi"},
+                "requests": {"cpu": "250m", "memory": "6Gi"},
+                "limits": {"cpu": "2", "memory": "12Gi"},
             },
             schema["properties"]["resources"]["properties"]["renovate"]["const"],
         )
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
-        self.assertIn('.resources.requests.memory == "4Gi"', deploy)
-        self.assertIn('.resources.limits.memory == "8Gi"', deploy)
+        self.assertIn('.resources.requests.memory == "6Gi"', deploy)
+        self.assertIn('.resources.limits.memory == "12Gi"', deploy)
+        self.assertIn('.emptyDir.sizeLimit == "4Gi"', deploy)
 
     def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
         rendered = self.render()

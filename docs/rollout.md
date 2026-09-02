@@ -51,12 +51,14 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
    before unsuspending. Keep the root filesystem read-only; the main container's scoped,
-   memory-backed `/opt/containerbase` volume is the only executable tool-state surface and is
-   seeded from the immutable image before Renovate starts.
-   The Renovate container requests 4 GiB and is capped at 8 GiB. That limit covers Renovate and
+   memory-backed `/opt/containerbase` volume is seeded from the immutable image before Renovate
+   starts, and its bounded 4 GiB memory-backed `/tmp` provides transient executable extraction
+   space for upstream tool installers.
+   The Renovate container requests 6 GiB and is capped at 12 GiB. That limit covers Renovate and
    package-manager working memory plus cgroup-charged pages in the memory-backed work, cache, tmp,
-   and containerbase volumes. Treat any OOM kill as a failed production gate: keep the CronJob
-   suspended, retire partial PRs and branches, and repair the resource contract before retrying.
+   and containerbase volumes. Treat any OOM kill or volume-capacity failure as a failed production
+   gate: keep the CronJob suspended, retire partial PRs and branches, and repair the resource
+   contract before retrying.
 5. Before release, create one Job from the suspended CronJob and wait for success. The clean-break
    configuration intentionally has no manager-level time schedules, so the production run must
    immediately exercise npm and GitHub Actions across all 39 repositories without overrides. Logs
