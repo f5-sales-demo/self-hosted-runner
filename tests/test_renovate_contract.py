@@ -141,6 +141,26 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn("install-tool node 24.20.0", verifier)
         self.assertIn("Install tool node succeeded", verifier)
 
+    def test_renovate_memory_budget_covers_memory_backed_working_sets(self):
+        rendered = self.render()
+        main = rendered.split("containers:\n", 2)[-1].split("volumes:\n", 1)[0]
+        self.assertRegex(
+            main,
+            r"resources:\s*\n\s+limits:\n\s+cpu: \"2\"\n\s+memory: 8Gi"
+            r"\n\s+requests:\n\s+cpu: 250m\n\s+memory: 4Gi",
+        )
+        schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
+        self.assertEqual(
+            {
+                "requests": {"cpu": "250m", "memory": "4Gi"},
+                "limits": {"cpu": "2", "memory": "8Gi"},
+            },
+            schema["properties"]["resources"]["properties"]["renovate"]["const"],
+        )
+        deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
+        self.assertIn('.resources.requests.memory == "4Gi"', deploy)
+        self.assertIn('.resources.limits.memory == "8Gi"', deploy)
+
     def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
         rendered = self.render()
         self.assertIn("runAsUser: 12021", rendered)
