@@ -19,3 +19,5 @@ resources:
   renovate:
     requests: {cpu: 250m, memory: 6Gi}
     limits: {cpu: "2", memory: 12Gi}
+ephemeralStorage:
+  containerbaseSizeLimit: 2Gi
