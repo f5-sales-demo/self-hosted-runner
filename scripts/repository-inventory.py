@@ -111,6 +111,12 @@ def global_config(repositories: list[str]) -> dict:
         ],
         "packageRules": [
             {
+                "description": "Pin npm overrides for artifact command compatibility",
+                "matchManagers": ["npm"],
+                "matchDepTypes": ["overrides"],
+                "rangeStrategy": "pin",
+            },
+            {
                 "groupName": "npm-minor-patch",
                 "matchManagers": ["npm"],
                 "matchUpdateTypes": ["minor", "patch"],
