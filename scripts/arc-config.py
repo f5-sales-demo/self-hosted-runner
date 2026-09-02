@@ -94,7 +94,7 @@ EXPECTED_CAPS = {
             "docs-control": (8, 2),
             "api-specs": (6, 2),
             "api-specs-enriched": (6, 2, 2),
-            "terraform-provider-xcsh": (6, 2, 2),
+            "terraform-provider-xcsh": (6, 2, 3),
             "devcontainer": (4, 2),
             "console": (4, 1),
             "marketplace": (4, 1),

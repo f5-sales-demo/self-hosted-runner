@@ -150,15 +150,26 @@ class ArcConfigTests(unittest.TestCase):
                     self.assertEqual(maximum, item["max_runners"])
 
     def test_managed_compute_profiles_are_exact(self) -> None:
-        for repository in ("api-specs-enriched", "terraform-provider-xcsh"):
-            config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
-            compute = next(
-                item for item in config["scale_sets"] if item["profile"] == "compute"
-            )
-            self.assertEqual(f"arc-runners-{repository}-compute", compute["namespace"])
-            self.assertEqual(f"{repository}-compute", compute["release"])
-            self.assertEqual(f"{repository}-compute", compute["runner_scale_set_name"])
-            self.assertEqual((0, 2), (compute["min_runners"], compute["max_runners"]))
+        expected = {"api-specs-enriched": 2, "terraform-provider-xcsh": 3}
+        for repository, maximum in expected.items():
+            with self.subTest(repository=repository):
+                config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
+                compute = next(
+                    item
+                    for item in config["scale_sets"]
+                    if item["profile"] == "compute"
+                )
+                self.assertEqual(
+                    f"arc-runners-{repository}-compute", compute["namespace"]
+                )
+                self.assertEqual(f"{repository}-compute", compute["release"])
+                self.assertEqual(
+                    f"{repository}-compute", compute["runner_scale_set_name"]
+                )
+                self.assertEqual(
+                    (0, maximum),
+                    (compute["min_runners"], compute["max_runners"]),
+                )
 
     def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(
