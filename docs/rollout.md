@@ -80,7 +80,11 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    dependency-type-specific overrides rule remains `pin` for deterministic npm override installs.
    A repository-scoped rule holds `vscode-xcsh` on the reviewed Babel 7-compatible
    `@rolldown/plugin-babel` release until its peer graph is intentionally migrated; it does not
-   suppress other npm updates. The `docs-icons` artifact rule uses `recreateWhen: always` so a
+   suppress other npm updates. A separate docs-control rule constrains the setup-uv tool input to
+   uv 0.8.24, the version present in the immutable runner catalog; the setup-uv action itself
+   remains eligible for updates. Advance that input only with the runner-image catalog so setup
+   actions never attempt to mutate the read-only image tool cache. The `docs-icons` artifact rule
+   uses `recreateWhen: always` so a
    closed fail-closed validation PR can be regenerated during a clean-break retry without enabling
    fleet-wide closed-PR recreation. The final package rule disables updates to the eight
    docs-control-managed workflow callers in the other 38 repositories. Canonical dependency

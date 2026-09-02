@@ -110,6 +110,20 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual(["npm"], peer_pin["matchManagers"])
         self.assertEqual(["@rolldown/plugin-babel"], peer_pin["matchPackageNames"])
         self.assertFalse(peer_pin["enabled"])
+        uv_catalog = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("description")
+            == "Keep docs-control uv input within the immutable runner catalog"
+        )
+        self.assertEqual(["f5-sales-demo/docs-control"], uv_catalog["matchRepositories"])
+        self.assertEqual(["github-actions"], uv_catalog["matchManagers"])
+        self.assertEqual(["astral-sh/uv"], uv_catalog["matchPackageNames"])
+        self.assertEqual("0.8.24", uv_catalog["allowedVersions"])
+        self.assertGreater(
+            config["packageRules"].index(uv_catalog),
+            config["packageRules"].index(groups["actions-minor-patch"]),
+        )
         managed_workflows = next(
             rule
             for rule in config["packageRules"]
