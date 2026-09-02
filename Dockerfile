@@ -91,25 +91,28 @@ ENV DEBIAN_FRONTEND=noninteractive \
     ImageOS=ubuntu24 \
     PATH=/opt/go/bin:/opt/dotnet:/opt/powershell:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}
 
-# The snapshot fixes the complete apt package set. No service is enabled or started here; every target runs as the unprivileged runner user.
-RUN rm -f /etc/apt/sources.list.d/* \
+# The snapshot fixes the complete apt package set. Resolve package URIs from its
+# signed indexes, fetch them concurrently through APT's checksum-verifying
+# helper, and then prohibit network access during installation. No service is
+# enabled or started here; every target runs as the unprivileged runner user.
+RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross sqlite3 sudo swig unzip wget xz-utils zip zstd libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth' \
+    && rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
     && for attempt in 1 2 3 4 5 6 7 8; do \
       if apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 update \
-        && apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 install --yes --no-install-recommends \
-      ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client \
-      dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 \
-      libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full \
-      php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 \
-      python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross \
-      sqlite3 sudo swig unzip wget xz-utils zip zstd \
-      libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth; then break; fi; \
+        && install -d -m 0755 -o _apt -g root /var/cache/apt/archives/partial \
+        && rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
+        && apt-get --print-uris --yes --no-install-recommends install $packages \
+          | awk '/^\047https:/ { gsub(/\047/, "", $1); print $1, $2, $4 }' \
+          | xargs -r -n3 -P16 sh -c '/usr/lib/apt/apt-helper -o Acquire::Retries=5 -o Acquire::https::Timeout=30 download-file "$0" "/var/cache/apt/archives/partial/$1" "$2" >/dev/null' \
+        && find /var/cache/apt/archives/partial -maxdepth 1 -type f -name '*.deb' -exec mv -t /var/cache/apt/archives {} + \
+        && apt-get --no-download --yes --no-install-recommends install $packages; then break; fi; \
       test "$attempt" -eq 8 && exit 1; \
-      rm -rf /var/lib/apt/lists/*; sleep $((attempt * 15)); \
+      rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*; sleep $((attempt * 15)); \
     done \
     && ln -s /usr/bin/fdfind /usr/local/bin/fd \
     && ln -s /usr/bin/convert /usr/local/bin/magick \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
     && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime "$AGENT_TOOLSDIRECTORY"
 
