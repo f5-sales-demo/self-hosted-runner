@@ -69,6 +69,13 @@ class RepositoryInventoryTests(unittest.TestCase):
                 "Renovate must observe passing CI before squash-merging",
             )
         self.assertNotIn("major", json.dumps(groups))
+        overrides = next(
+            rule
+            for rule in config["packageRules"]
+            if rule.get("matchDepTypes") == ["overrides"]
+        )
+        self.assertEqual("pin", overrides["rangeStrategy"])
+        self.assertNotIn("groupName", overrides)
         task = next(
             rule
             for rule in config["packageRules"]
