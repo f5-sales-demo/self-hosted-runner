@@ -156,6 +156,13 @@ def global_config(repositories: list[str]) -> dict:
                 "platformAutomerge": False,
             },
             {
+                "description": "Keep docs-control uv input within the immutable runner catalog",
+                "matchRepositories": ["f5-sales-demo/docs-control"],
+                "matchManagers": ["github-actions"],
+                "matchPackageNames": ["astral-sh/uv"],
+                "allowedVersions": "0.8.24",
+            },
+            {
                 "description": "Regenerate docs-icons release artifacts on npm branches",
                 "matchRepositories": ["f5-sales-demo/docs-icons"],
                 "matchManagers": ["npm"],
