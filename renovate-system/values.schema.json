@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["image", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources"],
+  "required": ["image", "suspend", "schedule", "timeZone", "activeDeadlineSeconds", "tokenSafetyMarginSeconds", "githubApp", "nodeSelector", "resources", "ephemeralStorage"],
   "properties": {
     "image": {"type": "string", "pattern": "^f5salesdemoarcca\\.azurecr\\.io/renovate@sha256:[0-9a-f]{64}$"},
     "suspend": {"const": false},
@@ -24,7 +24,8 @@
         "requests": {"cpu": "250m", "memory": "6Gi"},
         "limits": {"cpu": "2", "memory": "12Gi"}
       }}
-    }}
+    }},
+    "ephemeralStorage": {"const": {"containerbaseSizeLimit": "2Gi"}}
   },
   "$defs": {"resources": {"type": "object", "additionalProperties": false, "required": ["requests", "limits"], "properties": {
     "requests": {"type": "object", "required": ["cpu", "memory"]}, "limits": {"type": "object", "required": ["cpu", "memory"]}

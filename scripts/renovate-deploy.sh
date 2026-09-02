@@ -67,7 +67,7 @@ kubectl get cronjob renovate -n renovate-system -o json | jq -e --arg image "$im
   (.spec.jobTemplate.spec.template.spec.volumes[] |
     select(.name == "tmp") | .emptyDir.medium == "Memory" and .emptyDir.sizeLimit == "4Gi") and
   (.spec.jobTemplate.spec.template.spec.volumes[] |
-    select(.name == "containerbase") | .emptyDir.medium == "Memory" and .emptyDir.sizeLimit == "1Gi") and
+    select(.name == "containerbase") | .emptyDir.medium == "Memory" and .emptyDir.sizeLimit == "2Gi") and
   .spec.jobTemplate.spec.template.spec.initContainers[0].image == $image
 ' >/dev/null
 printf 'deployed active Renovate CronJob and pre-pull at %s\n' "$image"

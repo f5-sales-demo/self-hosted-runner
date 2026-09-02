@@ -136,7 +136,7 @@ class RenovateContractTests(unittest.TestCase):
         main = rendered.split("containers:\n", 2)[-1].split("volumes:\n", 1)[0]
         self.assertIn("mountPath: /opt/containerbase", main)
         self.assertIn("name: containerbase", main)
-        self.assertIn("sizeLimit: 1Gi", rendered)
+        self.assertIn("sizeLimit: 2Gi", rendered)
         verifier = (ROOT / "scripts/verify-renovate-runtime.sh").read_text()
         self.assertIn("install-tool node 24.20.0", verifier)
         self.assertIn("Install tool node succeeded", verifier)
@@ -151,7 +151,7 @@ class RenovateContractTests(unittest.TestCase):
             "name: tmp, emptyDir: {medium: Memory, sizeLimit: 4Gi}", rendered
         )
         self.assertIn(
-            "name: containerbase, emptyDir: {medium: Memory, sizeLimit: 1Gi}",
+            "name: containerbase, emptyDir: {medium: Memory, sizeLimit: 2Gi}",
             rendered,
         )
         self.assertRegex(
@@ -167,6 +167,10 @@ class RenovateContractTests(unittest.TestCase):
             },
             schema["properties"]["resources"]["properties"]["renovate"]["const"],
         )
+        self.assertEqual(
+            {"containerbaseSizeLimit": "2Gi"},
+            schema["properties"]["ephemeralStorage"]["const"],
+        )
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn('.resources.requests.memory == "6Gi"', deploy)
         self.assertIn('.resources.limits.memory == "12Gi"', deploy)
@@ -175,7 +179,7 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn('select(.name == "tmp") |', deploy)
         self.assertIn('.emptyDir.sizeLimit == "4Gi"', deploy)
         self.assertIn('select(.name == "containerbase") |', deploy)
-        self.assertIn('.emptyDir.sizeLimit == "1Gi"', deploy)
+        self.assertIn('.emptyDir.sizeLimit == "2Gi"', deploy)
 
     def test_release_contract_requires_active_production_schedule(self):
         schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())

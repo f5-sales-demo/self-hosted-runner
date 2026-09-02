@@ -52,7 +52,8 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
    in its namespace. Keep the root filesystem read-only; the main container's scoped,
    memory-backed `/opt/containerbase` volume is seeded from the immutable image before Renovate
-   starts. Its bounded 2 GiB memory-backed `/cache` retains package-manager and containerbase
+   starts. Its 2 GiB bound accommodates current Rust toolchains used for artifact updates. The
+   separate bounded 2 GiB memory-backed `/cache` retains package-manager and containerbase
    downloads across serial repository processing, while the separate bounded 4 GiB memory-backed
    `/tmp` provides transient executable extraction space for upstream tool installers. Treat these
    three paths as independent capacity contracts.
