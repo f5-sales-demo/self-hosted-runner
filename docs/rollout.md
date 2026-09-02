@@ -52,8 +52,10 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
    before unsuspending. Keep the root filesystem read-only; the main container's scoped,
    memory-backed `/opt/containerbase` volume is seeded from the immutable image before Renovate
-   starts, and its bounded 4 GiB memory-backed `/tmp` provides transient executable extraction
-   space for upstream tool installers.
+   starts. Its bounded 2 GiB memory-backed `/cache` retains package-manager and containerbase
+   downloads across serial repository processing, while the separate bounded 4 GiB memory-backed
+   `/tmp` provides transient executable extraction space for upstream tool installers. Treat these
+   three paths as independent capacity contracts.
    The Renovate container requests 6 GiB and is capped at 12 GiB. That limit covers Renovate and
    package-manager working memory plus cgroup-charged pages in the memory-backed work, cache, tmp,
    and containerbase volumes. Treat any OOM kill or volume-capacity failure as a failed production

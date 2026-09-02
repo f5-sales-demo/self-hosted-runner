@@ -145,7 +145,14 @@ class RenovateContractTests(unittest.TestCase):
         rendered = self.render()
         main = rendered.split("containers:\n", 2)[-1].split("volumes:\n", 1)[0]
         self.assertIn(
+            "name: cache, emptyDir: {medium: Memory, sizeLimit: 2Gi}", rendered
+        )
+        self.assertIn(
             "name: tmp, emptyDir: {medium: Memory, sizeLimit: 4Gi}", rendered
+        )
+        self.assertIn(
+            "name: containerbase, emptyDir: {medium: Memory, sizeLimit: 1Gi}",
+            rendered,
         )
         self.assertRegex(
             main,
@@ -163,7 +170,12 @@ class RenovateContractTests(unittest.TestCase):
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn('.resources.requests.memory == "6Gi"', deploy)
         self.assertIn('.resources.limits.memory == "12Gi"', deploy)
+        self.assertIn('select(.name == "cache") |', deploy)
+        self.assertIn('.emptyDir.sizeLimit == "2Gi"', deploy)
+        self.assertIn('select(.name == "tmp") |', deploy)
         self.assertIn('.emptyDir.sizeLimit == "4Gi"', deploy)
+        self.assertIn('select(.name == "containerbase") |', deploy)
+        self.assertIn('.emptyDir.sizeLimit == "1Gi"', deploy)
 
     def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
         rendered = self.render()
