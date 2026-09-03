@@ -57,7 +57,8 @@
   "allowPlugins": false,
   "ignoreScripts": true,
   "allowedCommands": [
-    "^node scripts/prepare-generated-artifact-release\\.mjs prepare$"
+    "^node scripts/prepare-generated-artifact-release\\.mjs prepare$",
+    "^bash scripts/refresh-asm-migration-dependencies\\.sh$"
   ],
   "packageRules": [
     {

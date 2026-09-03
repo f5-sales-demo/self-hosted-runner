@@ -199,6 +199,16 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn("value: /config/renovate.json", rendered)
         self.assertNotIn("--config-file=/config/renovate.json", rendered)
 
+    def test_global_command_allowlist_is_exact_and_narrow(self):
+        config = json.loads((ROOT / "renovate-system/generated/renovate.json").read_text())
+        self.assertEqual(
+            [
+                r"^node scripts/prepare-generated-artifact-release\.mjs prepare$",
+                r"^bash scripts/refresh-asm-migration-dependencies\.sh$",
+            ],
+            config["allowedCommands"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
