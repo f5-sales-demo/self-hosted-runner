@@ -50,7 +50,10 @@ class RepositoryInventoryTests(unittest.TestCase):
             config["force"],
         )
         self.assertEqual(
-            [r"^node scripts/prepare-generated-artifact-release\.mjs prepare$"],
+            [
+                r"^node scripts/prepare-generated-artifact-release\.mjs prepare$",
+                r"^bash scripts/refresh-asm-migration-dependencies\.sh$",
+            ],
             config["allowedCommands"],
         )
         self.assertFalse(

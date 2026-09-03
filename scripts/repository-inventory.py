@@ -118,7 +118,8 @@ def global_config(repositories: list[str]) -> dict:
         "allowPlugins": False,
         "ignoreScripts": True,
         "allowedCommands": [
-            r"^node scripts/prepare-generated-artifact-release\.mjs prepare$"
+            r"^node scripts/prepare-generated-artifact-release\.mjs prepare$",
+            r"^bash scripts/refresh-asm-migration-dependencies\.sh$",
         ],
         "packageRules": [
             {
