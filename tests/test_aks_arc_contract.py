@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -39,6 +40,26 @@ class AksArcContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("azurerm_role_assignment", source)
         self.assertNotIn("AcrPull", source)
+
+    def test_capacity_ceiling_and_quota_arithmetic_are_exact(self) -> None:
+        source = (ROOT / "terraform/runner-fleet/main.tf").read_text(
+            encoding="utf-8"
+        )
+        policy = json.loads(
+            (ROOT / "config/arc-capacity.json").read_text(encoding="utf-8")
+        )
+        compute = source.split("compute = {", 1)[1].split("}", 1)[0]
+        self.assertIn("minimum      = 0", compute)
+        self.assertIn("maximum      = 7", compute)
+        self.assertEqual(
+            {"socketless": 30, "compute": 7, "container-build": 5},
+            policy["pool_capacity"],
+        )
+        self.assertIn("maximum_runner_vcpus = 30 * 8 + 7 * 16 + 5 * 16", source)
+        self.assertIn("maximum_system_vcpus = 3 * 4", source)
+        self.assertIn("required_vcpu_quota  = 600", source)
+        self.assertEqual(444, 30 * 8 + 7 * 16 + 5 * 16 + 3 * 4)
+        self.assertEqual(0.26, 1 - 444 / 600)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/runner-fleet/main.tf").read_text(

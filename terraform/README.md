@@ -14,7 +14,7 @@ control-plane diagnostics.
 | --- | --- | --- | --- | --- |
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
 | socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
-| compute | Standard_D16ads_v5 | 0-5 | ephemeral | CPU-heavy socketless xcsh runners |
+| compute | Standard_D16ads_v5 | 0-7 | ephemeral | CPU-heavy socketless xcsh runners |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
 Labels and NoSchedule taints enforce profile placement. Do not substitute
@@ -92,7 +92,7 @@ references and deploy the xcsh scale sets and pre-pullers:
 
     scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
 
-The xcsh socketless, compute, and container-build scale sets are capped at 10, 5, and 3 respectively, all with zero idle runners. The original self-hosted-runner configuration retains its 20 and 5 limits. Every worker pool scales to zero; after demand drains, the autoscaler retains nodes for 60 minutes.
+The xcsh socketless, compute, and container-build scale sets are capped at 10, 2, and 3 respectively; the provider compute scale set is capped at 3. All have zero idle runners. The original self-hosted-runner configuration retains its 20 and 5 limits. Every worker pool scales to zero; after demand drains, the autoscaler retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -106,7 +106,7 @@ docs-container-build.
 
 ## Capacity evidence and image mirror
 
-Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/5/5 worker fleet plus three system nodes consumes 412 vCPUs, leaving more than 20% headroom at that quota.
+Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/7/5 worker fleet plus three system nodes consumes 444 vCPUs, leaving 26% headroom at that quota.
 
 The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains
 the publication authority. Anonymous pull is intentionally enabled for the

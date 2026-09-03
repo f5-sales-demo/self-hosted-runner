@@ -12,7 +12,7 @@ locals {
       name         = "compute"
       vm_size      = "Standard_D16ads_v5"
       minimum      = 0
-      maximum      = 5
+      maximum      = 7
       os_disk_size = 128
       profile      = "compute"
     }
@@ -26,9 +26,9 @@ locals {
     }
   }
 
-  # 30*8 + 5*16 + 5*16 plus 3*4 system vCPUs. The quota request deliberately
-  # targets 600 to retain at least 20% regional and family headroom.
-  maximum_runner_vcpus = 30 * 8 + 5 * 16 + 5 * 16
+  # 30*8 + 7*16 + 5*16 plus 3*4 system vCPUs. The quota request deliberately
+  # targets 600 to retain at least 26% regional and family headroom.
+  maximum_runner_vcpus = 30 * 8 + 7 * 16 + 5 * 16
   maximum_system_vcpus = 3 * 4
   required_vcpu_quota  = 600
 }
