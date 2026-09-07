@@ -180,5 +180,30 @@ class ImageContractTests(unittest.TestCase):
         self.assertEqual("xvfb-run --help", xvfb["command"])
         self.assertEqual(["standard", "container-build"], xvfb["profiles"])
 
+    def test_zig_is_a_pinned_immutable_image_tool(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        zig = next(tool for tool in catalog["tools"] if tool["name"] == "zig")
+        self.assertEqual("0.15.2", zig["version"])
+        self.assertEqual(
+            "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+            zig["sha256"],
+        )
+        self.assertEqual(["standard", "container-build"], zig["profiles"])
+        self.assertEqual("zig version", zig["command"])
+        self.assertEqual("0.15.2", zig["expected"])
+
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG ZIG_VERSION=0.15.2", dockerfile)
+        self.assertIn(
+            "ARG ZIG_SHA256=02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+            dockerfile,
+        )
+        self.assertIn(
+            'https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz',
+            dockerfile,
+        )
+        self.assertIn('echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict', dockerfile)
+        self.assertIn("ln -s /opt/zig/zig /usr/local/bin/zig", dockerfile)
+
 if __name__ == "__main__":
     unittest.main()
