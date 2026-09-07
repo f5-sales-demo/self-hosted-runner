@@ -12,7 +12,7 @@ Every production reference is an immutable `ghcr.io/f5-sales-demo/self-hosted-ru
 ## What is pinned
 
 - Ubuntu, Node, and Docker CLI base images are digest-pinned in the `Dockerfile`.
-- The GitHub Actions runner, GitHub CLI, Go, .NET, PowerShell, AWS CLI, Helm, and Android command-line tools use versioned HTTPS URLs and verified SHA-256 checksums.
+- The GitHub Actions runner, GitHub CLI, Go, Zig, .NET, PowerShell, AWS CLI, Helm, and Android command-line tools use versioned HTTPS URLs and verified SHA-256 checksums.
 - `catalog/tool-catalog.json` records the exact runner-images reference revision, installed tools, setup-action cache entries, sources, and version checks. `scripts/verify-tools.py` is installed in every target and validates the image contract.
 
 ## Setup-action cache contract
