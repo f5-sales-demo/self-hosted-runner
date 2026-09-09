@@ -79,7 +79,13 @@ class ImageContractTests(unittest.TestCase):
             "ARG BUN_CANDIDATE_SHA256=36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
             dockerfile,
         )
-        self.assertIn("github.event_name == 'workflow_dispatch'", publish)
+        self.assertIn(
+            "jobs:\n  publish:\n    if: github.event_name == 'push'", publish
+        )
+        self.assertIn(
+            "publish-compute-bun-candidate:\n    if: github.event_name == 'workflow_dispatch'",
+            publish,
+        )
         with tempfile.TemporaryDirectory() as directory:
             candidate = Path(directory) / "catalog.json"
             candidate.write_text(
