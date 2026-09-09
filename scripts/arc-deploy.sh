@@ -91,7 +91,9 @@ fi
 if [[ "$mode" == cache || "$mode" == all ]]; then
   cache_namespace=arc-runner-cache
   kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
-  for profile in socketless compute-candidate container-build; do
+  cache_profiles=(socketless container-build)
+  [[ "$candidate_required" != true ]] || cache_profiles+=(compute-candidate)
+  for profile in "${cache_profiles[@]}"; do
     image=$SOCKETLESS_IMAGE
     [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
     [[ "$profile" != compute-candidate ]] || image=${COMPUTE_CANDIDATE_IMAGE:-$SOCKETLESS_IMAGE}
