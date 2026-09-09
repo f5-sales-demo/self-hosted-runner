@@ -27,6 +27,24 @@
       "values": "arc/compute-values.yaml",
       "min_runners": 0,
       "max_runners": 2
+    },
+    {
+      "profile": "compute-bun-candidate",
+      "namespace": "arc-runners-xcsh-compute-bun-candidate",
+      "release": "xcsh-compute-bun-candidate",
+      "runner_scale_set_name": "xcsh-compute-bun-candidate",
+      "values": "arc/compute-bun-candidate-values.yaml",
+      "min_runners": 0,
+      "max_runners": 4
+    },
+    {
+      "profile": "compute-f32-candidate",
+      "namespace": "arc-runners-xcsh-compute-f32-candidate",
+      "release": "xcsh-compute-f32-candidate",
+      "runner_scale_set_name": "xcsh-compute-f32-candidate",
+      "values": "arc/compute-f32-candidate-values.yaml",
+      "min_runners": 0,
+      "max_runners": 4
     }
   ]
 }

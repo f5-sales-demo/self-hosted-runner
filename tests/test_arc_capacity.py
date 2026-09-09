@@ -167,6 +167,35 @@ class ArcCapacityTests(unittest.TestCase):
         self.assertEqual(1, summary["runner_sets"][0]["desired"])
         self.assertEqual(600, summary["quotas"][0]["limit"])
 
+    def test_candidate_labels_and_fsv2_quota_are_retained(self) -> None:
+        self.assertEqual(
+            "compute-bun-candidate",
+            MODULE.managed_profile(["xcsh-compute-bun-candidate"]),
+        )
+        self.assertEqual(
+            "compute-f32-candidate",
+            MODULE.managed_profile(["xcsh-compute-f32-candidate"]),
+        )
+        resources = {
+            "node_metrics": [],
+            "pod_metrics": [],
+            "nodes": {"items": []},
+            "pods": {"items": []},
+            "events": {"items": []},
+            "runner_sets": {"items": []},
+            "azure_quotas": [
+                {
+                    "name": {"value": "standardFSv2Family"},
+                    "currentValue": 0,
+                    "limit": 350,
+                }
+            ],
+        }
+        self.assertEqual(
+            "standardFSv2Family",
+            MODULE.summarize_kubernetes(resources)["quotas"][0]["name"],
+        )
+
     def test_kubernetes_summary_accepts_null_pending_status(self) -> None:
         resources = {
             "node_metrics": [],

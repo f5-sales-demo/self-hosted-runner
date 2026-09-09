@@ -50,7 +50,7 @@ helm template arc "$controller_chart" \
   --post-renderer scripts/arc-controller-post-renderer.py >"$tmpdir/controller.yaml"
 grep -Fq 'ghcr.io/actions/gha-runner-scale-set-controller@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d' "$tmpdir/controller.yaml"
 
-for profile in socketless container-build; do
+for profile in socketless compute-candidate container-build; do
   prepull_args=(
     --namespace arc-runner-cache
     --set-string "profile=$profile"
@@ -61,6 +61,9 @@ for profile in socketless container-build; do
   if [[ "$profile" == socketless ]]; then
     prepull_args+=(--set-string "nodeProfiles[1]=compute")
     prepull_args+=(--set-string "renovateImage=$renovate_image")
+  elif [[ "$profile" == compute-candidate ]]; then
+    prepull_args+=(--set-string "nodeProfiles[0]=compute")
+    prepull_args+=(--set-string "nodeProfiles[1]=compute-f32")
   elif [[ "$profile" == container-build ]]; then
     prepull_args+=(--set-string "additionalImages[0]=$dind_image")
   fi
@@ -113,7 +116,7 @@ for config in "$@"; do
     grep -Fq 'name: RUNNER_PROFILE' "$rendered_manifest"
     grep -Fq 'name: RUNNER_IMAGE_DIGEST' "$rendered_manifest"
     grep -Fq 'name: ghcr-pull' "$rendered_manifest"
-    if [[ "$profile" == socketless || "$profile" == compute ]]; then
+    if [[ "$profile" != container-build ]]; then
       if grep -Fq 'privileged: true' "$rendered_manifest"; then
         echo "$config socketless rendered a privileged container" >&2
         exit 1

@@ -255,6 +255,7 @@ COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
 COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
 COPY --chown=root:root scripts/runner-profile.py /usr/local/bin/runner-profile
 COPY --chown=root:root scripts/docker-action-profile.py /usr/local/bin/docker-action-profile
+COPY --chown=root:root scripts/configure-bun-candidate.py /usr/local/bin/configure-bun-candidate
 COPY --chown=root:root schemas/workload-profile.schema.json /usr/local/share/runner-profile/workload-profile.schema.json
 COPY --chown=root:root schemas/docker-action-profile.schema.json /usr/local/share/runner-profile/docker-action-profile.schema.json
 COPY --chown=root:root scripts/runner-entrypoint.sh /usr/local/bin/runner-entrypoint
@@ -264,7 +265,7 @@ RUN cc -O2 -Wall -Wextra -Werror /tmp/landlock-abi.c -o /usr/local/bin/landlock-
     && rm -f /tmp/landlock-abi.c \
     && chmod 0555 /usr/local/bin/landlock-abi /usr/local/bin/require-landlock-abi \
       /usr/local/bin/runner-entrypoint /usr/local/bin/runner-profile /usr/local/bin/docker-action-profile \
-      /usr/local/bin/verify-runner-tools
+      /usr/local/bin/verify-runner-tools /usr/local/bin/configure-bun-candidate
 
 WORKDIR /runner-runtime
 
@@ -274,6 +275,27 @@ ENTRYPOINT ["/usr/local/bin/runner-entrypoint"]
 LABEL org.opencontainers.image.source="https://github.com/f5-sales-demo/self-hosted-runner" \
       org.opencontainers.image.description="Ephemeral socketless GitHub Actions runner" \
       f5.sales-demo.runner.profile="standard"
+
+FROM runner-base AS compute-bun-1-4-2
+ARG BUN_CANDIDATE_VERSION=1.4.2
+ARG BUN_CANDIDATE_SHA256=36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913
+RUN set -eux; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/bun-candidate.zip \
+      "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_CANDIDATE_VERSION}/bun-linux-x64.zip"; \
+    echo "${BUN_CANDIDATE_SHA256}  /tmp/bun-candidate.zip" | sha256sum --check --strict; \
+    rm -rf /opt/bun-linux-x64; \
+    unzip -q /tmp/bun-candidate.zip -d /opt; \
+    rm -f /tmp/bun-candidate.zip; \
+    bun --version | grep -Fx "${BUN_CANDIDATE_VERSION}"; \
+    python3 /usr/local/bin/configure-bun-candidate \
+      /usr/local/share/runner-catalog/tool-catalog.json \
+      "${BUN_CANDIDATE_VERSION}" "${BUN_CANDIDATE_SHA256}"
+USER runner
+ENTRYPOINT ["/usr/local/bin/runner-entrypoint"]
+LABEL org.opencontainers.image.source="https://github.com/f5-sales-demo/self-hosted-runner" \
+      org.opencontainers.image.description="Ephemeral xcsh compute runner for isolated Bun 1.4.2 qualification" \
+      f5.sales-demo.runner.profile="compute-candidate" \
+      f5.sales-demo.runner.bun-version="1.4.2"
 
 FROM runner-base AS container-build
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker

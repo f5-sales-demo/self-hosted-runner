@@ -27,6 +27,11 @@ The locked reference is [`actions/runner-images@8926c75ceb03577c5cc94415743a88f5
 
 Production image construction and publication are intentionally restricted to the GitHub-hosted `ubuntu-24.04` workflows. The Ubuntu workstation may use local no-cache builds for development validation only, never as a promotion source; production preloading pulls and verifies a published digest:
 
+The `compute-bun-1-4-2` target is an isolated qualification image. It is built
+only by a manual workflow dispatch and is never emitted by an ordinary push to
+`main`; production `standard` and `container-build` targets remain on Bun 1.3.14
+until the compatibility and performance gates pass.
+
 ```bash
 scripts/preload-image.sh \
   ghcr.io/f5-sales-demo/self-hosted-runner@sha256:<digest> standard

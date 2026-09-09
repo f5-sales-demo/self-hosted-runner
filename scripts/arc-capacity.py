@@ -648,7 +648,7 @@ def summarize_kubernetes(resources: dict) -> dict:
                 "running": status.get("runningRunners"),
             }
         )
-    quota_names = {"cores", "standardDADSv5Family"}
+    quota_names = {"cores", "standardDADSv5Family", "standardFSv2Family"}
     quotas = [
         {
             "name": item.get("name", {}).get("value"),
@@ -662,7 +662,13 @@ def summarize_kubernetes(resources: dict) -> dict:
 
 
 def managed_profile(labels: list[str]) -> str | None:
-    for profile in ("compute", "container-build", "socketless"):
+    for profile in (
+        "compute-bun-candidate",
+        "compute-f32-candidate",
+        "compute",
+        "container-build",
+        "socketless",
+    ):
         if any(label == profile or label.endswith(f"-{profile}") for label in labels):
             return profile
     return None

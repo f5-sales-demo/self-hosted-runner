@@ -38,6 +38,18 @@ class ArcConfigTests(unittest.TestCase):
                     0,
                     2,
                 ),
+                "compute-bun-candidate": (
+                    "arc-runners-xcsh-compute-bun-candidate",
+                    "xcsh-compute-bun-candidate",
+                    0,
+                    4,
+                ),
+                "compute-f32-candidate": (
+                    "arc-runners-xcsh-compute-f32-candidate",
+                    "xcsh-compute-f32-candidate",
+                    0,
+                    4,
+                ),
             },
         }
         for filename, contract in expected.items():
@@ -159,6 +171,29 @@ class ArcConfigTests(unittest.TestCase):
             self.assertEqual(f"{repository}-compute", compute["release"])
             self.assertEqual(f"{repository}-compute", compute["runner_scale_set_name"])
             self.assertEqual((0, 2), (compute["min_runners"], compute["max_runners"]))
+
+    def test_candidate_compute_caps_are_exact_and_aggregate_to_nine(self) -> None:
+        expected = {
+            "xcsh": 4,
+            "api-specs-enriched": 2,
+            "terraform-provider-xcsh": 3,
+        }
+        observed = {}
+        for repository, maximum in expected.items():
+            config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
+            candidate = next(
+                item
+                for item in config["scale_sets"]
+                if item["profile"] == "compute-f32-candidate"
+            )
+            self.assertEqual(0, candidate["min_runners"])
+            self.assertEqual(maximum, candidate["max_runners"])
+            self.assertEqual(
+                f"{repository}-compute-f32-candidate",
+                candidate["runner_scale_set_name"],
+            )
+            observed[repository] = candidate["max_runners"]
+        self.assertEqual(9, sum(observed.values()))
 
     def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(

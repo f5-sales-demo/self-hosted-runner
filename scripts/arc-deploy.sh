@@ -69,6 +69,11 @@ if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io)/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
+  candidate_required=$(jq -r 'any(.scale_sets[]; (.profile | endswith("-candidate")))' <<<"$config_json")
+  if [[ "$candidate_required" == true ]]; then
+    : "${COMPUTE_CANDIDATE_IMAGE:?COMPUTE_CANDIDATE_IMAGE must be an immutable candidate reference}"
+    [[ "$COMPUTE_CANDIDATE_IMAGE" =~ $image_pattern ]]
+  fi
   if [[ "$SOCKETLESS_IMAGE" == f5salesdemoarcca.azurecr.io/* ]]; then
     : "${SOCKETLESS_SOURCE_IMAGE:?SOCKETLESS_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$SOCKETLESS_SOURCE_IMAGE" "$SOCKETLESS_IMAGE" >/dev/null
@@ -77,14 +82,19 @@ if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
     : "${CONTAINER_BUILD_SOURCE_IMAGE:?CONTAINER_BUILD_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$CONTAINER_BUILD_SOURCE_IMAGE" "$CONTAINER_BUILD_IMAGE" >/dev/null
   fi
+  if [[ "${COMPUTE_CANDIDATE_IMAGE:-}" == f5salesdemoarcca.azurecr.io/* ]]; then
+    : "${COMPUTE_CANDIDATE_SOURCE_IMAGE:?COMPUTE_CANDIDATE_SOURCE_IMAGE must identify the equal GHCR digest}"
+    scripts/mirror-runner-image.sh verify "$COMPUTE_CANDIDATE_SOURCE_IMAGE" "$COMPUTE_CANDIDATE_IMAGE" >/dev/null
+  fi
 fi
 
 if [[ "$mode" == cache || "$mode" == all ]]; then
   cache_namespace=arc-runner-cache
   kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
-  for profile in socketless container-build; do
+  for profile in socketless compute-candidate container-build; do
     image=$SOCKETLESS_IMAGE
     [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
+    [[ "$profile" != compute-candidate ]] || image=${COMPUTE_CANDIDATE_IMAGE:-$SOCKETLESS_IMAGE}
     cache_args=(
       upgrade --install "runner-image-cache-$profile" arc/prepull
       --namespace "$cache_namespace"
@@ -96,6 +106,9 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
     )
     if [[ "$profile" == socketless ]]; then
       cache_args+=(--set-string "nodeProfiles[1]=compute")
+    elif [[ "$profile" == compute-candidate ]]; then
+      cache_args+=(--set-string "nodeProfiles[0]=compute")
+      cache_args+=(--set-string "nodeProfiles[1]=compute-f32")
     elif [[ "$profile" == container-build ]]; then
       cache_args+=(--set-string "additionalImages[0]=$dind_image")
     fi
@@ -118,6 +131,7 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
     max_runners=$(jq -er .max_runners <<<"$spec")
     image=$SOCKETLESS_IMAGE
     [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
+    [[ "$profile" != *-candidate ]] || image=$COMPUTE_CANDIDATE_IMAGE
 
     kubectl get secret arc-github-app -n "$namespace" >/dev/null
     kubectl get secret ghcr-pull -n "$namespace" >/dev/null

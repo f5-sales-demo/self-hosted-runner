@@ -16,6 +16,14 @@ locals {
       os_disk_size = 128
       profile      = "compute"
     }
+    compute_f32 = {
+      name         = "computef32"
+      vm_size      = "Standard_F32s_v2"
+      minimum      = 0
+      maximum      = 5
+      os_disk_size = 128
+      profile      = "compute-f32"
+    }
     container_build = {
       name         = "build"
       vm_size      = "Standard_D16ads_v5"
@@ -26,11 +34,15 @@ locals {
     }
   }
 
-  # 30*8 + 5*16 + 5*16 plus 3*4 system vCPUs. The quota request deliberately
-  # targets 600 to retain at least 20% regional and family headroom.
-  maximum_runner_vcpus = 30 * 8 + 5 * 16 + 5 * 16
-  maximum_system_vcpus = 3 * 4
-  required_vcpu_quota  = 600
+  # DADSv5 and FSv2 quotas are independent, while total regional quota covers
+  # the blue/green overlap. Each declared requirement retains >=20% headroom.
+  maximum_dadsv5_vcpus  = 30 * 8 + 5 * 16 + 5 * 16
+  maximum_fsv2_vcpus    = 5 * 32
+  maximum_runner_vcpus  = local.maximum_dadsv5_vcpus + local.maximum_fsv2_vcpus
+  maximum_system_vcpus  = 3 * 4
+  required_dadsv5_quota = 600
+  required_fsv2_quota   = 200
+  required_total_quota  = 715
 }
 
 resource "azurerm_resource_group" "runner" {
@@ -140,8 +152,12 @@ resource "azurerm_container_registry" "runner" {
 
 check "quota_headroom" {
   assert {
-    condition     = local.required_vcpu_quota >= ceil((local.maximum_runner_vcpus + local.maximum_system_vcpus) / 0.8)
-    error_message = "The requested regional and DADSv5 quota must retain at least 20% headroom at maximum fleet capacity."
+    condition = (
+      local.required_dadsv5_quota >= ceil(local.maximum_dadsv5_vcpus / 0.8) &&
+      local.required_fsv2_quota >= ceil(local.maximum_fsv2_vcpus / 0.8) &&
+      local.required_total_quota >= ceil((local.maximum_runner_vcpus + local.maximum_system_vcpus) / 0.8)
+    )
+    error_message = "DADSv5, FSv2, and total regional quotas must retain at least 20% headroom at maximum blue/green fleet capacity."
   }
 }
 

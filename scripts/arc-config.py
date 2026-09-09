@@ -9,7 +9,14 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-PROFILES = {"socketless", "container-build", "compute"}
+PROFILES = {
+    "socketless",
+    "container-build",
+    "compute",
+    "compute-bun-candidate",
+    "compute-f32-candidate",
+}
+COMPUTE_PROFILES = {"compute", "compute-bun-candidate", "compute-f32-candidate"}
 REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
@@ -108,6 +115,18 @@ EXPECTED_CAPS = {
         }.items()
     },
 }
+CANDIDATE_CAPS = {
+    "https://github.com/f5-sales-demo/xcsh": {
+        "compute-bun-candidate": 4,
+        "compute-f32-candidate": 4,
+    },
+    "https://github.com/f5-sales-demo/api-specs-enriched": {
+        "compute-f32-candidate": 2,
+    },
+    "https://github.com/f5-sales-demo/terraform-provider-xcsh": {
+        "compute-f32-candidate": 3,
+    },
+}
 
 
 class ConfigError(ValueError):
@@ -145,9 +164,9 @@ def load_config(path: Path, repository_root: Path):
     if repository not in EXPECTED_CAPS:
         raise ConfigError(f"repository is outside the exact ARC fleet: {repository}")
     scale_sets = raw["scale_sets"]
-    if not isinstance(scale_sets, list) or len(scale_sets) not in (2, 3):
+    if not isinstance(scale_sets, list) or not 2 <= len(scale_sets) <= 5:
         raise ConfigError(
-            "scale_sets must contain two required entries and at most one optional entry"
+            "scale_sets must contain two required entries and at most three compute entries"
         )
 
     normalized = []
@@ -169,7 +188,7 @@ def load_config(path: Path, repository_root: Path):
             "https://github.com/f5-sales-demo/api-specs-enriched",
             "https://github.com/f5-sales-demo/terraform-provider-xcsh",
         }
-        if profile == "compute" and repository not in compute_allowlist:
+        if profile in COMPUTE_PROFILES and repository not in compute_allowlist:
             raise ConfigError("compute profile is outside the exact approved allowlist")
         for field, seen_values in unique.items():
             value = validate_name(spec[field], f"{context}.{field}")
@@ -215,7 +234,7 @@ def load_config(path: Path, repository_root: Path):
             (MANAGED_COHORT, MANAGED_SHARED_LABELS, "managed"),
         )
         for cohort, shared_labels, name in contracts:
-            if spec["profile"] == "compute":
+            if spec["profile"] in COMPUTE_PROFILES:
                 continue
             expected = shared_labels.get(spec["profile"])
             if repository in cohort and label != expected:
@@ -240,9 +259,14 @@ def load_config(path: Path, repository_root: Path):
                 )
             if minimum != 0:
                 raise ConfigError(f"{repository} min_runners must equal zero")
-        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[
-            spec["profile"]
-        ]
+        if spec["profile"] in CANDIDATE_CAPS.get(repository, {}):
+            expected_maximum = CANDIDATE_CAPS[repository][spec["profile"]]
+            if maximum != expected_maximum:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
+                )
+            continue
+        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[spec["profile"]]
         caps = EXPECTED_CAPS[repository]
         if cap_index >= len(caps):
             raise ConfigError(

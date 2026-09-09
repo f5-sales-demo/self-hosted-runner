@@ -4,8 +4,8 @@
   "additionalProperties": false,
   "required": ["profile", "nodeProfiles", "image", "additionalImages", "renovateImage"],
   "properties": {
-    "profile": {"type": "string", "enum": ["socketless", "container-build"]},
-    "nodeProfiles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["socketless", "compute", "container-build"]}},
+    "profile": {"type": "string", "enum": ["socketless", "compute-candidate", "container-build"]},
+    "nodeProfiles": {"type": "array", "minItems": 1, "items": {"type": "string", "enum": ["socketless", "compute", "compute-f32", "container-build"]}},
     "image": {
       "type": "string",
       "pattern": "^(ghcr\\.io/f5-sales-demo|f5salesdemoarcca\\.azurecr\\.io)/self-hosted-runner@sha256:[0-9a-f]{64}$"

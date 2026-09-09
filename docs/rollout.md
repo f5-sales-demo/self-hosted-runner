@@ -23,13 +23,30 @@ Migrate managed workflow templates first, then remaining governed repositories i
 
 ## ARC capacity and compute rollout
 
-1. Confirm the two Canada Central quota requests are approved at 600 or more and inspect the complete Terraform plan. The dedicated Premium ACR intentionally permits anonymous pull for every current and future repository; pushes remain authenticated and the admin account remains disabled. Anonymous clients share one ACR throttling identity, so include pull-rate monitoring in the rollout.
+1. Revalidate Canada Central quotas against the checked-in DADSv5, FSv2, and
+   total-regional requirements, then inspect the complete saved Terraform plan.
+   The dedicated Premium ACR intentionally permits anonymous pull for every
+   current and future repository; pushes remain authenticated and the admin
+   account remains disabled. Anonymous clients share one ACR throttling
+   identity, so include pull-rate monitoring in the rollout.
 2. Apply the saved plan. Mirror the approved standard/container-build GHCR digests into ACR and verify byte-identical manifests.
 3. Deploy the two cache releases. The socketless release must be Ready on both socketless and compute nodes; the container-build release remains confined to build nodes.
 4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at 0-2, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
-5. Benchmark the identical xcsh commit on D8 and D16 nodes, with cold and warm image/package caches, five runs for lifecycle-script limits 4, 8, and 16. Keep 8 only when it has the lowest median without peak memory reaching 80% or instability.
-6. Burst two xcsh, two enriched-spec, and two provider compute jobs together. Confirm the shared pool never exceeds five compute nodes, each repository stays at two runners, and the sixth request queues cleanly. Then burst 30 socketless and 5 container-build jobs. Prove unique ephemeral pods, exact namespaces, no avoidable pending state, and node scale-down after 60 minutes.
-7. Record two complete 06:00-22:00 America/Toronto business-day peak windows before acceptance. Warm assignment p95 must be at most 20 seconds and cold assignment p95 at most 180 seconds.
+5. On one frozen xcsh commit and immutable image digest, collect five cold and
+   five warm D16/Bun 1.3.14 runs plus a four-job burst. Qualify the Bun 1.4.2
+   image on the same D16 resources before allowing a hardware comparison.
+6. Deploy the F32 scale sets only after Bun qualification. Run two 14-CPU/28-GiB
+   pods per F32 node and burst candidate jobs up to the 4/2/3 repository caps.
+   Reject the candidate on any OOM, eviction, output drift, memory at or above
+   80%, sustained throttling regression, node disk at or above 70%, warm
+   assignment p95 above 20 seconds, or cold assignment p95 above 180 seconds.
+7. Retain a candidate only with five digest-matched pairs, zero failures, at
+   least 20% median PR critical-path or queue-clearance improvement, no p95
+   runtime regression, and no higher cost per successful PR workflow. Record
+   two complete 06:00-22:00 America/Toronto windows before acceptance.
+8. If F32 co-tenancy passes, migrate xcsh, enriched specs, and provider in that
+   order. Otherwise remove the candidate pool and raise the D16 pool to nine
+   nodes only after rechecking quota. Rollback is label-first to stable D16.
 
 Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore the last verified GHCR digest references, and set compute maximum capacity to zero. Do not remove the pool or mirror evidence until correctness, security, and latency are stable again.
 

@@ -15,6 +15,7 @@ control-plane diagnostics.
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
 | socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
 | compute | Standard_D16ads_v5 | 0-5 | ephemeral | CPU-heavy socketless xcsh runners |
+| compute-f32 | Standard_F32s_v2 | 0-5 | ephemeral | Temporary blue/green density candidate |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
 Labels and NoSchedule taints enforce profile placement. Do not substitute
@@ -88,11 +89,18 @@ existing secrets server-side into the configured namespaces after verifying the
 source and destination namespaces; never print or persist the secret payloads.
 
 Finally export `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE` as immutable
-references and deploy the xcsh scale sets and pre-pullers:
+references. During the bounded optimization experiment, also export
+`COMPUTE_CANDIDATE_IMAGE`; when an ACR mirror is used, provide its equal
+`COMPUTE_CANDIDATE_SOURCE_IMAGE`. Deploy the xcsh scale sets and pre-pullers:
 
     scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
 
-The xcsh socketless, compute, and container-build scale sets are capped at 10, 5, and 3 respectively, all with zero idle runners. The original self-hosted-runner configuration retains its 20 and 5 limits. Every worker pool scales to zero; after demand drains, the autoscaler retains nodes for 60 minutes.
+The stable xcsh socketless, compute, and container-build labels keep their existing
+caps and routing. Temporary candidate labels are isolated at zero idle runners:
+xcsh Bun/D16 at 4, and F32 density at xcsh 4, enriched specs 2, and provider 3.
+The nine aggregate F32 runner slots stay below the ten physical slots available
+on five two-pod nodes. Every worker pool scales to zero; after demand drains, the
+autoscaler retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -106,7 +114,12 @@ docs-container-build.
 
 ## Capacity evidence and image mirror
 
-Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/5/5 worker fleet plus three system nodes consumes 412 vCPUs, leaving more than 20% headroom at that quota.
+Do not create the candidate pool until Canada Central quota is at least 600
+`standardDADSv5Family`, 200 `standardFSv2Family`, and 715 total regional `cores`.
+The blue/green maximum consumes 400 DADSv5, 160 FSv2, and 572 total vCPUs
+including three system nodes, retaining at least 20% headroom in every scope.
+The verified 2026-09-09 subscription snapshot was 600 DADSv5, 350 FSv2, and 850
+regional vCPUs; revalidate it immediately before applying the saved plan.
 
 The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains
 the publication authority. Anonymous pull is intentionally enabled for the
