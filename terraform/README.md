@@ -141,6 +141,27 @@ Capture a 30-day GitHub baseline and the live Kubernetes scheduling/metrics stat
 
     scripts/arc-capacity.py collect --repository f5-sales-demo/xcsh --days 30 --output arc-capacity.json
 
-`runner-profile --name <phase> --output <file> -- <command>` records only approved identity fields and cgroup-v2 counters; it never records command arguments, environment values, credentials, or payloads. Jobs upload uniquely named `workload-profile-*` artifacts for 30 days. The capacity collector downloads those artifacts, validates schema version 1, aggregates phase medians/p95/memory/stability, and emits candidate comparisons only after five digest-matched pairs. Dependency wait (`workflow created` to `job created`) is reported separately from runnable assignment (`job created` to `job started`). Post-migration cutoffs exclude legacy-label history.
+For an exact benchmark run, start both redacted lifecycle observers before the
+workflow. They append only Kubernetes identity, scheduling, resource, and
+termination fields and reconnect after an API watch ends:
+
+    scripts/arc-lifecycle-watch.sh pods evidence/pod-watch.jsonl &
+    pod_watch_pid=$!
+    scripts/arc-lifecycle-watch.sh nodes evidence/node-watch.jsonl &
+    node_watch_pid=$!
+
+After the workflow and its ephemeral runner pods finish, collect the immutable
+run and observer files together, then stop the observers:
+
+    scripts/arc-capacity.py collect \
+      --repository f5-sales-demo/xcsh \
+      --run-id <workflow-run-id> \
+      --pod-watch evidence/pod-watch.jsonl \
+      --node-watch evidence/node-watch.jsonl \
+      --output evidence/collector.json
+    scripts/arc-capacity.py evaluate evidence/collector.json >evidence/evaluation.json
+    kill "$pod_watch_pid" "$node_watch_pid"
+
+`runner-profile --name <phase> --output <file> -- <command>` records only approved identity fields and cgroup-v2 counters; it never records command arguments, environment values, credentials, or payloads. Jobs upload uniquely named `workload-profile-*` artifacts for 30 days. The capacity collector downloads those artifacts, validates schema version 1, retains deleted-pod assignment and historical-node readiness from the observers, validates the node-filesystem sidecar, aggregates phase medians/p95/memory/stability, and emits five-pair hardware comparisons plus four-slot burst-clearance comparisons. Dependency wait (`workflow created` to `job created`) is reported separately from runnable assignment (`job created` to `job started`). Post-migration cutoffs exclude legacy-label history.
 
 The checked-in policy defines the 06:00-22:00 America/Toronto service window, warm (20-second p95) and cold (180-second p95) targets, two consecutive five-minute breach rule, ten-minute job wait, two-minute saturated-pool rule, 20% quota headroom, and deterministic repository cap formula. A start is warm only when a schedulable Ready node of the requested profile existed when the job entered the queue.

@@ -135,6 +135,19 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("memory: 30Gi", values)
         self.assertIn("ephemeral-storage: 40Gi", values)
 
+    def test_lifecycle_watcher_is_redacted_and_reconnects(self) -> None:
+        watcher = ROOT / "scripts/arc-lifecycle-watch.sh"
+        self.assertTrue(watcher.stat().st_mode & 0o111)
+        source = watcher.read_text(encoding="utf-8")
+        self.assertIn("<pods|nodes> <output.jsonl>", source)
+        self.assertIn("actions.github.com/scale-set-name", source)
+        self.assertIn("--output-watch-events", source)
+        self.assertIn("container_statuses", source)
+        self.assertIn("unschedulable", source)
+        self.assertIn("reconnecting", source)
+        for forbidden in ("env:", "command:", "args:", "secret"):
+            self.assertNotIn(forbidden, source)
+
 
 if __name__ == "__main__":
     unittest.main()
