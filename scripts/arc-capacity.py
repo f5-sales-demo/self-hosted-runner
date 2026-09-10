@@ -1767,6 +1767,39 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             pairs = sorted(set(baseline) & set(candidate))
             base_values = [baseline[pair]["duration_seconds"] for pair in pairs]
             candidate_values = [candidate[pair]["duration_seconds"] for pair in pairs]
+            baseline_commits = {
+                baseline[pair].get("commit")
+                for pair in pairs
+                if baseline[pair].get("commit")
+            }
+            candidate_commits = {
+                candidate[pair].get("commit")
+                for pair in pairs
+                if candidate[pair].get("commit")
+            }
+            baseline_images = {
+                baseline[pair].get("image_digest")
+                for pair in pairs
+                if baseline[pair].get("image_digest")
+            }
+            candidate_images = {
+                candidate[pair].get("image_digest")
+                for pair in pairs
+                if candidate[pair].get("image_digest")
+            }
+            frozen_commit = (
+                len(baseline_commits) == len(candidate_commits) == 1
+                and baseline_commits == candidate_commits
+            )
+            immutable_images = len(baseline_images) == len(
+                candidate_images
+            ) == 1 and all(
+                isinstance(image, str) and SHA256_PATTERN.fullmatch(image)
+                for image in (*baseline_images, *candidate_images)
+            )
+            hardware_image_equivalent = (
+                variant == "bun-1.4.2" or baseline_images == candidate_images
+            )
             base_median = median(base_values) if base_values else None
             candidate_median = median(candidate_values) if candidate_values else None
             improvement = (
@@ -1829,6 +1862,9 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                 and stable
                 and memory_ok
                 and no_sustained_throttling_regression
+                and frozen_commit
+                and immutable_images
+                and hardware_image_equivalent
             )
             results.append(
                 {
@@ -1845,6 +1881,15 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "baseline_p95_seconds": base_p95,
                     "candidate_p95_seconds": candidate_p95,
                     "output_equivalent": correct,
+                    "frozen_commit": frozen_commit,
+                    "baseline_image_digests": sorted(
+                        str(item) for item in baseline_images
+                    ),
+                    "candidate_image_digests": sorted(
+                        str(item) for item in candidate_images
+                    ),
+                    "immutable_image_evidence": immutable_images,
+                    "hardware_image_equivalent": hardware_image_equivalent,
                     "stable": stable,
                     "memory_below_80_percent": memory_ok,
                     "baseline_median_cpu_throttle_ratio": base_throttle_median,
