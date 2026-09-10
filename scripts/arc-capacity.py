@@ -697,16 +697,26 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
             if queued and profile and pod
             else None
         )
+        pod_created = parse_time(pod.get("created_at")) if pod else None
         scheduled = parse_time(pod.get("scheduled_at")) if pod else None
+        started = parse_time(job.get("started_at"))
+        arc_assignment_seconds = (
+            (started - pod_created).total_seconds()
+            if started and pod_created
+            else None
+        )
         sample = dict(job)
         sample.update(
             {
                 "profile": profile,
                 "warm": warm,
                 "pod": pod,
-                "assignment_slo_eligible": bool(profile),
-                "pod_schedule_seconds": (scheduled - queued).total_seconds()
-                if queued and scheduled
+                "github_queue_seconds": job.get("assignment_seconds"),
+                "assignment_seconds": arc_assignment_seconds,
+                "assignment_slo_eligible": bool(profile)
+                and arc_assignment_seconds is not None,
+                "pod_schedule_seconds": (scheduled - pod_created).total_seconds()
+                if pod_created and scheduled
                 else None,
             }
         )

@@ -332,11 +332,16 @@ class ArcCapacityTests(unittest.TestCase):
                 "runner_name": "runner-a",
                 "labels": ["xcsh-compute"],
                 "queued_at": "2026-08-28T14:00:00Z",
+                "started_at": "2026-08-28T14:00:05Z",
+                "assignment_seconds": 5,
             }
         ]
         sample = MODULE.correlate_jobs(jobs, summary)[0]
         self.assertTrue(sample["warm"])
-        self.assertEqual(2, sample["pod_schedule_seconds"])
+        self.assertEqual(4, sample["assignment_seconds"])
+        self.assertEqual(5, sample["github_queue_seconds"])
+        self.assertEqual(1, sample["pod_schedule_seconds"])
+        self.assertTrue(sample["assignment_slo_eligible"])
         self.assertEqual({"cpu": "250m", "memory": "4Gi"}, summary["nodes"][0]["usage"])
         self.assertEqual({"cpu": "500m", "memory": "2Gi"}, sample["pod"]["usage"])
         self.assertEqual(1, summary["runner_sets"][0]["desired"])
