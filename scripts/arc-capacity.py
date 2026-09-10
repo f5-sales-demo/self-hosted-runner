@@ -1865,8 +1865,11 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             }
         )
         for variant in variants:
-            minimum_improvement = 0.0 if variant == "bun-1.4.2" else 0.2
-            required_pairs = 4 if str(key[1]).endswith("-burst") else 5
+            burst_phase = str(key[1]).endswith("-burst")
+            minimum_improvement = (
+                0.0 if variant == "bun-1.4.2" else (0.2 if burst_phase else None)
+            )
+            required_pairs = 4 if burst_phase else 5
             candidate = {
                 item.get("pair_id"): item
                 for item in values
@@ -1974,7 +1977,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             qualifies = (
                 len(pairs) >= required_pairs
                 and improvement is not None
-                and improvement >= minimum_improvement
+                and (minimum_improvement is None or improvement >= minimum_improvement)
                 and candidate_p95 is not None
                 and base_p95 is not None
                 and candidate_p95 <= base_p95

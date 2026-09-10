@@ -121,6 +121,23 @@ class WorkloadReportTests(unittest.TestCase):
         comparison = MODULE.performance_comparisons(profiles)[0]
         self.assertEqual(4, comparison["paired_runs"])
         self.assertEqual(4, comparison["required_pairs"])
+        self.assertEqual(0.2, comparison["minimum_median_improvement_ratio"])
+        self.assertTrue(comparison["qualifies"])
+
+    def test_hardware_phase_requires_p95_non_regression_not_twenty_percent(
+        self,
+    ) -> None:
+        profiles = []
+        for index in range(5):
+            profiles.extend(
+                (
+                    profile("baseline", str(index), 100 + index),
+                    profile("f32", str(index), 99 + index),
+                )
+            )
+
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertIsNone(comparison["minimum_median_improvement_ratio"])
         self.assertTrue(comparison["qualifies"])
 
     def test_bun_candidate_requires_no_regression_not_twenty_percent(self) -> None:
