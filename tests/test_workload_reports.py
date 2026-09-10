@@ -71,6 +71,22 @@ class WorkloadReportTests(unittest.TestCase):
         profiles[-1]["output_digest"] = "different"
         self.assertFalse(MODULE.performance_comparisons(profiles)[0]["qualifies"])
 
+    def test_pairwise_output_matches_must_also_be_repeatable(self) -> None:
+        profiles = []
+        for index in range(5):
+            digest = f"pair-{index}"
+            profiles.extend(
+                (
+                    profile("baseline", str(index), 100, digest=digest),
+                    profile("f32", str(index), 70, digest=digest),
+                )
+            )
+
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertTrue(comparison["output_equivalent"])
+        self.assertFalse(comparison["outputs_repeatable"])
+        self.assertFalse(comparison["qualifies"])
+
     def test_fewer_than_five_or_memory_at_eighty_percent_fails(self) -> None:
         profiles = []
         for index in range(4):

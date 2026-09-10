@@ -1812,35 +1812,36 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             pairs = sorted(set(baseline) & set(candidate))
             base_values = [baseline[pair]["duration_seconds"] for pair in pairs]
             candidate_values = [candidate[pair]["duration_seconds"] for pair in pairs]
-            baseline_commits = {
-                baseline[pair].get("commit")
-                for pair in pairs
-                if baseline[pair].get("commit")
-            }
-            candidate_commits = {
-                candidate[pair].get("commit")
-                for pair in pairs
-                if candidate[pair].get("commit")
-            }
-            baseline_images = {
-                baseline[pair].get("image_digest")
-                for pair in pairs
-                if baseline[pair].get("image_digest")
-            }
-            candidate_images = {
-                candidate[pair].get("image_digest")
-                for pair in pairs
-                if candidate[pair].get("image_digest")
-            }
+            baseline_commit_values = [baseline[pair].get("commit") for pair in pairs]
+            candidate_commit_values = [candidate[pair].get("commit") for pair in pairs]
+            baseline_image_values = [
+                baseline[pair].get("image_digest") for pair in pairs
+            ]
+            candidate_image_values = [
+                candidate[pair].get("image_digest") for pair in pairs
+            ]
+            baseline_commits = set(baseline_commit_values)
+            candidate_commits = set(candidate_commit_values)
+            baseline_images = set(baseline_image_values)
+            candidate_images = set(candidate_image_values)
             frozen_commit = (
-                len(baseline_commits) == len(candidate_commits) == 1
+                len(baseline_commit_values)
+                == len(candidate_commit_values)
+                == len(pairs)
+                and None not in baseline_commits
+                and None not in candidate_commits
+                and len(baseline_commits) == len(candidate_commits) == 1
                 and baseline_commits == candidate_commits
             )
-            immutable_images = len(baseline_images) == len(
-                candidate_images
-            ) == 1 and all(
-                isinstance(image, str) and SHA256_PATTERN.fullmatch(image)
-                for image in (*baseline_images, *candidate_images)
+            immutable_images = (
+                len(baseline_image_values) == len(candidate_image_values) == len(pairs)
+                and None not in baseline_images
+                and None not in candidate_images
+                and len(baseline_images) == len(candidate_images) == 1
+                and all(
+                    isinstance(image, str) and SHA256_PATTERN.fullmatch(image)
+                    for image in (*baseline_images, *candidate_images)
+                )
             )
             hardware_image_equivalent = (
                 variant == "bun-1.4.2" or baseline_images == candidate_images
@@ -1850,11 +1851,22 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             improvement = (
                 (base_median - candidate_median) / base_median if base_median else None
             )
-            correct = bool(pairs) and all(
+            pairwise_output_equivalent = bool(pairs) and all(
                 baseline[pair].get("output_digest") is not None
                 and baseline[pair].get("output_digest")
                 == candidate[pair].get("output_digest")
                 for pair in pairs
+            )
+            baseline_output_digests = {
+                baseline[pair].get("output_digest") for pair in pairs
+            }
+            candidate_output_digests = {
+                candidate[pair].get("output_digest") for pair in pairs
+            }
+            outputs_repeatable = (
+                None not in baseline_output_digests
+                and None not in candidate_output_digests
+                and len(baseline_output_digests) == len(candidate_output_digests) == 1
             )
             stable = all(
                 item.get("exit", {}).get("code") == 0
@@ -1903,7 +1915,8 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                 and candidate_p95 is not None
                 and base_p95 is not None
                 and candidate_p95 <= base_p95
-                and correct
+                and pairwise_output_equivalent
+                and outputs_repeatable
                 and stable
                 and memory_ok
                 and no_sustained_throttling_regression
@@ -1925,7 +1938,14 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "minimum_median_improvement_ratio": minimum_improvement,
                     "baseline_p95_seconds": base_p95,
                     "candidate_p95_seconds": candidate_p95,
-                    "output_equivalent": correct,
+                    "output_equivalent": pairwise_output_equivalent,
+                    "outputs_repeatable": outputs_repeatable,
+                    "baseline_output_digests": sorted(
+                        str(item) for item in baseline_output_digests
+                    ),
+                    "candidate_output_digests": sorted(
+                        str(item) for item in candidate_output_digests
+                    ),
                     "frozen_commit": frozen_commit,
                     "baseline_image_digests": sorted(
                         str(item) for item in baseline_images
