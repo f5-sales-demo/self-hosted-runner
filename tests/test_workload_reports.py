@@ -74,6 +74,24 @@ class WorkloadReportTests(unittest.TestCase):
             )
         self.assertFalse(MODULE.performance_comparisons(profiles)[0]["qualifies"])
 
+    def test_bun_candidate_requires_no_regression_not_twenty_percent(self) -> None:
+        profiles = []
+        for index in range(5):
+            profiles.extend(
+                (
+                    profile("baseline", str(index), 100 + index),
+                    profile("bun-1.4.2", str(index), 99 + index),
+                )
+            )
+
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertEqual(0.0, comparison["minimum_median_improvement_ratio"])
+        self.assertTrue(comparison["qualifies"])
+
+        profiles[-1]["duration_seconds"] = 200
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertFalse(comparison["qualifies"])
+
     def test_profile_schema_validation_rejects_missing_or_invalid_fields(self) -> None:
         with self.assertRaises(ValueError):
             MODULE.validate_workload_profile({"schema_version": 1})

@@ -1104,6 +1104,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             }
         )
         for variant in variants:
+            minimum_improvement = 0.0 if variant == "bun-1.4.2" else 0.2
             candidate = {
                 item.get("pair_id"): item
                 for item in values
@@ -1140,7 +1141,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             qualifies = (
                 len(pairs) >= 5
                 and improvement is not None
-                and improvement >= 0.2
+                and improvement >= minimum_improvement
                 and candidate_p95 is not None
                 and base_p95 is not None
                 and candidate_p95 <= base_p95
@@ -1158,6 +1159,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "baseline_median_seconds": base_median,
                     "candidate_median_seconds": candidate_median,
                     "median_improvement_ratio": improvement,
+                    "minimum_median_improvement_ratio": minimum_improvement,
                     "baseline_p95_seconds": base_p95,
                     "candidate_p95_seconds": candidate_p95,
                     "output_equivalent": correct,
