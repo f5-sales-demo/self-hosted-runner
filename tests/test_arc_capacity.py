@@ -466,6 +466,45 @@ class ArcCapacityTests(unittest.TestCase):
             MODULE.summarize_kubernetes(resources)["quotas"][0]["name"],
         )
 
+    def test_live_candidate_pod_keeps_runner_profile_not_node_profile(self) -> None:
+        resources = {
+            "node_metrics": [],
+            "pod_metrics": [],
+            "nodes": {
+                "items": [
+                    {
+                        "metadata": {
+                            "name": "d16-node",
+                            "labels": {"runner-profile": "compute"},
+                        },
+                        "spec": {},
+                        "status": {"conditions": []},
+                    }
+                ]
+            },
+            "pods": {
+                "items": [
+                    {
+                        "metadata": {
+                            "name": "candidate-runner",
+                            "namespace": "arc-runners-xcsh-compute-bun-candidate",
+                            "labels": {
+                                "actions.github.com/scale-set-name": "xcsh-compute-bun-candidate"
+                            },
+                        },
+                        "spec": {"nodeName": "d16-node"},
+                        "status": {"conditions": [], "containerStatuses": []},
+                    }
+                ]
+            },
+            "events": {"items": []},
+            "runner_sets": {"items": []},
+            "azure_quotas": [],
+        }
+
+        summary = MODULE.summarize_kubernetes(resources)
+        self.assertEqual("compute-bun-candidate", summary["pods"][0]["profile"])
+
     def test_kubernetes_summary_accepts_null_pending_status(self) -> None:
         resources = {
             "node_metrics": [],

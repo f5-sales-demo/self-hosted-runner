@@ -704,12 +704,15 @@ def summarize_kubernetes(resources: dict) -> dict:
             name,
             *[value for value in labels.values() if isinstance(value, str)],
         }
+        runner_profile = managed_profile(
+            [value for value in labels.values() if isinstance(value, str)]
+        ) or (nodes_by_name.get(node_name) or {}).get("profile")
         pods.append(
             {
                 "namespace": namespace,
                 "name": name,
                 "identities": sorted(identity for identity in identities if identity),
-                "profile": (nodes_by_name.get(node_name) or {}).get("profile"),
+                "profile": runner_profile,
                 "node": node_name,
                 "created_at": metadata.get("creationTimestamp"),
                 "scheduled_at": scheduled.get("lastTransitionTime")
