@@ -921,6 +921,69 @@ def summarize_pod_stability(pods: list[dict]) -> list[dict]:
     ]
 
 
+def f32_cotenancy_summary(samples: list[dict]) -> dict:
+    """Prove that the four-job F32 burst actually shared a node."""
+    burst_samples = [
+        sample
+        for sample in samples
+        if BURST_PATTERNS["f32"].match(str(sample.get("name") or ""))
+    ]
+    intervals_by_node: dict[str, list[tuple[datetime, datetime]]] = {}
+    correlated = 0
+    runner_names = set()
+    for sample in burst_samples:
+        pod = sample.get("pod")
+        started = parse_time(sample.get("started_at"))
+        completed = parse_time(sample.get("completed_at"))
+        node = pod.get("node") if isinstance(pod, dict) else None
+        runner_name = sample.get("runner_name")
+        if (
+            not isinstance(node, str)
+            or not node
+            or not isinstance(runner_name, str)
+            or not runner_name
+            or not started
+            or not completed
+            or completed <= started
+        ):
+            continue
+        correlated += 1
+        runner_names.add(runner_name)
+        intervals_by_node.setdefault(node, []).append((started, completed))
+
+    peak_by_node = {}
+    for node, intervals in intervals_by_node.items():
+        events = [
+            event
+            for started, completed in intervals
+            for event in ((started, 1), (completed, -1))
+        ]
+        concurrent = peak = 0
+        for _, delta in sorted(events, key=lambda event: (event[0], event[1])):
+            concurrent += delta
+            peak = max(peak, concurrent)
+        peak_by_node[node] = peak
+
+    cotenant_nodes = sorted(node for node, peak in peak_by_node.items() if peak >= 2)
+    maximum = max(peak_by_node.values(), default=0)
+    successful = sum(sample.get("conclusion") == "success" for sample in burst_samples)
+    return {
+        "jobs": len(burst_samples),
+        "successful_jobs": successful,
+        "correlated_jobs": correlated,
+        "unique_runners": len(runner_names),
+        "nodes": len(intervals_by_node),
+        "maximum_concurrent_runners_per_node": maximum,
+        "nodes_with_two_runner_overlap": cotenant_nodes,
+        "observed": bool(cotenant_nodes),
+        "qualifies": len(burst_samples) == 4
+        and successful == 4
+        and correlated == 4
+        and len(runner_names) == 4
+        and maximum == 2,
+    }
+
+
 def load_node_watch(path: Path) -> dict:
     digest = hashlib.sha256()
     latest: dict[str, tuple[str, str | None, dict]] = {}
@@ -2093,6 +2156,7 @@ def collect(args, policy: dict) -> dict:
         "selected_run_pod_stability_summary": summarize_pod_stability(
             list(selected_pods.values())
         ),
+        "f32_cotenancy_summary": f32_cotenancy_summary(samples),
         "pod_observer": {
             key: value for key, value in pod_observer.items() if key != "pods"
         }
@@ -2166,6 +2230,7 @@ def main(argv=None) -> int:
             "burst_cost_comparisons",
             "pod_stability_summary",
             "selected_run_pod_stability_summary",
+            "f32_cotenancy_summary",
             "workload_reports",
             "node_filesystem_reports",
             "node_filesystem_summary",
@@ -2175,6 +2240,8 @@ def main(argv=None) -> int:
             default = {} if key == "repository_cap_recommendations" else []
             if key == "price_evidence":
                 default = None
+            elif key == "f32_cotenancy_summary":
+                default = f32_cotenancy_summary([])
             result[key] = evidence.get(key, default)
         print(json.dumps(result, sort_keys=True))
     return 0

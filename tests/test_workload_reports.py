@@ -223,6 +223,47 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertEqual(1, summary["oom_kills"])
         self.assertFalse(summary["stable"])
 
+    def test_f32_cotenancy_requires_four_successes_and_observed_overlap(self) -> None:
+        samples = []
+        for slot in range(1, 5):
+            node = "f32-node-a" if slot <= 2 else "f32-node-b"
+            samples.append(
+                {
+                    "name": f"F32 four-job burst / slot-{slot}",
+                    "conclusion": "success",
+                    "runner_name": f"runner-{slot}",
+                    "started_at": "2026-09-10T12:00:00Z",
+                    "completed_at": "2026-09-10T12:10:00Z",
+                    "pod": {"node": node},
+                }
+            )
+
+        summary = MODULE.f32_cotenancy_summary(samples)
+        self.assertEqual(4, summary["jobs"])
+        self.assertEqual(4, summary["successful_jobs"])
+        self.assertEqual(4, summary["correlated_jobs"])
+        self.assertEqual(4, summary["unique_runners"])
+        self.assertEqual(2, summary["nodes"])
+        self.assertEqual(2, summary["maximum_concurrent_runners_per_node"])
+        self.assertEqual(
+            ["f32-node-a", "f32-node-b"], summary["nodes_with_two_runner_overlap"]
+        )
+        self.assertTrue(summary["observed"])
+        self.assertTrue(summary["qualifies"])
+
+        for slot, sample in enumerate(samples, 1):
+            sample["pod"] = {"node": f"f32-node-{slot}"}
+        summary = MODULE.f32_cotenancy_summary(samples)
+        self.assertEqual(1, summary["maximum_concurrent_runners_per_node"])
+        self.assertFalse(summary["observed"])
+        self.assertFalse(summary["qualifies"])
+
+        samples[-1]["conclusion"] = "failure"
+        samples[-1]["pod"] = {"node": "f32-node-1"}
+        summary = MODULE.f32_cotenancy_summary(samples)
+        self.assertTrue(summary["observed"])
+        self.assertFalse(summary["qualifies"])
+
     def test_profile_schema_validation_rejects_missing_or_invalid_fields(self) -> None:
         with self.assertRaises(ValueError):
             MODULE.validate_workload_profile({"schema_version": 1})
