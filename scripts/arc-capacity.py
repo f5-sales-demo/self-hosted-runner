@@ -76,6 +76,12 @@ DOCKER_PROFILE_REQUIRED = {
     "observer",
 }
 SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+NODE_FILESYSTEM_REQUIRED = {
+    "filesystem_bytes",
+    "used_bytes",
+    "available_bytes",
+    "used_ratio",
+}
 
 
 def _integer_map(value: object, name: str) -> dict:
@@ -341,6 +347,27 @@ def validate_workload_profile(profile: object) -> dict:
     ):
         raise TypeError("invalid workload signal")
     return profile
+
+
+def validate_node_filesystem(report: object) -> dict:
+    if not isinstance(report, dict) or set(report) != NODE_FILESYSTEM_REQUIRED:
+        raise TypeError("node filesystem report fields do not match the contract")
+    for key in ("filesystem_bytes", "used_bytes", "available_bytes"):
+        value = report[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise TypeError(f"invalid node filesystem counter: {key}")
+    ratio = report["used_ratio"]
+    if (
+        isinstance(ratio, bool)
+        or not isinstance(ratio, (int, float))
+        or not 0 <= ratio <= 1
+    ):
+        raise TypeError("invalid node filesystem used ratio")
+    if report["used_bytes"] > report["filesystem_bytes"]:
+        raise ValueError("node filesystem used bytes exceed its capacity")
+    if report["available_bytes"] > report["filesystem_bytes"]:
+        raise ValueError("node filesystem available bytes exceed its capacity")
+    return report
 
 
 def parse_time(value: str | None) -> datetime | None:
@@ -1208,7 +1235,7 @@ def github_workload_profiles(
     since: datetime,
     max_artifacts: int = 200,
     run_ids: list[int] | None = None,
-) -> tuple[list[dict], list[dict]]:
+) -> tuple[list[dict], list[dict], list[dict]]:
     if run_ids:
         pages = []
         for run_id in dict.fromkeys(run_ids):
@@ -1235,7 +1262,7 @@ def github_workload_profiles(
         )
     artifacts = [artifact for page in pages for artifact in page.get("artifacts", [])]
     selected_run_ids = {str(run_id) for run_id in run_ids or []}
-    profiles, rejected = [], []
+    profiles, filesystem_reports, rejected = [], [], []
     for artifact in artifacts:
         if len(profiles) >= max_artifacts:
             break
@@ -1259,9 +1286,15 @@ def github_workload_profiles(
             continue
         try:
             artifact_profiles = []
+            artifact_filesystem = None
             with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
                 for name in archive.namelist():
                     member = PurePosixPath(name)
+                    if member == PurePosixPath("node-filesystem.json"):
+                        artifact_filesystem = validate_node_filesystem(
+                            json.loads(archive.read(name))
+                        )
+                        continue
                     if member.suffix != ".json" or not (
                         member.name == "profile.json" or "profiles" in member.parts
                     ):
@@ -1274,6 +1307,25 @@ def github_workload_profiles(
                         artifact_profiles.append(profile)
             if not artifact_profiles:
                 raise ValueError("artifact contains no selected workload profiles")
+            if artifact_filesystem:
+                identity = artifact_profiles[0]
+                filesystem_reports.append(
+                    {
+                        "artifact_id": artifact["id"],
+                        "artifact_name": artifact.get("name"),
+                        "repository": identity.get("repository"),
+                        "run_id": identity.get("run_id"),
+                        "job_id": identity.get("job_id"),
+                        "runner_name": identity.get("runner_name"),
+                        "runner_profile": identity.get("runner_profile"),
+                        "variant": identity.get("variant"),
+                        "pair_id": identity.get("pair_id"),
+                        "cache_state": identity.get("cache_state"),
+                        **artifact_filesystem,
+                        "disk_below_70_percent": artifact_filesystem["used_ratio"]
+                        < 0.7,
+                    }
+                )
             profiles.extend(artifact_profiles)
         except (
             ValueError,
@@ -1285,7 +1337,35 @@ def github_workload_profiles(
             rejected.append(
                 {"artifact_id": artifact["id"], "reason": "invalid_profile"}
             )
-    return profiles, rejected
+    return profiles, filesystem_reports, rejected
+
+
+def aggregate_node_filesystems(reports: list[dict]) -> list[dict]:
+    groups: dict[tuple, list[dict]] = {}
+    for report in reports:
+        key = (
+            report.get("repository"),
+            report.get("variant"),
+            report.get("cache_state"),
+            report.get("runner_profile"),
+        )
+        groups.setdefault(key, []).append(report)
+    return [
+        {
+            "repository": key[0],
+            "variant": key[1],
+            "cache_state": key[2],
+            "runner_profile": key[3],
+            "runs": len(values),
+            "max_used_ratio": max(value["used_ratio"] for value in values),
+            "disk_below_70_percent": all(
+                value["disk_below_70_percent"] for value in values
+            ),
+        }
+        for key, values in sorted(
+            groups.items(), key=lambda item: tuple(str(part) for part in item[0])
+        )
+    ]
 
 
 def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
@@ -1526,7 +1606,7 @@ def cap_recommendations(samples: list[dict], policy: dict, existing: dict) -> di
 def collect(args, policy: dict) -> dict:
     now = datetime.now(UTC)
     since = now - timedelta(days=args.days)
-    jobs, profiles, rejected = [], [], []
+    jobs, profiles, filesystem_reports, rejected = [], [], [], []
     for repository in args.repository:
         repository_jobs = github_jobs(repository, since, args.max_runs, args.run_id)
         cutoff = parse_time(policy.get("baseline_not_before", {}).get(repository))
@@ -1537,10 +1617,11 @@ def collect(args, policy: dict) -> dict:
                 if (parse_time(job.get("run_created_at")) or since) >= cutoff
             ]
         jobs.extend(repository_jobs)
-        found, invalid = github_workload_profiles(
+        found, found_filesystems, invalid = github_workload_profiles(
             repository, since, args.max_artifacts, args.run_id
         )
         profiles.extend(found)
+        filesystem_reports.extend(found_filesystems)
         rejected.extend({"repository": repository, **item} for item in invalid)
     kubernetes = kubernetes_snapshot()
     summary = summarize_kubernetes(kubernetes)
@@ -1563,6 +1644,8 @@ def collect(args, policy: dict) -> dict:
         "job_timing_reports": aggregate_job_timings(jobs),
         "burst_clearance_comparisons": burst_clearance_comparisons(jobs),
         "workload_reports": aggregate_workload_profiles(profiles),
+        "node_filesystem_reports": filesystem_reports,
+        "node_filesystem_summary": aggregate_node_filesystems(filesystem_reports),
         "performance_comparisons": performance_comparisons(profiles),
         "repository_cap_recommendations": cap_recommendations(
             samples, policy, repository_caps()
@@ -1634,6 +1717,8 @@ def main(argv=None) -> int:
             "job_timing_reports",
             "burst_clearance_comparisons",
             "workload_reports",
+            "node_filesystem_reports",
+            "node_filesystem_summary",
             "performance_comparisons",
             "rejected_workload_profiles",
         ):

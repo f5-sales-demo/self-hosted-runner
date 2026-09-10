@@ -356,11 +356,35 @@ class WorkloadReportTests(unittest.TestCase):
                 return_value=SimpleNamespace(returncode=0, stdout=payload.getvalue()),
             ),
         ):
-            profiles, rejected = MODULE.github_workload_profiles(
+            profiles, filesystems, rejected = MODULE.github_workload_profiles(
                 "example/repo", datetime(2026, 8, 27, tzinfo=UTC)
             )
         self.assertEqual([], profiles)
+        self.assertEqual([], filesystems)
         self.assertEqual([{"artifact_id": 7, "reason": "invalid_profile"}], rejected)
+
+    def test_node_filesystem_reports_enforce_the_seventy_percent_gate(self) -> None:
+        reports = [
+            {
+                "repository": "f5-sales-demo/xcsh",
+                "variant": "f32",
+                "cache_state": "cold",
+                "runner_profile": "compute-f32-candidate",
+                "used_ratio": ratio,
+                "disk_below_70_percent": ratio < 0.7,
+            }
+            for ratio in (0.56, 0.69)
+        ]
+        summary = MODULE.aggregate_node_filesystems(reports)[0]
+        self.assertEqual(2, summary["runs"])
+        self.assertEqual(0.69, summary["max_used_ratio"])
+        self.assertTrue(summary["disk_below_70_percent"])
+
+        reports[-1]["used_ratio"] = 0.7
+        reports[-1]["disk_below_70_percent"] = False
+        self.assertFalse(
+            MODULE.aggregate_node_filesystems(reports)[0]["disk_below_70_percent"]
+        )
 
     def test_dependency_wait_is_not_assignment_latency(self) -> None:
         labels = ["managed-socketless"]

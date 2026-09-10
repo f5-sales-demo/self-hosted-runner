@@ -102,7 +102,17 @@ class ArcCapacityTests(unittest.TestCase):
         archive_bytes = io.BytesIO()
         with zipfile.ZipFile(archive_bytes, "w") as archive:
             archive.writestr("profiles/install.json", json.dumps({"profile": 1}))
-            archive.writestr("node-filesystem.json", json.dumps({"used_ratio": 0.5}))
+            archive.writestr(
+                "node-filesystem.json",
+                json.dumps(
+                    {
+                        "filesystem_bytes": 100,
+                        "used_bytes": 50,
+                        "available_bytes": 45,
+                        "used_ratio": 0.5,
+                    }
+                ),
+            )
             archive.writestr("workload-profiles.json", json.dumps([{"profile": 1}]))
         artifact_page = {
             "artifacts": [
@@ -130,11 +140,13 @@ class ArcCapacityTests(unittest.TestCase):
                 MODULE, "validate_workload_profile", side_effect=validate
             ),
         ):
-            profiles, rejected = MODULE.github_workload_profiles(
+            profiles, filesystems, rejected = MODULE.github_workload_profiles(
                 "f5-sales-demo/xcsh", datetime(2026, 9, 10, tzinfo=UTC)
             )
 
         self.assertEqual([{"profile": 1}], profiles)
+        self.assertEqual(0.5, filesystems[0]["used_ratio"])
+        self.assertTrue(filesystems[0]["disk_below_70_percent"])
         self.assertEqual([], rejected)
 
     def test_workload_artifacts_are_queried_and_filtered_by_exact_run(self) -> None:
@@ -171,13 +183,14 @@ class ArcCapacityTests(unittest.TestCase):
                 MODULE, "validate_workload_profile", side_effect=lambda value: value
             ),
         ):
-            profiles, rejected = MODULE.github_workload_profiles(
+            profiles, filesystems, rejected = MODULE.github_workload_profiles(
                 "f5-sales-demo/xcsh",
                 datetime(2026, 9, 11, tzinfo=UTC),
                 run_ids=[34440550597],
             )
 
         self.assertEqual([{"run_id": "34440550597", "profile": 1}], profiles)
+        self.assertEqual([], filesystems)
         self.assertEqual([], rejected)
         self.assertEqual(
             [
