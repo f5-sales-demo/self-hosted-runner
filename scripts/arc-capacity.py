@@ -82,6 +82,16 @@ NODE_FILESYSTEM_REQUIRED = {
     "available_bytes",
     "used_ratio",
 }
+BURST_PATTERNS = {
+    "baseline": re.compile(r"^Current D16 two-slot burst / slot-[1-4]$"),
+    "d16-four": re.compile(r"^Candidate D16 four-slot burst / slot-[1-4]$"),
+    "f32": re.compile(r"^F32 four-job burst / slot-[1-4]$"),
+}
+BURST_COST_MODEL = {
+    "baseline": {"sku": "d16", "runners_per_node": 1, "peak_nodes": 5},
+    "d16-four": {"sku": "d16", "runners_per_node": 1, "peak_nodes": 9},
+    "f32": {"sku": "f32", "runners_per_node": 2, "peak_nodes": 5},
+}
 
 
 def _integer_map(value: object, name: str) -> dict:
@@ -1120,19 +1130,14 @@ def aggregate_job_timings(jobs: list[dict]) -> list[dict]:
     ]
 
 
-def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
-    patterns = {
-        "baseline": re.compile(r"^Current D16 two-slot burst / slot-[1-4]$"),
-        "d16-four": re.compile(r"^Candidate D16 four-slot burst / slot-[1-4]$"),
-        "f32": re.compile(r"^F32 four-job burst / slot-[1-4]$"),
-    }
+def burst_job_groups(jobs: list[dict]) -> dict[tuple[str, int, str], list[dict]]:
     groups: dict[tuple[str, int, str], list[dict]] = {}
     for job in jobs:
         name = str(job.get("name", ""))
         variant = next(
             (
                 candidate
-                for candidate, pattern in patterns.items()
+                for candidate, pattern in BURST_PATTERNS.items()
                 if pattern.fullmatch(name)
             ),
             None,
@@ -1142,6 +1147,11 @@ def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
         if variant is None or not isinstance(run_id, int) or not repository:
             continue
         groups.setdefault((str(repository), run_id, variant), []).append(job)
+    return groups
+
+
+def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
+    groups = burst_job_groups(jobs)
 
     reports = []
     run_keys = sorted({(repository, run_id) for repository, run_id, _ in groups})
@@ -1225,6 +1235,134 @@ def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
                     and improvement is not None
                     and improvement >= 0.2
                     and no_runtime_regression,
+                }
+            )
+    return reports
+
+
+def load_price_evidence(path: Path) -> dict:
+    raw = path.read_bytes()
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise TypeError("price evidence must be a JSON object")
+    currency = payload.get("currency")
+    region = payload.get("region")
+    if not isinstance(currency, str) or not currency:
+        raise TypeError("price evidence currency must be a nonempty string")
+    if region != "canadacentral":
+        raise ValueError("price evidence must be for Canada Central")
+
+    rates = {}
+    expected_skus = {
+        "d16": "Standard_D16ads_v5",
+        "f32": "Standard_F32s_v2",
+    }
+    for key, expected_sku in expected_skus.items():
+        item = payload.get(key)
+        if not isinstance(item, dict) or item.get("armSkuName") != expected_sku:
+            raise ValueError(f"price evidence lacks exact {expected_sku} pricing")
+        if (
+            item.get("currencyCode") != currency
+            or item.get("unitOfMeasure") != "1 Hour"
+        ):
+            raise ValueError(f"price evidence has incompatible {expected_sku} units")
+        rate = item.get("unitPrice")
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)) or rate <= 0:
+            raise TypeError(f"price evidence has invalid {expected_sku} hourly rate")
+        rates[key] = float(rate)
+
+    current_ceiling = rates["d16"] * BURST_COST_MODEL["baseline"]["peak_nodes"]
+    maximum_ceiling = current_ceiling * 2
+    peak_hourly_costs = {
+        variant: rates[model["sku"]] * model["peak_nodes"]
+        for variant, model in BURST_COST_MODEL.items()
+    }
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{hashlib.sha256(raw).hexdigest()}",
+        "collected_at": payload.get("collected_at"),
+        "source": payload.get("source"),
+        "region": region,
+        "currency": currency,
+        "vm_hourly_rates": rates,
+        "runner_slot_hourly_rates": {
+            variant: rates[model["sku"]] / model["runners_per_node"]
+            for variant, model in BURST_COST_MODEL.items()
+        },
+        "current_peak_hourly_cost": current_ceiling,
+        "maximum_peak_hourly_cost": maximum_ceiling,
+        "candidate_peak_hourly_costs": {
+            key: peak_hourly_costs[key] for key in ("d16-four", "f32")
+        },
+        "candidate_peak_below_limit": {
+            key: peak_hourly_costs[key] < maximum_ceiling for key in ("d16-four", "f32")
+        },
+    }
+
+
+def _runner_cost(jobs: list[dict], slot_hourly_rate: float) -> dict:
+    durations = [
+        float(job["duration_seconds"])
+        for job in jobs
+        if isinstance(job.get("duration_seconds"), (int, float))
+        and not isinstance(job.get("duration_seconds"), bool)
+        and job["duration_seconds"] >= 0
+    ]
+    successes = sum(job.get("conclusion") == "success" for job in jobs)
+    complete = len(jobs) == len(durations) == 4
+    total_cost = sum(durations) * slot_hourly_rate / 3600 if complete else None
+    return {
+        "jobs": len(jobs),
+        "successful_jobs": successes,
+        "runner_slot_hours": sum(durations) / 3600 if complete else None,
+        "total_runner_cost": total_cost,
+        "cost_per_successful_workflow": total_cost / successes
+        if total_cost is not None and successes
+        else None,
+        "stable": complete and successes == 4,
+    }
+
+
+def burst_cost_comparisons(jobs: list[dict], pricing: dict | None) -> list[dict]:
+    if not pricing:
+        return []
+    groups = burst_job_groups(jobs)
+    rates = pricing["runner_slot_hourly_rates"]
+    peak_costs = pricing["candidate_peak_hourly_costs"]
+    peak_gate = pricing["candidate_peak_below_limit"]
+    reports = []
+    run_keys = sorted({(repository, run_id) for repository, run_id, _ in groups})
+    for repository, run_id in run_keys:
+        baseline = _runner_cost(
+            groups.get((repository, run_id, "baseline"), []), rates["baseline"]
+        )
+        for variant in ("d16-four", "f32"):
+            candidate = _runner_cost(
+                groups.get((repository, run_id, variant), []), rates[variant]
+            )
+            baseline_cost = baseline["cost_per_successful_workflow"]
+            candidate_cost = candidate["cost_per_successful_workflow"]
+            cost_not_increased = (
+                baseline_cost is not None
+                and candidate_cost is not None
+                and candidate_cost <= baseline_cost
+            )
+            reports.append(
+                {
+                    "repository": repository,
+                    "run_id": run_id,
+                    "variant": variant,
+                    "currency": pricing["currency"],
+                    "baseline": baseline,
+                    "candidate": candidate,
+                    "cost_not_increased": cost_not_increased,
+                    "candidate_peak_hourly_cost": peak_costs[variant],
+                    "maximum_peak_hourly_cost": pricing["maximum_peak_hourly_cost"],
+                    "peak_below_twice_current": peak_gate[variant],
+                    "qualifies": baseline["stable"]
+                    and candidate["stable"]
+                    and cost_not_increased
+                    and peak_gate[variant],
                 }
             )
     return reports
@@ -1632,6 +1770,9 @@ def collect(args, policy: dict) -> dict:
     if pod_observer:
         merge_observed_pods(summary, pod_observer["pods"])
     samples = correlate_jobs(jobs, summary)
+    price_evidence = (
+        load_price_evidence(args.price_evidence) if args.price_evidence else None
+    )
     return {
         "schema_version": 2,
         "collected_at": now.isoformat(),
@@ -1643,6 +1784,8 @@ def collect(args, policy: dict) -> dict:
         "rejected_workload_profiles": rejected,
         "job_timing_reports": aggregate_job_timings(jobs),
         "burst_clearance_comparisons": burst_clearance_comparisons(jobs),
+        "price_evidence": price_evidence,
+        "burst_cost_comparisons": burst_cost_comparisons(jobs, price_evidence),
         "workload_reports": aggregate_workload_profiles(profiles),
         "node_filesystem_reports": filesystem_reports,
         "node_filesystem_summary": aggregate_node_filesystems(filesystem_reports),
@@ -1690,6 +1833,11 @@ def main(argv=None) -> int:
         type=int,
         help="collect only this workflow run (repeatable; requires one repository)",
     )
+    collect_parser.add_argument(
+        "--price-evidence",
+        type=Path,
+        help="validated Canada Central D16/F32 hourly price evidence",
+    )
     collect_parser.add_argument("--output", type=Path)
     evaluate_parser = subparsers.add_parser("evaluate")
     evaluate_parser.add_argument("evidence", type=Path)
@@ -1716,15 +1864,18 @@ def main(argv=None) -> int:
             "repository_cap_recommendations",
             "job_timing_reports",
             "burst_clearance_comparisons",
+            "price_evidence",
+            "burst_cost_comparisons",
             "workload_reports",
             "node_filesystem_reports",
             "node_filesystem_summary",
             "performance_comparisons",
             "rejected_workload_profiles",
         ):
-            result[key] = evidence.get(
-                key, [] if key != "repository_cap_recommendations" else {}
-            )
+            default = {} if key == "repository_cap_recommendations" else []
+            if key == "price_evidence":
+                default = None
+            result[key] = evidence.get(key, default)
         print(json.dumps(result, sort_keys=True))
     return 0
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import io
 import json
+import tempfile
 import unittest
 import zipfile
 from datetime import UTC, datetime
@@ -291,6 +292,104 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertTrue(comparisons["d16-four"]["no_p95_runtime_regression"])
         self.assertTrue(comparisons["d16-four"]["qualifies"])
         self.assertTrue(comparisons["f32"]["qualifies"])
+
+    def test_price_evidence_enforces_peak_and_per_workflow_cost_gates(self) -> None:
+        payload = {
+            "collected_at": "2026-09-10T09:55:33Z",
+            "source": "https://prices.azure.com/api/retail/prices",
+            "region": "canadacentral",
+            "currency": "USD",
+            "d16": {
+                "armSkuName": "Standard_D16ads_v5",
+                "currencyCode": "USD",
+                "unitOfMeasure": "1 Hour",
+                "unitPrice": 0.92,
+            },
+            "f32": {
+                "armSkuName": "Standard_F32s_v2",
+                "currencyCode": "USD",
+                "unitOfMeasure": "1 Hour",
+                "unitPrice": 1.482,
+            },
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "retail-prices.json"
+            path.write_text(json.dumps(payload), encoding="utf-8")
+            pricing = MODULE.load_price_evidence(path)
+
+        self.assertEqual(0.741, pricing["runner_slot_hourly_rates"]["f32"])
+        self.assertAlmostEqual(8.28, pricing["candidate_peak_hourly_costs"]["d16-four"])
+        self.assertAlmostEqual(7.41, pricing["candidate_peak_hourly_costs"]["f32"])
+        self.assertAlmostEqual(9.2, pricing["maximum_peak_hourly_cost"])
+        self.assertTrue(all(pricing["candidate_peak_below_limit"].values()))
+        self.assertRegex(pricing["sha256"], r"^sha256:[0-9a-f]{64}$")
+
+        jobs = []
+        variants = {
+            "Current D16 two-slot burst": 60,
+            "Candidate D16 four-slot burst": 50,
+            "F32 four-job burst": 70,
+        }
+        for name, duration in variants.items():
+            for slot in range(1, 5):
+                jobs.append(
+                    {
+                        "repository": "f5-sales-demo/xcsh",
+                        "run_id": 123,
+                        "name": f"{name} / slot-{slot}",
+                        "duration_seconds": duration,
+                        "conclusion": "success",
+                    }
+                )
+
+        comparisons = {
+            item["variant"]: item
+            for item in MODULE.burst_cost_comparisons(jobs, pricing)
+        }
+        self.assertTrue(comparisons["d16-four"]["qualifies"])
+        self.assertTrue(comparisons["f32"]["qualifies"])
+        self.assertLess(
+            comparisons["f32"]["candidate"]["cost_per_successful_workflow"],
+            comparisons["f32"]["baseline"]["cost_per_successful_workflow"],
+        )
+
+        for job in jobs:
+            if job["name"].startswith("F32 four-job burst"):
+                job["duration_seconds"] = 100
+        comparison = {
+            item["variant"]: item
+            for item in MODULE.burst_cost_comparisons(jobs, pricing)
+        }["f32"]
+        self.assertFalse(comparison["cost_not_increased"])
+        self.assertFalse(comparison["qualifies"])
+
+    def test_price_evidence_requires_exact_region_skus_and_units(self) -> None:
+        payload = {
+            "region": "canadacentral",
+            "currency": "USD",
+            "d16": {
+                "armSkuName": "Standard_D16ads_v5",
+                "currencyCode": "USD",
+                "unitOfMeasure": "1 Hour",
+                "unitPrice": 0.92,
+            },
+            "f32": {
+                "armSkuName": "Standard_F32s_v2",
+                "currencyCode": "USD",
+                "unitOfMeasure": "1 Hour",
+                "unitPrice": 1.482,
+            },
+        }
+        for field, value in (
+            ("region", "eastus"),
+            ("currency", "CAD"),
+        ):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as directory:
+                candidate = {**payload, field: value}
+                path = Path(directory) / "prices.json"
+                path.write_text(json.dumps(candidate), encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    MODULE.load_price_evidence(path)
 
     def test_invalid_artifact_is_rejected_without_partial_profiles(self) -> None:
         valid = {
