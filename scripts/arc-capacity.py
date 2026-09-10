@@ -1093,6 +1093,116 @@ def aggregate_job_timings(jobs: list[dict]) -> list[dict]:
     ]
 
 
+def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
+    patterns = {
+        "baseline": re.compile(r"^Current D16 two-slot burst / slot-[1-4]$"),
+        "d16-four": re.compile(r"^Candidate D16 four-slot burst / slot-[1-4]$"),
+        "f32": re.compile(r"^F32 four-job burst / slot-[1-4]$"),
+    }
+    groups: dict[tuple[str, int, str], list[dict]] = {}
+    for job in jobs:
+        name = str(job.get("name", ""))
+        variant = next(
+            (
+                candidate
+                for candidate, pattern in patterns.items()
+                if pattern.fullmatch(name)
+            ),
+            None,
+        )
+        run_id = job.get("run_id")
+        repository = job.get("repository")
+        if variant is None or not isinstance(run_id, int) or not repository:
+            continue
+        groups.setdefault((str(repository), run_id, variant), []).append(job)
+
+    reports = []
+    run_keys = sorted({(repository, run_id) for repository, run_id, _ in groups})
+    for repository, run_id in run_keys:
+        baseline = groups.get((repository, run_id, "baseline"), [])
+        baseline_queued = [parse_time(job.get("queued_at")) for job in baseline]
+        baseline_completed = [parse_time(job.get("completed_at")) for job in baseline]
+        baseline_durations = [
+            float(job["duration_seconds"])
+            for job in baseline
+            if isinstance(job.get("duration_seconds"), (int, float))
+            and not isinstance(job.get("duration_seconds"), bool)
+        ]
+        baseline_clearance = (
+            (max(baseline_completed) - min(baseline_queued)).total_seconds()
+            if len(baseline) == 4 and all(baseline_queued) and all(baseline_completed)
+            else None
+        )
+        baseline_success = len(baseline) == 4 and all(
+            job.get("conclusion") == "success" for job in baseline
+        )
+        baseline_p95 = (
+            percentile95(baseline_durations)
+            if len(baseline_durations) == len(baseline) == 4
+            else None
+        )
+        for variant in ("d16-four", "f32"):
+            candidate = groups.get((repository, run_id, variant), [])
+            candidate_queued = [parse_time(job.get("queued_at")) for job in candidate]
+            candidate_completed = [
+                parse_time(job.get("completed_at")) for job in candidate
+            ]
+            candidate_durations = [
+                float(job["duration_seconds"])
+                for job in candidate
+                if isinstance(job.get("duration_seconds"), (int, float))
+                and not isinstance(job.get("duration_seconds"), bool)
+            ]
+            candidate_clearance = (
+                (max(candidate_completed) - min(candidate_queued)).total_seconds()
+                if len(candidate) == 4
+                and all(candidate_queued)
+                and all(candidate_completed)
+                else None
+            )
+            candidate_success = len(candidate) == 4 and all(
+                job.get("conclusion") == "success" for job in candidate
+            )
+            candidate_p95 = (
+                percentile95(candidate_durations)
+                if len(candidate_durations) == len(candidate) == 4
+                else None
+            )
+            improvement = (
+                (baseline_clearance - candidate_clearance) / baseline_clearance
+                if baseline_clearance and candidate_clearance is not None
+                else None
+            )
+            no_runtime_regression = (
+                baseline_p95 is not None
+                and candidate_p95 is not None
+                and candidate_p95 <= baseline_p95
+            )
+            reports.append(
+                {
+                    "repository": repository,
+                    "run_id": run_id,
+                    "variant": variant,
+                    "baseline_jobs": len(baseline),
+                    "candidate_jobs": len(candidate),
+                    "baseline_clearance_seconds": baseline_clearance,
+                    "candidate_clearance_seconds": candidate_clearance,
+                    "clearance_improvement_ratio": improvement,
+                    "minimum_clearance_improvement_ratio": 0.2,
+                    "baseline_p95_runtime_seconds": baseline_p95,
+                    "candidate_p95_runtime_seconds": candidate_p95,
+                    "no_p95_runtime_regression": no_runtime_regression,
+                    "stable": baseline_success and candidate_success,
+                    "qualifies": baseline_success
+                    and candidate_success
+                    and improvement is not None
+                    and improvement >= 0.2
+                    and no_runtime_regression,
+                }
+            )
+    return reports
+
+
 def github_workload_profiles(
     repository: str,
     since: datetime,
@@ -1289,6 +1399,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
         )
         for variant in variants:
             minimum_improvement = 0.0 if variant == "bun-1.4.2" else 0.2
+            required_pairs = 4 if str(key[1]).endswith("-burst") else 5
             candidate = {
                 item.get("pair_id"): item
                 for item in values
@@ -1323,7 +1434,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             base_p95 = percentile95(base_values)
             candidate_p95 = percentile95(candidate_values)
             qualifies = (
-                len(pairs) >= 5
+                len(pairs) >= required_pairs
                 and improvement is not None
                 and improvement >= minimum_improvement
                 and candidate_p95 is not None
@@ -1340,6 +1451,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "cache_state": key[2],
                     "variant": variant,
                     "paired_runs": len(pairs),
+                    "required_pairs": required_pairs,
                     "baseline_median_seconds": base_median,
                     "candidate_median_seconds": candidate_median,
                     "median_improvement_ratio": improvement,
@@ -1449,6 +1561,7 @@ def collect(args, policy: dict) -> dict:
         "workload_profiles": profiles,
         "rejected_workload_profiles": rejected,
         "job_timing_reports": aggregate_job_timings(jobs),
+        "burst_clearance_comparisons": burst_clearance_comparisons(jobs),
         "workload_reports": aggregate_workload_profiles(profiles),
         "performance_comparisons": performance_comparisons(profiles),
         "repository_cap_recommendations": cap_recommendations(
@@ -1519,6 +1632,7 @@ def main(argv=None) -> int:
         for key in (
             "repository_cap_recommendations",
             "job_timing_reports",
+            "burst_clearance_comparisons",
             "workload_reports",
             "performance_comparisons",
             "rejected_workload_profiles",

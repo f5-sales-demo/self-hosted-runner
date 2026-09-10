@@ -74,6 +74,20 @@ class WorkloadReportTests(unittest.TestCase):
             )
         self.assertFalse(MODULE.performance_comparisons(profiles)[0]["qualifies"])
 
+    def test_four_paired_burst_slots_meet_the_burst_sample_gate(self) -> None:
+        profiles = []
+        for index in range(4):
+            baseline = profile("baseline", str(index), 100 + index)
+            baseline["phase"] = "test-burst"
+            candidate = profile("f32", str(index), 70 + index)
+            candidate["phase"] = "test-burst"
+            profiles.extend((baseline, candidate))
+
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertEqual(4, comparison["paired_runs"])
+        self.assertEqual(4, comparison["required_pairs"])
+        self.assertTrue(comparison["qualifies"])
+
     def test_bun_candidate_requires_no_regression_not_twenty_percent(self) -> None:
         profiles = []
         for index in range(5):
@@ -226,6 +240,57 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertEqual(20, phases["super_linter"])
         self.assertEqual(6, phases["spectral"])
         self.assertEqual(1, phases["post_processing"])
+
+    def test_burst_clearance_requires_improvement_and_no_runtime_regression(
+        self,
+    ) -> None:
+        jobs = []
+        for slot in range(1, 5):
+            baseline_completed = 60 if slot <= 2 else 120
+            jobs.append(
+                {
+                    "repository": "f5-sales-demo/xcsh",
+                    "run_id": 123,
+                    "name": f"Current D16 two-slot burst / slot-{slot}",
+                    "queued_at": "2026-09-10T09:00:00Z",
+                    "completed_at": f"2026-09-10T09:{baseline_completed // 60:02d}:{baseline_completed % 60:02d}Z",
+                    "duration_seconds": 60,
+                    "conclusion": "success",
+                }
+            )
+            jobs.append(
+                {
+                    "repository": "f5-sales-demo/xcsh",
+                    "run_id": 123,
+                    "name": f"Candidate D16 four-slot burst / slot-{slot}",
+                    "queued_at": "2026-09-10T09:00:00Z",
+                    "completed_at": "2026-09-10T09:01:20Z",
+                    "duration_seconds": 50,
+                    "conclusion": "success",
+                }
+            )
+            jobs.append(
+                {
+                    "repository": "f5-sales-demo/xcsh",
+                    "run_id": 123,
+                    "name": f"F32 four-job burst / slot-{slot}",
+                    "queued_at": "2026-09-10T09:00:00Z",
+                    "completed_at": "2026-09-10T09:01:10Z",
+                    "duration_seconds": 45,
+                    "conclusion": "success",
+                }
+            )
+
+        comparisons = {
+            item["variant"]: item for item in MODULE.burst_clearance_comparisons(jobs)
+        }
+        self.assertEqual({"d16-four", "f32"}, set(comparisons))
+        self.assertAlmostEqual(
+            1 / 3, comparisons["d16-four"]["clearance_improvement_ratio"]
+        )
+        self.assertTrue(comparisons["d16-four"]["no_p95_runtime_regression"])
+        self.assertTrue(comparisons["d16-four"]["qualifies"])
+        self.assertTrue(comparisons["f32"]["qualifies"])
 
     def test_invalid_artifact_is_rejected_without_partial_profiles(self) -> None:
         valid = {
