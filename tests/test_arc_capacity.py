@@ -21,6 +21,48 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ArcCapacityTests(unittest.TestCase):
+    def test_github_jobs_can_select_exact_runs_without_listing_repository_runs(
+        self,
+    ) -> None:
+        run = {
+            "id": 34440550597,
+            "run_attempt": 1,
+            "created_at": "2026-09-10T05:18:37Z",
+        }
+        job = {
+            "id": 456,
+            "name": "benchmark",
+            "status": "completed",
+            "conclusion": "success",
+            "created_at": "2026-09-10T05:29:57Z",
+            "started_at": "2026-09-10T05:30:02Z",
+            "completed_at": "2026-09-10T05:46:28Z",
+            "runner_name": "xcsh-compute-runner",
+            "runner_group_name": "Default",
+            "labels": ["xcsh-compute"],
+            "steps": [],
+        }
+        with mock.patch.object(
+            MODULE, "command_json", side_effect=[run, [{"jobs": [job]}]]
+        ) as command_json:
+            result = MODULE.github_jobs(
+                "f5-sales-demo/xcsh",
+                datetime(2026, 9, 10, tzinfo=UTC),
+                10,
+                [34440550597],
+            )
+
+        self.assertEqual(34440550597, result[0]["run_id"])
+        self.assertEqual(
+            [
+                "gh",
+                "api",
+                "repos/f5-sales-demo/xcsh/actions/runs/34440550597",
+            ],
+            command_json.call_args_list[0].args[0],
+        )
+        self.assertNotIn("actions/runs?", str(command_json.call_args_list))
+
     def test_queued_github_job_has_no_assignment_until_a_runner_exists(self) -> None:
         run = {
             "id": 123,
@@ -93,6 +135,61 @@ class ArcCapacityTests(unittest.TestCase):
 
         self.assertEqual([{"profile": 1}], profiles)
         self.assertEqual([], rejected)
+
+    def test_workload_artifacts_are_queried_and_filtered_by_exact_run(self) -> None:
+        archive_bytes = io.BytesIO()
+        with zipfile.ZipFile(archive_bytes, "w") as archive:
+            archive.writestr(
+                "profiles/selected.json",
+                json.dumps({"run_id": "34440550597", "profile": 1}),
+            )
+            archive.writestr(
+                "profiles/other.json",
+                json.dumps({"run_id": "34440000000", "profile": 2}),
+            )
+        artifact_page = {
+            "artifacts": [
+                {
+                    "id": 789,
+                    "name": "workload-profile-software-baseline-cold-1",
+                    "created_at": "2026-09-10T05:00:00Z",
+                    "expired": False,
+                }
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=archive_bytes.getvalue(), stderr=b""
+        )
+
+        with (
+            mock.patch.object(
+                MODULE, "command_json", return_value=[artifact_page]
+            ) as command_json,
+            mock.patch.object(MODULE.subprocess, "run", return_value=completed),
+            mock.patch.object(
+                MODULE, "validate_workload_profile", side_effect=lambda value: value
+            ),
+        ):
+            profiles, rejected = MODULE.github_workload_profiles(
+                "f5-sales-demo/xcsh",
+                datetime(2026, 9, 11, tzinfo=UTC),
+                run_ids=[34440550597],
+            )
+
+        self.assertEqual(
+            [{"run_id": "34440550597", "profile": 1}], profiles
+        )
+        self.assertEqual([], rejected)
+        self.assertEqual(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                "repos/f5-sales-demo/xcsh/actions/runs/34440550597/artifacts?per_page=100",
+            ],
+            command_json.call_args.args[0],
+        )
 
     def test_repository_cap_formula_is_bounded_and_deterministic(self) -> None:
         self.assertEqual(18, MODULE.recommend_cap(30, 10, 16, 12.1))

@@ -714,18 +714,33 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
     return samples
 
 
-def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
-    created = since.date().isoformat()
-    run_pages = command_json(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/runs?created=>={created}&per_page=100",
+def github_jobs(
+    repository: str,
+    since: datetime,
+    max_runs: int,
+    run_ids: list[int] | None = None,
+) -> list[dict]:
+    if run_ids:
+        runs = [
+            command_json(
+                ["gh", "api", f"repos/{repository}/actions/runs/{run_id}"]
+            )
+            for run_id in dict.fromkeys(run_ids)
         ]
-    )
-    runs = [run for page in run_pages for run in page["workflow_runs"]][:max_runs]
+    else:
+        created = since.date().isoformat()
+        run_pages = command_json(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/runs?created=>={created}&per_page=100",
+            ]
+        )
+        runs = [run for page in run_pages for run in page["workflow_runs"]][
+            :max_runs
+        ]
     jobs = []
     for run in runs:
         run_created = parse_time(run.get("created_at"))
@@ -875,18 +890,37 @@ def aggregate_job_timings(jobs: list[dict]) -> list[dict]:
 
 
 def github_workload_profiles(
-    repository: str, since: datetime, max_artifacts: int = 200
+    repository: str,
+    since: datetime,
+    max_artifacts: int = 200,
+    run_ids: list[int] | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    pages = command_json(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/artifacts?per_page=100",
-        ]
-    )
+    if run_ids:
+        pages = []
+        for run_id in dict.fromkeys(run_ids):
+            pages.extend(
+                command_json(
+                    [
+                        "gh",
+                        "api",
+                        "--paginate",
+                        "--slurp",
+                        f"repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100",
+                    ]
+                )
+            )
+    else:
+        pages = command_json(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/artifacts?per_page=100",
+            ]
+        )
     artifacts = [artifact for page in pages for artifact in page.get("artifacts", [])]
+    selected_run_ids = {str(run_id) for run_id in run_ids or []}
     profiles, rejected = [], []
     for artifact in artifacts:
         if len(profiles) >= max_artifacts:
@@ -896,7 +930,7 @@ def github_workload_profiles(
             not str(artifact.get("name", "")).startswith("workload-profile-")
             or artifact.get("expired")
             or not created
-            or created < since
+            or (not selected_run_ids and created < since)
         ):
             continue
         result = subprocess.run(
@@ -919,9 +953,13 @@ def github_workload_profiles(
                     ):
                         continue
                     profile = validate_workload_profile(json.loads(archive.read(name)))
-                    artifact_profiles.append(profile)
+                    if (
+                        not selected_run_ids
+                        or str(profile.get("run_id")) in selected_run_ids
+                    ):
+                        artifact_profiles.append(profile)
             if not artifact_profiles:
-                raise ValueError("artifact contains no workload profiles")
+                raise ValueError("artifact contains no selected workload profiles")
             profiles.extend(artifact_profiles)
         except (
             ValueError,
@@ -1172,7 +1210,7 @@ def collect(args, policy: dict) -> dict:
     since = now - timedelta(days=args.days)
     jobs, profiles, rejected = [], [], []
     for repository in args.repository:
-        repository_jobs = github_jobs(repository, since, args.max_runs)
+        repository_jobs = github_jobs(repository, since, args.max_runs, args.run_id)
         cutoff = parse_time(policy.get("baseline_not_before", {}).get(repository))
         if cutoff:
             repository_jobs = [
@@ -1181,7 +1219,9 @@ def collect(args, policy: dict) -> dict:
                 if (parse_time(job.get("run_created_at")) or since) >= cutoff
             ]
         jobs.extend(repository_jobs)
-        found, invalid = github_workload_profiles(repository, since, args.max_artifacts)
+        found, invalid = github_workload_profiles(
+            repository, since, args.max_artifacts, args.run_id
+        )
         profiles.extend(found)
         rejected.extend({"repository": repository, **item} for item in invalid)
     kubernetes = kubernetes_snapshot()
@@ -1191,6 +1231,7 @@ def collect(args, policy: dict) -> dict:
         "schema_version": 2,
         "collected_at": now.isoformat(),
         "range": {"start": since.isoformat(), "end": now.isoformat()},
+        "selected_run_ids": [str(run_id) for run_id in args.run_id or []],
         "policy": policy,
         "samples": samples,
         "workload_profiles": profiles,
@@ -1215,10 +1256,18 @@ def main(argv=None) -> int:
     collect_parser.add_argument("--days", type=int, default=30)
     collect_parser.add_argument("--max-runs", type=int, default=200)
     collect_parser.add_argument("--max-artifacts", type=int, default=200)
+    collect_parser.add_argument(
+        "--run-id",
+        action="append",
+        type=int,
+        help="collect only this workflow run (repeatable; requires one repository)",
+    )
     collect_parser.add_argument("--output", type=Path)
     evaluate_parser = subparsers.add_parser("evaluate")
     evaluate_parser.add_argument("evidence", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "collect" and args.run_id and len(args.repository) != 1:
+        collect_parser.error("--run-id requires exactly one --repository")
     policy = json.loads(args.policy.read_text(encoding="utf-8"))
     if args.command == "collect":
         result = collect(args, policy)
