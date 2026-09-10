@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import subprocess
+import tempfile
 import unittest
 import zipfile
 from datetime import UTC, datetime
@@ -176,9 +177,7 @@ class ArcCapacityTests(unittest.TestCase):
                 run_ids=[34440550597],
             )
 
-        self.assertEqual(
-            [{"run_id": "34440550597", "profile": 1}], profiles
-        )
+        self.assertEqual([{"run_id": "34440550597", "profile": 1}], profiles)
         self.assertEqual([], rejected)
         self.assertEqual(
             [
@@ -234,9 +233,7 @@ class ArcCapacityTests(unittest.TestCase):
 
         self.assertTrue(MODULE.classify_warm(demanded, nodes, "compute"))
         self.assertFalse(
-            MODULE.classify_warm(
-                demanded, nodes, "compute", "newly-scaled-node"
-            )
+            MODULE.classify_warm(demanded, nodes, "compute", "newly-scaled-node")
         )
 
     def test_two_consecutive_service_window_breaches_page(self) -> None:
@@ -447,6 +444,111 @@ class ArcCapacityTests(unittest.TestCase):
         summary = MODULE.summarize_kubernetes(resources)
         self.assertFalse(summary["nodes"][0]["schedulable"])
         self.assertEqual([], summary["pods"][0]["images"])
+
+    def test_deleted_runner_pod_watch_retains_assignment_evidence(self) -> None:
+        pod = {
+            "namespace": "arc-runners-xcsh-compute-bun-candidate",
+            "name": "xcsh-compute-bun-candidate-runner-a",
+            "created_at": "2026-09-10T09:00:00Z",
+            "deleted_at": "2026-09-10T09:20:00Z",
+            "scale_set": "xcsh-compute-bun-candidate",
+            "node": "compute-node-a",
+            "phase": "Succeeded",
+            "started_at": "2026-09-10T09:00:04Z",
+            "conditions": [
+                {
+                    "type": "PodScheduled",
+                    "status": "True",
+                    "lastTransitionTime": "2026-09-10T09:00:01Z",
+                }
+            ],
+            "container_statuses": [
+                {
+                    "image": "runner@sha256:abc",
+                    "imageID": "runner@sha256:abc",
+                }
+            ],
+        }
+        events = [
+            {
+                "observed_at": "2026-09-10T09:00:00Z",
+                "event_type": "ADDED",
+                "pod": {**pod, "phase": "Pending", "deleted_at": None},
+            },
+            {
+                "observed_at": "2026-09-10T09:20:00Z",
+                "event_type": "DELETED",
+                "pod": pod,
+            },
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            watch = Path(directory) / "pod-watch.jsonl"
+            watch.write_text(
+                "".join(json.dumps(event) + "\n" for event in events),
+                encoding="utf-8",
+            )
+            observed = MODULE.load_pod_watch(watch)
+            node_watch = Path(directory) / "node-watch.jsonl"
+            node_watch.write_text(
+                json.dumps(
+                    {
+                        "observed_at": "2026-09-10T09:30:00Z",
+                        "event_type": "DELETED",
+                        "node": {
+                            "name": "compute-node-a",
+                            "created_at": "2026-09-10T08:58:00Z",
+                            "profile": "compute",
+                            "unschedulable": False,
+                            "allocatable": {"cpu": "15740m", "memory": "62Gi"},
+                            "conditions": [
+                                {
+                                    "type": "Ready",
+                                    "status": "True",
+                                    "lastTransitionTime": "2026-09-10T08:59:00Z",
+                                }
+                            ],
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            observed_nodes = MODULE.load_node_watch(node_watch)
+
+        summary = {
+            "nodes": [],
+            "pods": [],
+            "runner_sets": [],
+            "quotas": [],
+        }
+        MODULE.merge_observed_nodes(summary, observed_nodes["nodes"])
+        MODULE.merge_observed_pods(summary, observed["pods"])
+        sample = MODULE.correlate_jobs(
+            [
+                {
+                    "job_id": 1,
+                    "runner_name": "xcsh-compute-bun-candidate-runner-a",
+                    "labels": ["xcsh-compute-bun-candidate"],
+                    "queued_at": "2026-09-10T08:59:58Z",
+                    "started_at": "2026-09-10T09:00:05Z",
+                    "assignment_seconds": 7,
+                }
+            ],
+            summary,
+        )[0]
+
+        self.assertEqual(2, observed["event_count"])
+        self.assertEqual(1, observed["pod_count"])
+        self.assertRegex(observed["sha256"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(1, observed_nodes["event_count"])
+        self.assertEqual(1, observed_nodes["node_count"])
+        self.assertEqual("2026-09-10T09:30:00Z", summary["nodes"][0]["removed_at"])
+        self.assertTrue(sample["warm"])
+        self.assertEqual(5, sample["assignment_seconds"])
+        self.assertEqual(7, sample["github_queue_seconds"])
+        self.assertEqual(1, sample["pod_schedule_seconds"])
+        self.assertEqual("Succeeded", sample["pod"]["phase"])
+        self.assertEqual("2026-09-10T09:20:00Z", sample["pod"]["observed_deleted_at"])
 
     def test_slo_breaches_must_be_consecutive_and_unknown_warmth_is_ignored(
         self,

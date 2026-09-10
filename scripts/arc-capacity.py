@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import math
@@ -379,8 +380,10 @@ def classify_warm(
             continue
         ready = parse_time(node.get("ready_at"))
         removed = parse_time(node.get("removed_at"))
-        if ready and ready <= demanded_at and (
-            removed is None or demanded_at < removed
+        if (
+            ready
+            and ready <= demanded_at
+            and (removed is None or demanded_at < removed)
         ):
             return True
     return False
@@ -672,6 +675,181 @@ def summarize_kubernetes(resources: dict) -> dict:
     return {"nodes": nodes, "pods": pods, "runner_sets": runner_sets, "quotas": quotas}
 
 
+def load_pod_watch(path: Path) -> dict:
+    digest = hashlib.sha256()
+    latest: dict[tuple[str, str], dict] = {}
+    event_count = 0
+    with path.open("rb") as stream:
+        for line_number, raw_line in enumerate(stream, 1):
+            digest.update(raw_line)
+            if not raw_line.strip():
+                continue
+            try:
+                event = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError(
+                    f"invalid pod watch JSON on line {line_number}"
+                ) from error
+            pod = event.get("pod") if isinstance(event, dict) else None
+            namespace = pod.get("namespace") if isinstance(pod, dict) else None
+            name = pod.get("name") if isinstance(pod, dict) else None
+            if not isinstance(namespace, str) or not namespace:
+                raise ValueError(
+                    f"pod watch event on line {line_number} lacks a namespace"
+                )
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"pod watch event on line {line_number} lacks a name")
+            latest[(namespace, name)] = pod
+            event_count += 1
+
+    pods = []
+    for (namespace, name), pod in sorted(latest.items()):
+        conditions = pod.get("conditions") or []
+        container_statuses = pod.get("container_statuses") or []
+        if not isinstance(conditions, list) or not isinstance(container_statuses, list):
+            raise TypeError(f"invalid pod watch state for {namespace}/{name}")
+        scheduled = next(
+            (
+                condition
+                for condition in conditions
+                if isinstance(condition, dict)
+                and condition.get("type") == "PodScheduled"
+                and condition.get("status") == "True"
+            ),
+            {},
+        )
+        scale_set = pod.get("scale_set")
+        identities = {name}
+        if isinstance(scale_set, str) and scale_set:
+            identities.add(scale_set)
+        pods.append(
+            {
+                "namespace": namespace,
+                "name": name,
+                "identities": sorted(identities),
+                "profile": managed_profile([scale_set])
+                if isinstance(scale_set, str)
+                else None,
+                "node": pod.get("node"),
+                "created_at": pod.get("created_at"),
+                "scheduled_at": scheduled.get("lastTransitionTime"),
+                "started_at": pod.get("started_at"),
+                "phase": pod.get("phase"),
+                "usage": None,
+                "images": [
+                    status.get("image")
+                    for status in container_statuses
+                    if isinstance(status, dict)
+                ],
+                "image_ids": [
+                    status.get("imageID")
+                    for status in container_statuses
+                    if isinstance(status, dict)
+                ],
+                "image_pull_events": [],
+                "observed_deleted_at": pod.get("deleted_at"),
+            }
+        )
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{digest.hexdigest()}",
+        "event_count": event_count,
+        "pod_count": len(pods),
+        "pods": pods,
+    }
+
+
+def merge_observed_pods(summary: dict, observed_pods: list[dict]) -> None:
+    current = {
+        (pod.get("namespace"), pod.get("name")) for pod in summary.get("pods", [])
+    }
+    summary.setdefault("pods", []).extend(
+        pod
+        for pod in observed_pods
+        if (pod.get("namespace"), pod.get("name")) not in current
+    )
+    summary["pods"].sort(
+        key=lambda pod: (pod.get("namespace") or "", pod.get("name") or "")
+    )
+
+
+def load_node_watch(path: Path) -> dict:
+    digest = hashlib.sha256()
+    latest: dict[str, tuple[str, str | None, dict]] = {}
+    event_count = 0
+    with path.open("rb") as stream:
+        for line_number, raw_line in enumerate(stream, 1):
+            digest.update(raw_line)
+            if not raw_line.strip():
+                continue
+            try:
+                event = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError(
+                    f"invalid node watch JSON on line {line_number}"
+                ) from error
+            node = event.get("node") if isinstance(event, dict) else None
+            name = node.get("name") if isinstance(node, dict) else None
+            event_type = event.get("event_type") if isinstance(event, dict) else None
+            observed_at = event.get("observed_at") if isinstance(event, dict) else None
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"node watch event on line {line_number} lacks a name")
+            if not isinstance(event_type, str) or not event_type:
+                raise ValueError(
+                    f"node watch event on line {line_number} lacks an event type"
+                )
+            if observed_at is not None and not isinstance(observed_at, str):
+                raise TypeError(
+                    f"node watch event on line {line_number} has an invalid timestamp"
+                )
+            latest[name] = (event_type, observed_at, node)
+            event_count += 1
+
+    nodes = []
+    for name, (event_type, observed_at, node) in sorted(latest.items()):
+        conditions = node.get("conditions") or []
+        if not isinstance(conditions, list):
+            raise TypeError(f"invalid node watch state for {name}")
+        ready = next(
+            (
+                condition
+                for condition in conditions
+                if isinstance(condition, dict) and condition.get("type") == "Ready"
+            ),
+            {},
+        )
+        nodes.append(
+            {
+                "name": name,
+                "profile": node.get("profile"),
+                "created_at": node.get("created_at"),
+                "ready_at": ready.get("lastTransitionTime")
+                if ready.get("status") == "True"
+                else None,
+                "removed_at": observed_at if event_type == "DELETED" else None,
+                "schedulable": not node.get("unschedulable", False)
+                and ready.get("status") == "True",
+                "usage": None,
+                "allocatable": node.get("allocatable") or {},
+            }
+        )
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{digest.hexdigest()}",
+        "event_count": event_count,
+        "node_count": len(nodes),
+        "nodes": nodes,
+    }
+
+
+def merge_observed_nodes(summary: dict, observed_nodes: list[dict]) -> None:
+    current = {node.get("name") for node in summary.get("nodes", [])}
+    summary.setdefault("nodes", []).extend(
+        node for node in observed_nodes if node.get("name") not in current
+    )
+    summary["nodes"].sort(key=lambda node: node.get("name") or "")
+
+
 def managed_profile(labels: list[str]) -> str | None:
     for profile in (
         "compute-bun-candidate",
@@ -723,9 +901,7 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
         scheduled = parse_time(pod.get("scheduled_at")) if pod else None
         started = parse_time(job.get("started_at"))
         arc_assignment_seconds = (
-            (started - pod_created).total_seconds()
-            if started and pod_created
-            else None
+            (started - pod_created).total_seconds() if started and pod_created else None
         )
         sample = dict(job)
         sample.update(
@@ -754,9 +930,7 @@ def github_jobs(
 ) -> list[dict]:
     if run_ids:
         runs = [
-            command_json(
-                ["gh", "api", f"repos/{repository}/actions/runs/{run_id}"]
-            )
+            command_json(["gh", "api", f"repos/{repository}/actions/runs/{run_id}"])
             for run_id in dict.fromkeys(run_ids)
         ]
     else:
@@ -770,9 +944,7 @@ def github_jobs(
                 f"repos/{repository}/actions/runs?created=>={created}&per_page=100",
             ]
         )
-        runs = [run for page in run_pages for run in page["workflow_runs"]][
-            :max_runs
-        ]
+        runs = [run for page in run_pages for run in page["workflow_runs"]][:max_runs]
     jobs = []
     for run in runs:
         run_created = parse_time(run.get("created_at"))
@@ -1260,6 +1432,12 @@ def collect(args, policy: dict) -> dict:
         rejected.extend({"repository": repository, **item} for item in invalid)
     kubernetes = kubernetes_snapshot()
     summary = summarize_kubernetes(kubernetes)
+    pod_observer = load_pod_watch(args.pod_watch) if args.pod_watch else None
+    node_observer = load_node_watch(args.node_watch) if args.node_watch else None
+    if node_observer:
+        merge_observed_nodes(summary, node_observer["nodes"])
+    if pod_observer:
+        merge_observed_pods(summary, pod_observer["pods"])
     samples = correlate_jobs(jobs, summary)
     return {
         "schema_version": 2,
@@ -1278,6 +1456,16 @@ def collect(args, policy: dict) -> dict:
         ),
         "kubernetes": kubernetes,
         "kubernetes_summary": summary,
+        "pod_observer": {
+            key: value for key, value in pod_observer.items() if key != "pods"
+        }
+        if pod_observer
+        else None,
+        "node_observer": {
+            key: value for key, value in node_observer.items() if key != "nodes"
+        }
+        if node_observer
+        else None,
     }
 
 
@@ -1290,6 +1478,16 @@ def main(argv=None) -> int:
     collect_parser.add_argument("--days", type=int, default=30)
     collect_parser.add_argument("--max-runs", type=int, default=200)
     collect_parser.add_argument("--max-artifacts", type=int, default=200)
+    collect_parser.add_argument(
+        "--pod-watch",
+        type=Path,
+        help="pod lifecycle JSONL captured while the selected workflow ran",
+    )
+    collect_parser.add_argument(
+        "--node-watch",
+        type=Path,
+        help="node lifecycle JSONL captured while the selected workflow ran",
+    )
     collect_parser.add_argument(
         "--run-id",
         action="append",
