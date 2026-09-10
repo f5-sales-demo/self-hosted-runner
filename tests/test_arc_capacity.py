@@ -213,6 +213,32 @@ class ArcCapacityTests(unittest.TestCase):
         nodes[0]["schedulable"] = False
         self.assertFalse(MODULE.classify_warm(queued, nodes, "compute"))
 
+    def test_warm_classification_uses_the_runner_pods_selected_node(self) -> None:
+        demanded = datetime(2026, 8, 28, 14, tzinfo=UTC)
+        nodes = [
+            {
+                "name": "already-ready-but-full",
+                "profile": "compute",
+                "schedulable": True,
+                "ready_at": "2026-08-28T13:00:00Z",
+                "removed_at": None,
+            },
+            {
+                "name": "newly-scaled-node",
+                "profile": "compute",
+                "schedulable": True,
+                "ready_at": "2026-08-28T14:02:00Z",
+                "removed_at": None,
+            },
+        ]
+
+        self.assertTrue(MODULE.classify_warm(demanded, nodes, "compute"))
+        self.assertFalse(
+            MODULE.classify_warm(
+                demanded, nodes, "compute", "newly-scaled-node"
+            )
+        )
+
     def test_two_consecutive_service_window_breaches_page(self) -> None:
         policy = {
             "timezone": "America/Toronto",

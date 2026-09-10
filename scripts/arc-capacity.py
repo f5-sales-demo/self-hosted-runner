@@ -364,13 +364,24 @@ def recommend_cap(
     )
 
 
-def classify_warm(queued_at: datetime, nodes: list[dict], profile: str) -> bool:
+def classify_warm(
+    demanded_at: datetime,
+    nodes: list[dict],
+    profile: str,
+    node_name: str | None = None,
+) -> bool:
     for node in nodes:
-        if node.get("profile") != profile or not node.get("schedulable", False):
+        if (
+            node.get("profile") != profile
+            or not node.get("schedulable", False)
+            or (node_name and node.get("name") != node_name)
+        ):
             continue
         ready = parse_time(node.get("ready_at"))
         removed = parse_time(node.get("removed_at"))
-        if ready and ready <= queued_at and (removed is None or queued_at < removed):
+        if ready and ready <= demanded_at and (
+            removed is None or demanded_at < removed
+        ):
             return True
     return False
 
@@ -693,7 +704,7 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
         )
         pod_created = parse_time(pod.get("created_at")) if pod else None
         warm = (
-            classify_warm(pod_created, nodes, profile)
+            classify_warm(pod_created, nodes, profile, pod.get("node"))
             if pod_created and profile and pod
             else None
         )
