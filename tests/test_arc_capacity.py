@@ -397,6 +397,7 @@ class ArcCapacityTests(unittest.TestCase):
                         "job_id": f"{warm}-{index}",
                         "queued_at": queued.isoformat(),
                         "started_at": started.isoformat(),
+                        "assignment_seconds": delay,
                         "assignment_slo_eligible": True,
                         "warm": warm,
                     }
@@ -415,7 +416,7 @@ class ArcCapacityTests(unittest.TestCase):
         self.assertTrue(reports["warm"]["qualifies"])
         self.assertTrue(reports["cold"]["qualifies"])
 
-        samples[-1]["started_at"] = (queued + timedelta(seconds=300)).isoformat()
+        samples[-1]["assignment_seconds"] = 300
         reports = {
             item["class"]: item
             for item in MODULE.assignment_slo_summary(samples, policy)

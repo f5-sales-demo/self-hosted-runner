@@ -446,10 +446,13 @@ def assignment_slo_summary(samples: list[dict], policy: dict) -> list[dict]:
                 or sample.get("warm") is not warm
             ):
                 continue
-            queued = parse_time(sample.get("queued_at"))
-            started = parse_time(sample.get("started_at"))
-            if queued and started:
-                values.append((started - queued).total_seconds())
+            value = sample.get("assignment_seconds")
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value >= 0
+            ):
+                values.append(float(value))
         limit = policy["slo_seconds"][f"{kind}_assignment_p95"]
         p95 = percentile95(values)
         reports.append(
@@ -475,17 +478,19 @@ def evaluate(
         eligible = sample.get("assignment_slo_eligible", True)
         queued = parse_time(sample.get("queued_at"))
         if eligible and queued and sample.get("started_at"):
-            started = parse_time(sample["started_at"])
-            assert started is not None
+            assignment = sample.get("assignment_seconds")
             boundary = queued.replace(
                 minute=(queued.minute // interval) * interval, second=0, microsecond=0
             )
             warm = sample.get("warm")
-            if warm is not None:
+            if (
+                warm is not None
+                and isinstance(assignment, (int, float))
+                and not isinstance(assignment, bool)
+                and assignment >= 0
+            ):
                 kind = "warm" if warm else "cold"
-                buckets.setdefault((kind, boundary), []).append(
-                    (started - queued).total_seconds()
-                )
+                buckets.setdefault((kind, boundary), []).append(float(assignment))
         wait = sample.get("assignment_seconds")
         if (
             eligible
@@ -1940,6 +1945,11 @@ def collect(args, policy: dict) -> dict:
     if pod_observer:
         merge_observed_pods(summary, pod_observer["pods"])
     samples = correlate_jobs(jobs, summary)
+    selected_pods = {
+        (sample["pod"].get("namespace"), sample["pod"].get("name")): sample["pod"]
+        for sample in samples
+        if isinstance(sample.get("pod"), dict)
+    }
     price_evidence = (
         load_price_evidence(args.price_evidence) if args.price_evidence else None
     )
@@ -1967,6 +1977,9 @@ def collect(args, policy: dict) -> dict:
         "kubernetes": kubernetes,
         "kubernetes_summary": summary,
         "pod_stability_summary": summarize_pod_stability(summary["pods"]),
+        "selected_run_pod_stability_summary": summarize_pod_stability(
+            list(selected_pods.values())
+        ),
         "pod_observer": {
             key: value for key, value in pod_observer.items() if key != "pods"
         }
@@ -2039,6 +2052,7 @@ def main(argv=None) -> int:
             "price_evidence",
             "burst_cost_comparisons",
             "pod_stability_summary",
+            "selected_run_pod_stability_summary",
             "workload_reports",
             "node_filesystem_reports",
             "node_filesystem_summary",
