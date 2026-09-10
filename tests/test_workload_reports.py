@@ -33,6 +33,7 @@ def profile(
         "duration_seconds": duration,
         "output_digest": digest,
         "exit": {"code": 0},
+        "cpu": {"nr_periods": 100, "nr_throttled": 5},
         "memory": {"peak_limit_ratio": ratio, "events": {"oom_kill": 0}},
     }
 
@@ -106,6 +107,62 @@ class WorkloadReportTests(unittest.TestCase):
         profiles[-1]["duration_seconds"] = 200
         comparison = MODULE.performance_comparisons(profiles)[0]
         self.assertFalse(comparison["qualifies"])
+
+    def test_sustained_cpu_throttling_regression_fails_candidate(self) -> None:
+        profiles = []
+        for index in range(5):
+            baseline = profile("baseline", str(index), 100)
+            candidate = profile("f32", str(index), 70)
+            candidate["cpu"] = {"nr_periods": 100, "nr_throttled": 20}
+            profiles.extend((baseline, candidate))
+
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertEqual(0.05, comparison["baseline_median_cpu_throttle_ratio"])
+        self.assertEqual(0.2, comparison["candidate_median_cpu_throttle_ratio"])
+        self.assertFalse(comparison["no_sustained_cpu_throttling_regression"])
+        self.assertFalse(comparison["qualifies"])
+
+        for candidate in profiles[1::2]:
+            candidate["cpu"] = {"nr_periods": 1000, "nr_throttled": 59}
+        comparison = MODULE.performance_comparisons(profiles)[0]
+        self.assertTrue(comparison["no_sustained_cpu_throttling_regression"])
+        self.assertTrue(comparison["qualifies"])
+
+    def test_pod_stability_reports_failures_evictions_restarts_and_ooms(self) -> None:
+        pods = [
+            {
+                "namespace": "arc-runners-xcsh-compute-f32-candidate",
+                "profile": "compute-f32-candidate",
+                "phase": "Succeeded",
+                "reason": None,
+                "restart_count": 0,
+                "termination_reasons": ["Completed"],
+            },
+            {
+                "namespace": "arc-runners-xcsh-compute-f32-candidate",
+                "profile": "compute-f32-candidate",
+                "phase": "Failed",
+                "reason": "Evicted",
+                "restart_count": 1,
+                "termination_reasons": ["OOMKilled"],
+            },
+            {
+                "namespace": "arc-systems",
+                "profile": "compute-f32-candidate",
+                "phase": "Running",
+                "reason": None,
+                "restart_count": 0,
+                "termination_reasons": [],
+            },
+        ]
+
+        summary = MODULE.summarize_pod_stability(pods)[0]
+        self.assertEqual(2, summary["pods"])
+        self.assertEqual(1, summary["failed_pods"])
+        self.assertEqual(1, summary["evictions"])
+        self.assertEqual(1, summary["container_restarts"])
+        self.assertEqual(1, summary["oom_kills"])
+        self.assertFalse(summary["stable"])
 
     def test_profile_schema_validation_rejects_missing_or_invalid_fields(self) -> None:
         with self.assertRaises(ValueError):

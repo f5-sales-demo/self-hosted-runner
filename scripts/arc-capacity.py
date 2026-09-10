@@ -92,6 +92,7 @@ BURST_COST_MODEL = {
     "d16-four": {"sku": "d16", "runners_per_node": 1, "peak_nodes": 9},
     "f32": {"sku": "f32", "runners_per_node": 2, "peak_nodes": 5},
 }
+MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO = 0.01
 
 
 def _integer_map(value: object, name: str) -> dict:
@@ -643,6 +644,17 @@ def summarize_kubernetes(resources: dict) -> dict:
         namespace = metadata.get("namespace", "default")
         name = metadata.get("name")
         status = item.get("status", {})
+        container_statuses = status.get("containerStatuses") or []
+        termination_reasons = [
+            termination.get("reason")
+            for container in container_statuses
+            if isinstance(container, dict)
+            for state_key in ("state", "lastState")
+            for termination in [
+                (container.get(state_key) or {}).get("terminated") or {}
+            ]
+            if isinstance(termination, dict) and termination.get("reason")
+        ]
         node_name = item.get("spec", {}).get("nodeName")
         scheduled = next(
             (
@@ -670,14 +682,23 @@ def summarize_kubernetes(resources: dict) -> dict:
                 else None,
                 "started_at": status.get("startTime"),
                 "phase": status.get("phase"),
+                "reason": status.get("reason"),
+                "restart_count": sum(
+                    int(entry.get("restartCount", 0))
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
+                ),
+                "termination_reasons": termination_reasons,
                 "usage": pod_metrics.get(f"{namespace}/{name}"),
                 "images": [
                     entry.get("image")
-                    for entry in status.get("containerStatuses") or []
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
                 ],
                 "image_ids": [
                     entry.get("imageID")
-                    for entry in status.get("containerStatuses") or []
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
                 ],
                 "image_pull_events": sorted(
                     image_events.get((namespace, name), []),
@@ -759,6 +780,16 @@ def load_pod_watch(path: Path) -> dict:
         identities = {name}
         if isinstance(scale_set, str) and scale_set:
             identities.add(scale_set)
+        termination_reasons = [
+            termination.get("reason")
+            for container in container_statuses
+            if isinstance(container, dict)
+            for state_key in ("state", "lastState")
+            for termination in [
+                (container.get(state_key) or {}).get("terminated") or {}
+            ]
+            if isinstance(termination, dict) and termination.get("reason")
+        ]
         pods.append(
             {
                 "namespace": namespace,
@@ -772,6 +803,13 @@ def load_pod_watch(path: Path) -> dict:
                 "scheduled_at": scheduled.get("lastTransitionTime"),
                 "started_at": pod.get("started_at"),
                 "phase": pod.get("phase"),
+                "reason": pod.get("reason"),
+                "restart_count": sum(
+                    int(entry.get("restartCount", 0))
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
+                ),
+                "termination_reasons": termination_reasons,
                 "usage": None,
                 "images": [
                     status.get("image")
@@ -808,6 +846,41 @@ def merge_observed_pods(summary: dict, observed_pods: list[dict]) -> None:
     summary["pods"].sort(
         key=lambda pod: (pod.get("namespace") or "", pod.get("name") or "")
     )
+
+
+def summarize_pod_stability(pods: list[dict]) -> list[dict]:
+    groups: dict[str, list[dict]] = {}
+    for pod in pods:
+        namespace = str(pod.get("namespace") or "")
+        profile = pod.get("profile")
+        if not namespace.startswith("arc-runners-") or not profile:
+            continue
+        groups.setdefault(str(profile), []).append(pod)
+    return [
+        {
+            "runner_profile": profile,
+            "pods": len(values),
+            "failed_pods": sum(pod.get("phase") == "Failed" for pod in values),
+            "evictions": sum(pod.get("reason") == "Evicted" for pod in values),
+            "container_restarts": sum(
+                int(pod.get("restart_count") or 0) for pod in values
+            ),
+            "oom_kills": sum(
+                reason == "OOMKilled"
+                for pod in values
+                for reason in pod.get("termination_reasons") or []
+            ),
+            "stable": all(pod.get("phase") != "Failed" for pod in values)
+            and all(pod.get("reason") != "Evicted" for pod in values)
+            and all(int(pod.get("restart_count") or 0) == 0 for pod in values)
+            and all(
+                reason != "OOMKilled"
+                for pod in values
+                for reason in pod.get("termination_reasons") or []
+            ),
+        }
+        for profile, values in sorted(groups.items())
+    ]
 
 
 def load_node_watch(path: Path) -> dict:
@@ -1506,6 +1579,25 @@ def aggregate_node_filesystems(reports: list[dict]) -> list[dict]:
     ]
 
 
+def cpu_throttling_ratio(profile: dict) -> float | None:
+    cpu = profile.get("cpu")
+    if not isinstance(cpu, dict):
+        return None
+    periods = cpu.get("nr_periods")
+    throttled = cpu.get("nr_throttled")
+    if (
+        isinstance(periods, bool)
+        or not isinstance(periods, int)
+        or periods < 0
+        or isinstance(throttled, bool)
+        or not isinstance(throttled, int)
+        or throttled < 0
+        or throttled > periods
+    ):
+        return None
+    return throttled / periods if periods else 0.0
+
+
 def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
     groups: dict[tuple, list[dict]] = {}
     for profile in profiles:
@@ -1523,6 +1615,11 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
     ):
         durations = [float(value["duration_seconds"]) for value in values]
         memory = [value.get("memory", {}).get("peak_limit_ratio") for value in values]
+        throttle_ratios = [
+            ratio
+            for value in values
+            if (ratio := cpu_throttling_ratio(value)) is not None
+        ]
         docker_values = [
             value for value in values if value.get("profile_kind") == "docker_action"
         ]
@@ -1539,6 +1636,10 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                 "max_peak_memory_ratio": max(
                     (value for value in memory if value is not None), default=None
                 ),
+                "median_cpu_throttle_ratio": median(throttle_ratios)
+                if throttle_ratios
+                else None,
+                "p95_cpu_throttle_ratio": percentile95(throttle_ratios),
                 "failures": sum(
                     (
                         value.get("observer", {}).get("result") != "completed"
@@ -1649,6 +1750,32 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             memory_ok = bool(memory_ratios) and all(
                 ratio is not None and ratio < 0.8 for ratio in memory_ratios
             )
+            base_throttle = [cpu_throttling_ratio(baseline[pair]) for pair in pairs]
+            candidate_throttle = [
+                cpu_throttling_ratio(candidate[pair]) for pair in pairs
+            ]
+            throttle_evidence_complete = bool(pairs) and all(
+                ratio is not None for ratio in (*base_throttle, *candidate_throttle)
+            )
+            base_throttle_values = [
+                float(ratio) for ratio in base_throttle if ratio is not None
+            ]
+            candidate_throttle_values = [
+                float(ratio) for ratio in candidate_throttle if ratio is not None
+            ]
+            base_throttle_median = (
+                median(base_throttle_values) if base_throttle_values else None
+            )
+            candidate_throttle_median = (
+                median(candidate_throttle_values) if candidate_throttle_values else None
+            )
+            no_sustained_throttling_regression = (
+                throttle_evidence_complete
+                and base_throttle_median is not None
+                and candidate_throttle_median is not None
+                and candidate_throttle_median
+                <= base_throttle_median + MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO
+            )
             base_p95 = percentile95(base_values)
             candidate_p95 = percentile95(candidate_values)
             qualifies = (
@@ -1661,6 +1788,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                 and correct
                 and stable
                 and memory_ok
+                and no_sustained_throttling_regression
             )
             results.append(
                 {
@@ -1679,6 +1807,16 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "output_equivalent": correct,
                     "stable": stable,
                     "memory_below_80_percent": memory_ok,
+                    "baseline_median_cpu_throttle_ratio": base_throttle_median,
+                    "baseline_p95_cpu_throttle_ratio": percentile95(
+                        base_throttle_values
+                    ),
+                    "candidate_median_cpu_throttle_ratio": candidate_throttle_median,
+                    "candidate_p95_cpu_throttle_ratio": percentile95(
+                        candidate_throttle_values
+                    ),
+                    "maximum_sustained_throttle_regression_ratio": MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO,
+                    "no_sustained_cpu_throttling_regression": no_sustained_throttling_regression,
                     "qualifies": qualifies,
                 }
             )
@@ -1795,6 +1933,7 @@ def collect(args, policy: dict) -> dict:
         ),
         "kubernetes": kubernetes,
         "kubernetes_summary": summary,
+        "pod_stability_summary": summarize_pod_stability(summary["pods"]),
         "pod_observer": {
             key: value for key, value in pod_observer.items() if key != "pods"
         }
@@ -1866,6 +2005,7 @@ def main(argv=None) -> int:
             "burst_clearance_comparisons",
             "price_evidence",
             "burst_cost_comparisons",
+            "pod_stability_summary",
             "workload_reports",
             "node_filesystem_reports",
             "node_filesystem_summary",
