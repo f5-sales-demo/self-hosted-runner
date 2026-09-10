@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -373,7 +373,7 @@ class ArcCapacityTests(unittest.TestCase):
             }
         ]
         sample = MODULE.correlate_jobs(jobs, summary)[0]
-        self.assertTrue(sample["warm"])
+        self.assertFalse(sample["warm"])
         self.assertEqual(4, sample["assignment_seconds"])
         self.assertEqual(5, sample["github_queue_seconds"])
         self.assertEqual(1, sample["pod_schedule_seconds"])
@@ -382,6 +382,45 @@ class ArcCapacityTests(unittest.TestCase):
         self.assertEqual({"cpu": "500m", "memory": "2Gi"}, sample["pod"]["usage"])
         self.assertEqual(1, summary["runner_sets"][0]["desired"])
         self.assertEqual(600, summary["quotas"][0]["limit"])
+
+    def test_assignment_summary_enforces_warm_and_cold_p95(self) -> None:
+        queued = datetime(2026, 9, 10, 14, tzinfo=UTC)
+        samples = []
+        for warm, delays in (
+            (True, (10, 12, 14, 16, 18)),
+            (False, (100, 120, 140, 160, 170)),
+        ):
+            for index, delay in enumerate(delays):
+                started = queued + timedelta(seconds=delay)
+                samples.append(
+                    {
+                        "job_id": f"{warm}-{index}",
+                        "queued_at": queued.isoformat(),
+                        "started_at": started.isoformat(),
+                        "assignment_slo_eligible": True,
+                        "warm": warm,
+                    }
+                )
+        policy = {
+            "slo_seconds": {
+                "warm_assignment_p95": 20,
+                "cold_assignment_p95": 180,
+            }
+        }
+
+        reports = {
+            item["class"]: item
+            for item in MODULE.assignment_slo_summary(samples, policy)
+        }
+        self.assertTrue(reports["warm"]["qualifies"])
+        self.assertTrue(reports["cold"]["qualifies"])
+
+        samples[-1]["started_at"] = (queued + timedelta(seconds=300)).isoformat()
+        reports = {
+            item["class"]: item
+            for item in MODULE.assignment_slo_summary(samples, policy)
+        }
+        self.assertFalse(reports["cold"]["qualifies"])
 
     def test_candidate_runner_profiles_map_to_underlying_node_profiles(self) -> None:
         self.assertEqual(

@@ -436,6 +436,35 @@ def in_service_window(instant: datetime, policy: dict) -> bool:
     )
 
 
+def assignment_slo_summary(samples: list[dict], policy: dict) -> list[dict]:
+    reports = []
+    for kind, warm in (("warm", True), ("cold", False)):
+        values = []
+        for sample in samples:
+            if (
+                not sample.get("assignment_slo_eligible", True)
+                or sample.get("warm") is not warm
+            ):
+                continue
+            queued = parse_time(sample.get("queued_at"))
+            started = parse_time(sample.get("started_at"))
+            if queued and started:
+                values.append((started - queued).total_seconds())
+        limit = policy["slo_seconds"][f"{kind}_assignment_p95"]
+        p95 = percentile95(values)
+        reports.append(
+            {
+                "class": kind,
+                "samples": len(values),
+                "median_seconds": median(values) if values else None,
+                "p95_seconds": p95,
+                "limit_seconds": limit,
+                "qualifies": p95 is not None and p95 <= limit,
+            }
+        )
+    return reports
+
+
 def evaluate(
     samples: list[dict], policy: dict, now: datetime, quotas: list[dict] | None = None
 ) -> dict:
@@ -523,6 +552,7 @@ def evaluate(
         "generated_at": now.astimezone(UTC).isoformat(),
         "paging": paging,
         "alerts": [{**item, "page": paging} for item in alerts],
+        "assignment_slo_summary": assignment_slo_summary(samples, policy),
     }
 
 
@@ -998,14 +1028,16 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
             pod.get("profile") if pod else None
         )
         pod_created = parse_time(pod.get("created_at")) if pod else None
+        queued = parse_time(job.get("queued_at"))
+        demanded = queued or pod_created
         warm = (
             classify_warm(
-                pod_created,
+                demanded,
                 nodes,
                 node_profile_for_runner(profile),
                 pod.get("node"),
             )
-            if pod_created and profile and pod
+            if demanded and profile and pod
             else None
         )
         scheduled = parse_time(pod.get("scheduled_at")) if pod else None
@@ -1921,6 +1953,7 @@ def collect(args, policy: dict) -> dict:
         "workload_profiles": profiles,
         "rejected_workload_profiles": rejected,
         "job_timing_reports": aggregate_job_timings(jobs),
+        "assignment_slo_summary": assignment_slo_summary(samples, policy),
         "burst_clearance_comparisons": burst_clearance_comparisons(jobs),
         "price_evidence": price_evidence,
         "burst_cost_comparisons": burst_cost_comparisons(jobs, price_evidence),
