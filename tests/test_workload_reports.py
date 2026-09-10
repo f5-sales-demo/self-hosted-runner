@@ -35,7 +35,12 @@ def profile(
         "duration_seconds": duration,
         "output_digest": digest,
         "exit": {"code": 0},
-        "cpu": {"nr_periods": 100, "nr_throttled": 5},
+        "cpu": {
+            "utilization_ratio": 0.5,
+            "nr_periods": 100,
+            "nr_throttled": 5,
+        },
+        "io": {"rbytes": 1024, "wbytes": 2048},
         "memory": {"peak_limit_ratio": ratio, "events": {"oom_kill": 0}},
     }
 
@@ -53,6 +58,16 @@ class WorkloadReportTests(unittest.TestCase):
         comparison = MODULE.performance_comparisons(profiles)[0]
         self.assertTrue(comparison["qualifies"])
         self.assertGreaterEqual(comparison["median_improvement_ratio"], 0.2)
+        report = next(
+            item
+            for item in MODULE.aggregate_workload_profiles(profiles)
+            if item["variant"] == "baseline"
+        )
+        self.assertEqual(0.5, report["median_cpu_utilization_ratio"])
+        self.assertEqual(1024, report["median_io_read_bytes"])
+        self.assertEqual(2048, report["median_io_write_bytes"])
+        self.assertEqual(["sha256:" + "b" * 64], report["image_digests"])
+        self.assertEqual(["same"], report["output_digests"])
         profiles[-1]["output_digest"] = "different"
         self.assertFalse(MODULE.performance_comparisons(profiles)[0]["qualifies"])
 

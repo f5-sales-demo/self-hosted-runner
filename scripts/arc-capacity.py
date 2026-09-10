@@ -1663,6 +1663,27 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
         docker_values = [
             value for value in values if value.get("profile_kind") == "docker_action"
         ]
+        workload_values = [
+            value for value in values if value.get("profile_kind") != "docker_action"
+        ]
+        cpu_utilization = [
+            float(value["cpu"]["utilization_ratio"])
+            for value in workload_values
+            if isinstance(value.get("cpu", {}).get("utilization_ratio"), (int, float))
+            and not isinstance(value["cpu"]["utilization_ratio"], bool)
+        ]
+        io_read_bytes = [
+            int(value["io"]["rbytes"])
+            for value in workload_values
+            if isinstance(value.get("io", {}).get("rbytes"), int)
+            and not isinstance(value["io"]["rbytes"], bool)
+        ]
+        io_write_bytes = [
+            int(value["io"]["wbytes"])
+            for value in workload_values
+            if isinstance(value.get("io", {}).get("wbytes"), int)
+            and not isinstance(value["io"]["wbytes"], bool)
+        ]
         reports.append(
             {
                 "repository": key[0],
@@ -1680,6 +1701,30 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                 if throttle_ratios
                 else None,
                 "p95_cpu_throttle_ratio": percentile95(throttle_ratios),
+                "median_cpu_utilization_ratio": median(cpu_utilization)
+                if cpu_utilization
+                else None,
+                "p95_cpu_utilization_ratio": percentile95(cpu_utilization),
+                "median_io_read_bytes": median(io_read_bytes)
+                if io_read_bytes
+                else None,
+                "median_io_write_bytes": median(io_write_bytes)
+                if io_write_bytes
+                else None,
+                "image_digests": sorted(
+                    {
+                        str(value["image_digest"])
+                        for value in workload_values
+                        if value.get("image_digest")
+                    }
+                ),
+                "output_digests": sorted(
+                    {
+                        str(value["output_digest"])
+                        for value in workload_values
+                        if value.get("output_digest")
+                    }
+                ),
                 "failures": sum(
                     (
                         value.get("observer", {}).get("result") != "completed"
