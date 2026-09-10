@@ -32,10 +32,13 @@ Migrate managed workflow templates first, then remaining governed repositories i
 2. Apply the saved plan. Mirror the approved standard/container-build GHCR digests into ACR and verify byte-identical manifests.
 3. Deploy the two cache releases. The socketless release must be Ready on both socketless and compute nodes; the container-build release remains confined to build nodes.
 4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at its repository-declared zero-idle cap, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
-5. On one frozen xcsh commit and immutable image digest, collect five cold and
-   five warm D16/Bun 1.3.14 runs plus a four-job burst. Qualify the Bun 1.4.2
-   image on the same D16 resources before allowing a hardware comparison.
-6. Deploy the F32 scale sets only after Bun qualification. Run two 14-CPU/28-GiB
+5. After the workflow developer's next workflow-changing xcsh merge, freeze its
+   commit and the production image digest. Collect five cold and five warm D16
+   runs plus a four-job burst. Keep D16 candidates below the nine-node shared
+   production-pool capacity; cancel an experiment when a stable runner is
+   pending, a resource gate fails, or the concurrent compute cost exceeds
+   $9.20/hour.
+6. Deploy the F32 scale sets only after the D16 comparison. Run two 14-CPU/28-GiB
    pods per F32 node and burst candidate jobs up to the 4/2/3 repository caps.
    Reject the candidate on any OOM, eviction, output drift, memory at or above
    80%, sustained throttling regression, node disk at or above 70%, warm

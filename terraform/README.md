@@ -98,10 +98,13 @@ references. During the bounded optimization experiment, also export
 Stable production compute routing remains unchanged while its capacity caps are
 raised to xcsh 4, enriched specs 2, and provider 3. The nine aggregate D16 slots
 map one runner per node. Temporary candidate labels remain isolated at zero idle
-runners: xcsh Bun/D16 at 4, and F32 density at xcsh 4, enriched specs 2, and
+runners: the D16 candidate shares that nine-node production pool and is capped
+at four jobs, while F32 density is capped at xcsh 4, enriched specs 2, and
 provider 3. The nine aggregate F32 runner slots stay below the ten physical slots
-available on five two-pod nodes. Every worker pool scales to zero; after demand
-drains, the autoscaler retains nodes for 60 minutes.
+available on five two-pod nodes. Candidate pods use a negative, non-preempting
+priority, so production runners retain priority if the shared D16 pool is
+contended. Every worker pool scales to zero; after demand drains, the autoscaler
+retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 

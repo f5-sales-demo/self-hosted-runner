@@ -68,44 +68,15 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
 
-    def test_bun_candidate_is_isolated_and_catalogued(self) -> None:
+    def test_no_bun_qualification_image_or_manual_publisher_remains(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         publish = (ROOT / ".github/workflows/publish.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("FROM runner-base AS compute-bun-1-4-2", dockerfile)
-        self.assertIn("ARG BUN_CANDIDATE_VERSION=1.4.2", dockerfile)
-        self.assertIn(
-            "ARG BUN_CANDIDATE_SHA256=36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
-            dockerfile,
-        )
-        self.assertIn(
-            "jobs:\n  publish:\n    if: github.event_name == 'push'", publish
-        )
-        self.assertIn(
-            "publish-compute-bun-candidate:\n    if: github.event_name == 'workflow_dispatch'",
-            publish,
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            candidate = Path(directory) / "catalog.json"
-            candidate.write_text(
-                (ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
-            subprocess.run(
-                [
-                    "python3",
-                    str(ROOT / "scripts/configure-bun-candidate.py"),
-                    str(candidate),
-                    "1.4.2",
-                    "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
-                ],
-                check=True,
-            )
-            catalog = json.loads(candidate.read_text(encoding="utf-8"))
-            bun = next(tool for tool in catalog["tools"] if tool["name"] == "bun")
-            self.assertEqual("1.4.2", bun["version"])
-            self.assertEqual("1.4.2", bun["expected"])
+        self.assertNotIn("compute-bun", dockerfile)
+        self.assertNotIn("BUN_CANDIDATE", dockerfile)
+        self.assertNotIn("compute-bun", publish)
+        self.assertFalse((ROOT / "scripts/configure-bun-candidate.py").exists())
 
     def test_snapshot_packages_are_verified_and_fetched_concurrently(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

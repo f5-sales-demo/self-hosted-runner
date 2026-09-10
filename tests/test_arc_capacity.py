@@ -426,7 +426,7 @@ class ArcCapacityTests(unittest.TestCase):
     def test_candidate_runner_profiles_map_to_underlying_node_profiles(self) -> None:
         self.assertEqual(
             "compute",
-            MODULE.node_profile_for_runner("compute-bun-candidate"),
+            MODULE.node_profile_for_runner("compute-d16-candidate"),
         )
         self.assertEqual(
             "compute-f32",
@@ -439,8 +439,8 @@ class ArcCapacityTests(unittest.TestCase):
 
     def test_candidate_labels_and_fsv2_quota_are_retained(self) -> None:
         self.assertEqual(
-            "compute-bun-candidate",
-            MODULE.managed_profile(["xcsh-compute-bun-candidate"]),
+            "compute-d16-candidate",
+            MODULE.managed_profile(["xcsh-compute-d16-candidate"]),
         )
         self.assertEqual(
             "compute-f32-candidate",
@@ -487,9 +487,9 @@ class ArcCapacityTests(unittest.TestCase):
                     {
                         "metadata": {
                             "name": "candidate-runner",
-                            "namespace": "arc-runners-xcsh-compute-bun-candidate",
+                            "namespace": "arc-runners-xcsh-compute-d16-candidate",
                             "labels": {
-                                "actions.github.com/scale-set-name": "xcsh-compute-bun-candidate"
+                                "actions.github.com/scale-set-name": "xcsh-compute-d16-candidate"
                             },
                         },
                         "spec": {"nodeName": "d16-node"},
@@ -503,7 +503,7 @@ class ArcCapacityTests(unittest.TestCase):
         }
 
         summary = MODULE.summarize_kubernetes(resources)
-        self.assertEqual("compute-bun-candidate", summary["pods"][0]["profile"])
+        self.assertEqual("compute-d16-candidate", summary["pods"][0]["profile"])
 
     def test_kubernetes_summary_accepts_null_pending_status(self) -> None:
         resources = {
@@ -539,11 +539,11 @@ class ArcCapacityTests(unittest.TestCase):
 
     def test_deleted_runner_pod_watch_retains_assignment_evidence(self) -> None:
         pod = {
-            "namespace": "arc-runners-xcsh-compute-bun-candidate",
-            "name": "xcsh-compute-bun-candidate-runner-a",
+            "namespace": "arc-runners-xcsh-compute-d16-candidate",
+            "name": "xcsh-compute-d16-candidate-runner-a",
             "created_at": "2026-09-10T09:00:00Z",
             "deleted_at": "2026-09-10T09:20:00Z",
-            "scale_set": "xcsh-compute-bun-candidate",
+            "scale_set": "xcsh-compute-d16-candidate",
             "node": "compute-node-a",
             "phase": "Succeeded",
             "started_at": "2026-09-10T09:00:04Z",
@@ -619,8 +619,8 @@ class ArcCapacityTests(unittest.TestCase):
             [
                 {
                     "job_id": 1,
-                    "runner_name": "xcsh-compute-bun-candidate-runner-a",
-                    "labels": ["xcsh-compute-bun-candidate"],
+                    "runner_name": "xcsh-compute-d16-candidate-runner-a",
+                    "labels": ["xcsh-compute-d16-candidate"],
                     "queued_at": "2026-09-10T08:59:58Z",
                     "started_at": "2026-09-10T09:00:05Z",
                     "assignment_seconds": 7,

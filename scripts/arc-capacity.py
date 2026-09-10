@@ -1063,7 +1063,7 @@ def merge_observed_nodes(summary: dict, observed_nodes: list[dict]) -> None:
 
 def managed_profile(labels: list[str]) -> str | None:
     for profile in (
-        "compute-bun-candidate",
+        "compute-d16-candidate",
         "compute-f32-candidate",
         "compute",
         "container-build",
@@ -1076,7 +1076,7 @@ def managed_profile(labels: list[str]) -> str | None:
 
 def node_profile_for_runner(profile: str) -> str:
     return {
-        "compute-bun-candidate": "compute",
+        "compute-d16-candidate": "compute",
         "compute-f32-candidate": "compute-f32",
     }.get(profile, profile)
 
@@ -1867,7 +1867,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
         for variant in variants:
             burst_phase = str(key[1]).endswith("-burst")
             minimum_improvement = (
-                0.0 if variant == "bun-1.4.2" else (0.2 if burst_phase else None)
+                0.2 if burst_phase else None
             )
             required_pairs = 4 if burst_phase else 5
             candidate = {
@@ -1910,7 +1910,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                 )
             )
             hardware_image_equivalent = (
-                variant == "bun-1.4.2" or baseline_images == candidate_images
+                baseline_images == candidate_images
             )
             base_median = median(base_values) if base_values else None
             candidate_median = median(candidate_values) if candidate_values else None

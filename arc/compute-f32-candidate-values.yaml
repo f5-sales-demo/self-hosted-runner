@@ -24,6 +24,7 @@ template:
     labels:
       runner-profile: compute-f32-candidate
   spec:
+    priorityClassName: runner-candidate
     imagePullSecrets:
       - name: ghcr-pull
     nodeSelector:

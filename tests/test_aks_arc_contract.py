@@ -80,6 +80,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("nodeProfiles[1]=compute-f32", deploy)
         self.assertIn("COMPUTE_CANDIDATE_IMAGE", deploy)
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
+        self.assertIn("kubectl apply -f arc/candidate-priority-class.yaml", deploy)
         self.assertTrue((ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111)
         mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")
         self.assertLess(
@@ -94,6 +95,21 @@ class AksArcContractTests(unittest.TestCase):
             'if [[ "$mode" == runners || "$mode" == all ]]', 1
         )[1]
         self.assertNotIn("runner-image-cache arc/prepull", runners_block)
+
+    def test_candidate_priority_is_negative_and_non_preempting(self) -> None:
+        priority = (ROOT / "arc/candidate-priority-class.yaml").read_text(
+            encoding="utf-8"
+        )
+        d16 = (ROOT / "arc/compute-d16-candidate-values.yaml").read_text(
+            encoding="utf-8"
+        )
+        f32 = (ROOT / "arc/compute-f32-candidate-values.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("value: -1000", priority)
+        self.assertIn("preemptionPolicy: Never", priority)
+        self.assertIn("priorityClassName: runner-candidate", d16)
+        self.assertIn("priorityClassName: runner-candidate", f32)
 
     def test_controller_post_renderer_uses_python(self) -> None:
         post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"

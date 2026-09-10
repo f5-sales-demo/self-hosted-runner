@@ -13,10 +13,10 @@ PROFILES = {
     "socketless",
     "container-build",
     "compute",
-    "compute-bun-candidate",
+    "compute-d16-candidate",
     "compute-f32-candidate",
 }
-COMPUTE_PROFILES = {"compute", "compute-bun-candidate", "compute-f32-candidate"}
+COMPUTE_PROFILES = {"compute", "compute-d16-candidate", "compute-f32-candidate"}
 REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
@@ -117,7 +117,7 @@ EXPECTED_CAPS = {
 }
 CANDIDATE_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": {
-        "compute-bun-candidate": 4,
+        "compute-d16-candidate": 4,
         "compute-f32-candidate": 4,
     },
     "https://github.com/f5-sales-demo/api-specs-enriched": {
@@ -315,6 +315,22 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                 raise ConfigError(
                     f"{field} value {value} collides between {previous} and {repository}"
                 )
+    stable_d16_capacity = sum(
+        spec["max_runners"]
+        for config in configs
+        for spec in config["scale_sets"]
+        if spec["profile"] == "compute"
+    )
+    candidate_d16_demand = sum(
+        spec["max_runners"]
+        for config in configs
+        for spec in config["scale_sets"]
+        if spec["profile"] == "compute-d16-candidate"
+    )
+    if candidate_d16_demand > stable_d16_capacity:
+        raise ConfigError(
+            "D16 candidate demand exceeds the shared production compute capacity"
+        )
     return configs
 
 

@@ -58,16 +58,6 @@ jobs:
             exit 1
           fi
 
-      - name: Build and verify isolated Bun 1.4.2 candidate
-        run: |
-          set -euo pipefail
-          docker buildx build --progress=plain --no-cache --load \
-            --target compute-bun-1-4-2 --tag local/self-hosted-runner:bun-1.4.2 .
-          docker run --rm --entrypoint verify-runner-tools \
-            local/self-hosted-runner:bun-1.4.2 standard
-          docker run --rm --entrypoint bun \
-            local/self-hosted-runner:bun-1.4.2 --version | grep -Fx 1.4.2
-
   container-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 150

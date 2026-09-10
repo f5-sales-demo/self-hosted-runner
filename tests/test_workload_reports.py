@@ -140,24 +140,6 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertIsNone(comparison["minimum_median_improvement_ratio"])
         self.assertTrue(comparison["qualifies"])
 
-    def test_bun_candidate_requires_no_regression_not_twenty_percent(self) -> None:
-        profiles = []
-        for index in range(5):
-            baseline = profile("baseline", str(index), 100 + index)
-            candidate = profile("bun-1.4.2", str(index), 99 + index)
-            candidate["image_digest"] = "sha256:" + "c" * 64
-            profiles.extend((baseline, candidate))
-
-        comparison = MODULE.performance_comparisons(profiles)[0]
-        self.assertEqual(0.0, comparison["minimum_median_improvement_ratio"])
-        self.assertTrue(comparison["immutable_image_evidence"])
-        self.assertTrue(comparison["hardware_image_equivalent"])
-        self.assertTrue(comparison["qualifies"])
-
-        profiles[-1]["duration_seconds"] = 200
-        comparison = MODULE.performance_comparisons(profiles)[0]
-        self.assertFalse(comparison["qualifies"])
-
     def test_hardware_comparison_rejects_image_or_commit_drift(self) -> None:
         profiles = []
         for index in range(5):

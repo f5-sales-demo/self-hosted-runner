@@ -29,11 +29,11 @@
       "max_runners": 4
     },
     {
-      "profile": "compute-bun-candidate",
-      "namespace": "arc-runners-xcsh-compute-bun-candidate",
-      "release": "xcsh-compute-bun-candidate",
-      "runner_scale_set_name": "xcsh-compute-bun-candidate",
-      "values": "arc/compute-bun-candidate-values.yaml",
+      "profile": "compute-d16-candidate",
+      "namespace": "arc-runners-xcsh-compute-d16-candidate",
+      "release": "xcsh-compute-d16-candidate",
+      "runner_scale_set_name": "xcsh-compute-d16-candidate",
+      "values": "arc/compute-d16-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 4
     },
