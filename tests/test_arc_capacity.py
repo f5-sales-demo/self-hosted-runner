@@ -268,7 +268,7 @@ class ArcCapacityTests(unittest.TestCase):
                                 {
                                     "type": "Ready",
                                     "status": "True",
-                                    "lastTransitionTime": "2026-08-28T13:59:00Z",
+                                    "lastTransitionTime": "2026-08-28T14:00:00.500000Z",
                                 }
                             ],
                         },

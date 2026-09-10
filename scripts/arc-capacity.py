@@ -691,13 +691,12 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
         profile = managed_profile(job.get("labels", [])) or (
             pod.get("profile") if pod else None
         )
-        queued = parse_time(job.get("queued_at"))
+        pod_created = parse_time(pod.get("created_at")) if pod else None
         warm = (
-            classify_warm(queued, nodes, profile)
-            if queued and profile and pod
+            classify_warm(pod_created, nodes, profile)
+            if pod_created and profile and pod
             else None
         )
-        pod_created = parse_time(pod.get("created_at")) if pod else None
         scheduled = parse_time(pod.get("scheduled_at")) if pod else None
         started = parse_time(job.get("started_at"))
         arc_assignment_seconds = (
