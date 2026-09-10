@@ -12,7 +12,7 @@ locals {
       name         = "compute"
       vm_size      = "Standard_D16ads_v5"
       minimum      = 0
-      maximum      = 5
+      maximum      = 9
       os_disk_size = 128
       profile      = "compute"
     }
@@ -36,13 +36,13 @@ locals {
 
   # DADSv5 and FSv2 quotas are independent, while total regional quota covers
   # the blue/green overlap. Each declared requirement retains >=20% headroom.
-  maximum_dadsv5_vcpus  = 30 * 8 + 5 * 16 + 5 * 16
+  maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 5 * 16
   maximum_fsv2_vcpus    = 5 * 32
   maximum_runner_vcpus  = local.maximum_dadsv5_vcpus + local.maximum_fsv2_vcpus
   maximum_system_vcpus  = 3 * 4
   required_dadsv5_quota = 600
   required_fsv2_quota   = 200
-  required_total_quota  = 715
+  required_total_quota  = 795
 }
 
 resource "azurerm_resource_group" "runner" {

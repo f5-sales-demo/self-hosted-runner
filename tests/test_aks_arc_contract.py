@@ -40,6 +40,8 @@ class AksArcContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("azurerm_role_assignment", source)
         self.assertNotIn("AcrPull", source)
+        self.assertIn("maximum      = 9", source)
+        self.assertIn("required_total_quota  = 795", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/runner-fleet/main.tf").read_text(

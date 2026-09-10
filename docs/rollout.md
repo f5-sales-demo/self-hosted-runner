@@ -31,7 +31,7 @@ Migrate managed workflow templates first, then remaining governed repositories i
    identity, so include pull-rate monitoring in the rollout.
 2. Apply the saved plan. Mirror the approved standard/container-build GHCR digests into ACR and verify byte-identical manifests.
 3. Deploy the two cache releases. The socketless release must be Ready on both socketless and compute nodes; the container-build release remains confined to build nodes.
-4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at 0-2, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
+4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at its repository-declared zero-idle cap, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
 5. On one frozen xcsh commit and immutable image digest, collect five cold and
    five warm D16/Bun 1.3.14 runs plus a four-job burst. Qualify the Bun 1.4.2
    image on the same D16 resources before allowing a hardware comparison.
@@ -44,9 +44,10 @@ Migrate managed workflow templates first, then remaining governed repositories i
    least 20% median PR critical-path or queue-clearance improvement, no p95
    runtime regression, and no higher cost per successful PR workflow. Record
    two complete 06:00-22:00 America/Toronto windows before acceptance.
-8. If F32 co-tenancy passes, migrate xcsh, enriched specs, and provider in that
-   order. Otherwise remove the candidate pool and raise the D16 pool to nine
-   nodes only after rechecking quota. Rollback is label-first to stable D16.
+8. Keep the nine-node D16 pool as the production capacity baseline while F32
+   qualification runs out of band. If F32 co-tenancy passes, migrate xcsh,
+   enriched specs, and provider in that order. Otherwise remove the candidate
+   pool and retain D16. Rollback is label-first to stable D16.
 
 Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore the last verified GHCR digest references, and set compute maximum capacity to zero. Do not remove the pool or mirror evidence until correctness, security, and latency are stable again.
 

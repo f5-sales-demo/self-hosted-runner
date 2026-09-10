@@ -87,7 +87,7 @@ MANAGED_SHARED_LABELS = {
     "container-build": "managed-container-build",
 }
 EXPECTED_CAPS = {
-    "https://github.com/f5-sales-demo/xcsh": (10, 3, 2),
+    "https://github.com/f5-sales-demo/xcsh": (10, 3, 4),
     "https://github.com/f5-sales-demo/docs": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
     "https://github.com/f5-sales-demo/docs-icons": (3, 1),
@@ -101,7 +101,7 @@ EXPECTED_CAPS = {
             "docs-control": (8, 2),
             "api-specs": (6, 2),
             "api-specs-enriched": (6, 2, 2),
-            "terraform-provider-xcsh": (6, 2, 2),
+            "terraform-provider-xcsh": (6, 2, 3),
             "devcontainer": (4, 2),
             "console": (4, 1),
             "marketplace": (4, 1),

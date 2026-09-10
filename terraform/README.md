@@ -14,7 +14,7 @@ control-plane diagnostics.
 | --- | --- | --- | --- | --- |
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
 | socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
-| compute | Standard_D16ads_v5 | 0-5 | ephemeral | CPU-heavy socketless xcsh runners |
+| compute | Standard_D16ads_v5 | 0-9 | ephemeral | Production CPU-heavy socketless runners |
 | compute-f32 | Standard_F32s_v2 | 0-5 | ephemeral | Temporary blue/green density candidate |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
@@ -95,12 +95,13 @@ references. During the bounded optimization experiment, also export
 
     scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
 
-The stable xcsh socketless, compute, and container-build labels keep their existing
-caps and routing. Temporary candidate labels are isolated at zero idle runners:
-xcsh Bun/D16 at 4, and F32 density at xcsh 4, enriched specs 2, and provider 3.
-The nine aggregate F32 runner slots stay below the ten physical slots available
-on five two-pod nodes. Every worker pool scales to zero; after demand drains, the
-autoscaler retains nodes for 60 minutes.
+Stable production compute routing remains unchanged while its capacity caps are
+raised to xcsh 4, enriched specs 2, and provider 3. The nine aggregate D16 slots
+map one runner per node. Temporary candidate labels remain isolated at zero idle
+runners: xcsh Bun/D16 at 4, and F32 density at xcsh 4, enriched specs 2, and
+provider 3. The nine aggregate F32 runner slots stay below the ten physical slots
+available on five two-pod nodes. Every worker pool scales to zero; after demand
+drains, the autoscaler retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -115,8 +116,8 @@ docs-container-build.
 ## Capacity evidence and image mirror
 
 Do not create the candidate pool until Canada Central quota is at least 600
-`standardDADSv5Family`, 200 `standardFSv2Family`, and 715 total regional `cores`.
-The blue/green maximum consumes 400 DADSv5, 160 FSv2, and 572 total vCPUs
+`standardDADSv5Family`, 200 `standardFSv2Family`, and 795 total regional `cores`.
+The blue/green maximum consumes 464 DADSv5, 160 FSv2, and 636 total vCPUs
 including three system nodes, retaining at least 20% headroom in every scope.
 The verified 2026-09-09 subscription snapshot was 600 DADSv5, 350 FSv2, and 850
 regional vCPUs; revalidate it immediately before applying the saved plan.

@@ -36,7 +36,7 @@ class ArcConfigTests(unittest.TestCase):
                     "arc-runners-xcsh-compute",
                     "xcsh-compute",
                     0,
-                    2,
+                    4,
                 ),
                 "compute-bun-candidate": (
                     "arc-runners-xcsh-compute-bun-candidate",
@@ -162,7 +162,8 @@ class ArcConfigTests(unittest.TestCase):
                     self.assertEqual(maximum, item["max_runners"])
 
     def test_managed_compute_profiles_are_exact(self) -> None:
-        for repository in ("api-specs-enriched", "terraform-provider-xcsh"):
+        expected = {"api-specs-enriched": 2, "terraform-provider-xcsh": 3}
+        for repository, maximum in expected.items():
             config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
             compute = next(
                 item for item in config["scale_sets"] if item["profile"] == "compute"
@@ -170,7 +171,26 @@ class ArcConfigTests(unittest.TestCase):
             self.assertEqual(f"arc-runners-{repository}-compute", compute["namespace"])
             self.assertEqual(f"{repository}-compute", compute["release"])
             self.assertEqual(f"{repository}-compute", compute["runner_scale_set_name"])
-            self.assertEqual((0, 2), (compute["min_runners"], compute["max_runners"]))
+            self.assertEqual(
+                (0, maximum), (compute["min_runners"], compute["max_runners"])
+            )
+
+    def test_production_compute_caps_aggregate_to_nine(self) -> None:
+        expected = {
+            "xcsh": 4,
+            "api-specs-enriched": 2,
+            "terraform-provider-xcsh": 3,
+        }
+        observed = {}
+        for repository, maximum in expected.items():
+            config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
+            compute = next(
+                item for item in config["scale_sets"] if item["profile"] == "compute"
+            )
+            self.assertEqual(0, compute["min_runners"])
+            self.assertEqual(maximum, compute["max_runners"])
+            observed[repository] = compute["max_runners"]
+        self.assertEqual(9, sum(observed.values()))
 
     def test_candidate_compute_caps_are_exact_and_aggregate_to_nine(self) -> None:
         expected = {
@@ -335,7 +355,7 @@ class ArcConfigTests(unittest.TestCase):
         self.assertNotIn("DOCKER_HOST", values)
         self.assertIn("name: RUNNER_PROFILE", values)
         self.assertIn("name: RUNNER_IMAGE_DIGEST", values)
-        self.assertEqual(2, compute["max_runners"])
+        self.assertEqual(4, compute["max_runners"])
 
         unapproved = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
         unapproved["scale_sets"].append(copy.deepcopy(compute))
