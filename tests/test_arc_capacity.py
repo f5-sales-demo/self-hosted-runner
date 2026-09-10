@@ -2,9 +2,14 @@
 from __future__ import annotations
 
 import importlib.util
+import io
+import json
+import subprocess
 import unittest
+import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = importlib.util.spec_from_file_location(
@@ -16,6 +21,79 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ArcCapacityTests(unittest.TestCase):
+    def test_queued_github_job_has_no_assignment_until_a_runner_exists(self) -> None:
+        run = {
+            "id": 123,
+            "run_attempt": 1,
+            "created_at": "2026-09-10T05:00:00Z",
+        }
+        queued_job = {
+            "id": 456,
+            "name": "queued benchmark",
+            "status": "queued",
+            "conclusion": None,
+            "created_at": "2026-09-10T05:01:00Z",
+            "started_at": "2026-09-10T05:01:00Z",
+            "completed_at": None,
+            "runner_name": None,
+            "runner_group_name": None,
+            "labels": ["xcsh-compute"],
+            "steps": [],
+        }
+        responses = [
+            [{"workflow_runs": [run]}],
+            [{"jobs": [queued_job]}],
+        ]
+        with mock.patch.object(MODULE, "command_json", side_effect=responses):
+            result = MODULE.github_jobs(
+                "f5-sales-demo/xcsh", datetime(2026, 9, 10, tzinfo=UTC), 10
+            )
+
+        self.assertEqual("queued", result[0]["status"])
+        self.assertIsNone(result[0]["started_at"])
+        self.assertIsNone(result[0]["assignment_seconds"])
+
+    def test_workload_artifact_ignores_non_profile_json_and_aggregate_copy(
+        self,
+    ) -> None:
+        archive_bytes = io.BytesIO()
+        with zipfile.ZipFile(archive_bytes, "w") as archive:
+            archive.writestr("profiles/install.json", json.dumps({"profile": 1}))
+            archive.writestr("node-filesystem.json", json.dumps({"used_ratio": 0.5}))
+            archive.writestr("workload-profiles.json", json.dumps([{"profile": 1}]))
+        artifact_page = {
+            "artifacts": [
+                {
+                    "id": 789,
+                    "name": "workload-profile-software-baseline-cold-1",
+                    "created_at": "2026-09-10T05:00:00Z",
+                    "expired": False,
+                }
+            ]
+        }
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout=archive_bytes.getvalue(), stderr=b""
+        )
+
+        def validate(value: object) -> dict:
+            if value != {"profile": 1}:
+                raise ValueError("not a workload profile")
+            return value
+
+        with (
+            mock.patch.object(MODULE, "command_json", return_value=[artifact_page]),
+            mock.patch.object(MODULE.subprocess, "run", return_value=completed),
+            mock.patch.object(
+                MODULE, "validate_workload_profile", side_effect=validate
+            ),
+        ):
+            profiles, rejected = MODULE.github_workload_profiles(
+                "f5-sales-demo/xcsh", datetime(2026, 9, 10, tzinfo=UTC)
+            )
+
+        self.assertEqual([{"profile": 1}], profiles)
+        self.assertEqual([], rejected)
+
     def test_repository_cap_formula_is_bounded_and_deterministic(self) -> None:
         self.assertEqual(18, MODULE.recommend_cap(30, 10, 16, 12.1))
         self.assertEqual(30, MODULE.recommend_cap(30, 10, 40, 35))

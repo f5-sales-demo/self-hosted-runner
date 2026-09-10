@@ -13,7 +13,7 @@ import sys
 import zipfile
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from statistics import median, quantiles
 from zoneinfo import ZoneInfo
 
@@ -740,7 +740,8 @@ def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
         )
         for job in (job for page in job_pages for job in page["jobs"]):
             queued = parse_time(job.get("created_at"))
-            started = parse_time(job.get("started_at"))
+            runner_name = job.get("runner_name")
+            started = parse_time(job.get("started_at")) if runner_name else None
             completed = parse_time(job.get("completed_at"))
             labels = job.get("labels", [])
             profile = managed_profile(labels)
@@ -766,11 +767,12 @@ def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
                     "run_created_at": run.get("created_at"),
                     "job_id": job["id"],
                     "name": job["name"],
+                    "status": job.get("status"),
                     "labels": labels,
-                    "runner_name": job.get("runner_name"),
+                    "runner_name": runner_name,
                     "runner_group_name": job.get("runner_group_name"),
                     "queued_at": job.get("created_at"),
-                    "started_at": job.get("started_at"),
+                    "started_at": job.get("started_at") if started else None,
                     "completed_at": job.get("completed_at"),
                     "dependency_wait_seconds": (queued - run_created).total_seconds()
                     if queued and run_created
@@ -911,7 +913,10 @@ def github_workload_profiles(
             artifact_profiles = []
             with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
                 for name in archive.namelist():
-                    if not name.endswith(".json"):
+                    member = PurePosixPath(name)
+                    if member.suffix != ".json" or not (
+                        member.name == "profile.json" or "profiles" in member.parts
+                    ):
                         continue
                     profile = validate_workload_profile(json.loads(archive.read(name)))
                     artifact_profiles.append(profile)
