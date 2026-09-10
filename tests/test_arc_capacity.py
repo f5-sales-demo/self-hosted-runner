@@ -373,6 +373,20 @@ class ArcCapacityTests(unittest.TestCase):
         self.assertEqual(1, summary["runner_sets"][0]["desired"])
         self.assertEqual(600, summary["quotas"][0]["limit"])
 
+    def test_candidate_runner_profiles_map_to_underlying_node_profiles(self) -> None:
+        self.assertEqual(
+            "compute",
+            MODULE.node_profile_for_runner("compute-bun-candidate"),
+        )
+        self.assertEqual(
+            "compute-f32",
+            MODULE.node_profile_for_runner("compute-f32-candidate"),
+        )
+        self.assertEqual(
+            "socketless",
+            MODULE.node_profile_for_runner("socketless"),
+        )
+
     def test_candidate_labels_and_fsv2_quota_are_retained(self) -> None:
         self.assertEqual(
             "compute-bun-candidate",

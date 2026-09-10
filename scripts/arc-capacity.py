@@ -685,6 +685,13 @@ def managed_profile(labels: list[str]) -> str | None:
     return None
 
 
+def node_profile_for_runner(profile: str) -> str:
+    return {
+        "compute-bun-candidate": "compute",
+        "compute-f32-candidate": "compute-f32",
+    }.get(profile, profile)
+
+
 def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
     pods = summary["pods"]
     nodes = summary["nodes"]
@@ -704,7 +711,12 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
         )
         pod_created = parse_time(pod.get("created_at")) if pod else None
         warm = (
-            classify_warm(pod_created, nodes, profile, pod.get("node"))
+            classify_warm(
+                pod_created,
+                nodes,
+                node_profile_for_runner(profile),
+                pod.get("node"),
+            )
             if pod_created and profile and pod
             else None
         )
