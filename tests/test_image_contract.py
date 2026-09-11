@@ -249,6 +249,10 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("ARG RUST_TOOLCHAIN=nightly-2026-09-03", dockerfile)
         self.assertIn("ARG CARGO_NEXTEST_VERSION=0.9.143", dockerfile)
         self.assertIn("--component rustfmt --component clippy --component rust-analyzer", dockerfile)
+        self.assertIn("CARGO_HOME=/home/runner/.cargo", dockerfile)
+        self.assertIn("RUSTUP_HOME=/home/runner/.rustup", dockerfile)
+        self.assertNotIn("CARGO_HOME=/opt/cargo", dockerfile)
+        self.assertNotIn("RUSTUP_HOME=/opt/rustup", dockerfile)
         for target in ("x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-unknown-linux-gnu"):
             self.assertIn(f"--target {target}", dockerfile)
         self.assertIn("packages='ant bash build-essential clang", dockerfile)
