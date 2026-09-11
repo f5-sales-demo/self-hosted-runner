@@ -1,0 +1,64 @@
+githubConfigSecret: arc-github-app
+controllerServiceAccount:
+  name: arc-gha-rs-controller
+  namespace: arc-systems
+listenerTemplate:
+  spec:
+    nodeSelector:
+      runner-profile: system
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+        effect: NoSchedule
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+template:
+  metadata:
+    labels:
+      runner-profile: compute-f32-candidate
+  spec:
+    priorityClassName: runner-candidate
+    imagePullSecrets:
+      - name: ghcr-pull
+    nodeSelector:
+      runner-profile: compute-f32
+    tolerations:
+      - key: runner-profile
+        operator: Equal
+        value: compute-f32
+        effect: NoSchedule
+    securityContext:
+      fsGroup: 1001
+    containers:
+      - name: runner
+        image: RUNNER_IMAGE_REQUIRED
+        imagePullPolicy: IfNotPresent
+        command: [/bin/bash, -c]
+        args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
+        env:
+          - name: RUNNER_PROFILE
+            value: compute-f32-candidate
+          - name: RUNNER_IMAGE_DIGEST
+            value: RUNNER_IMAGE_REQUIRED
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          runAsNonRoot: true
+          runAsUser: 1001
+        resources:
+          requests:
+            cpu: "14"
+            memory: 28Gi
+            ephemeral-storage: 24Gi
+          limits:
+            cpu: "15"
+            memory: 30Gi
+            ephemeral-storage: 40Gi

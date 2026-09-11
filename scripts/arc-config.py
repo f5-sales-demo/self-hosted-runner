@@ -9,7 +9,14 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-PROFILES = {"socketless", "container-build", "compute"}
+PROFILES = {
+    "socketless",
+    "container-build",
+    "compute",
+    "compute-d16-candidate",
+    "compute-f32-candidate",
+}
+COMPUTE_PROFILES = {"compute", "compute-d16-candidate", "compute-f32-candidate"}
 REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
@@ -80,7 +87,7 @@ MANAGED_SHARED_LABELS = {
     "container-build": "managed-container-build",
 }
 EXPECTED_CAPS = {
-    "https://github.com/f5-sales-demo/xcsh": (10, 3, 2),
+    "https://github.com/f5-sales-demo/xcsh": (10, 3, 4),
     "https://github.com/f5-sales-demo/docs": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
     "https://github.com/f5-sales-demo/docs-icons": (3, 1),
@@ -94,7 +101,7 @@ EXPECTED_CAPS = {
             "docs-control": (8, 2),
             "api-specs": (6, 2),
             "api-specs-enriched": (6, 2, 2),
-            "terraform-provider-xcsh": (6, 2, 2),
+            "terraform-provider-xcsh": (6, 2, 3),
             "devcontainer": (4, 2),
             "console": (4, 1),
             "marketplace": (4, 1),
@@ -106,6 +113,18 @@ EXPECTED_CAPS = {
             "xcsh-action": (4, 1),
             "xcsh-chrome-extension": (4, 1),
         }.items()
+    },
+}
+CANDIDATE_CAPS = {
+    "https://github.com/f5-sales-demo/xcsh": {
+        "compute-d16-candidate": 4,
+        "compute-f32-candidate": 4,
+    },
+    "https://github.com/f5-sales-demo/api-specs-enriched": {
+        "compute-f32-candidate": 2,
+    },
+    "https://github.com/f5-sales-demo/terraform-provider-xcsh": {
+        "compute-f32-candidate": 3,
     },
 }
 
@@ -145,9 +164,9 @@ def load_config(path: Path, repository_root: Path):
     if repository not in EXPECTED_CAPS:
         raise ConfigError(f"repository is outside the exact ARC fleet: {repository}")
     scale_sets = raw["scale_sets"]
-    if not isinstance(scale_sets, list) or len(scale_sets) not in (2, 3):
+    if not isinstance(scale_sets, list) or not 2 <= len(scale_sets) <= 5:
         raise ConfigError(
-            "scale_sets must contain two required entries and at most one optional entry"
+            "scale_sets must contain two required entries and at most three compute entries"
         )
 
     normalized = []
@@ -169,7 +188,7 @@ def load_config(path: Path, repository_root: Path):
             "https://github.com/f5-sales-demo/api-specs-enriched",
             "https://github.com/f5-sales-demo/terraform-provider-xcsh",
         }
-        if profile == "compute" and repository not in compute_allowlist:
+        if profile in COMPUTE_PROFILES and repository not in compute_allowlist:
             raise ConfigError("compute profile is outside the exact approved allowlist")
         for field, seen_values in unique.items():
             value = validate_name(spec[field], f"{context}.{field}")
@@ -215,7 +234,7 @@ def load_config(path: Path, repository_root: Path):
             (MANAGED_COHORT, MANAGED_SHARED_LABELS, "managed"),
         )
         for cohort, shared_labels, name in contracts:
-            if spec["profile"] == "compute":
+            if spec["profile"] in COMPUTE_PROFILES:
                 continue
             expected = shared_labels.get(spec["profile"])
             if repository in cohort and label != expected:
@@ -240,9 +259,14 @@ def load_config(path: Path, repository_root: Path):
                 )
             if minimum != 0:
                 raise ConfigError(f"{repository} min_runners must equal zero")
-        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[
-            spec["profile"]
-        ]
+        if spec["profile"] in CANDIDATE_CAPS.get(repository, {}):
+            expected_maximum = CANDIDATE_CAPS[repository][spec["profile"]]
+            if maximum != expected_maximum:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
+                )
+            continue
+        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[spec["profile"]]
         caps = EXPECTED_CAPS[repository]
         if cap_index >= len(caps):
             raise ConfigError(
@@ -291,6 +315,22 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                 raise ConfigError(
                     f"{field} value {value} collides between {previous} and {repository}"
                 )
+    stable_d16_capacity = sum(
+        spec["max_runners"]
+        for config in configs
+        for spec in config["scale_sets"]
+        if spec["profile"] == "compute"
+    )
+    candidate_d16_demand = sum(
+        spec["max_runners"]
+        for config in configs
+        for spec in config["scale_sets"]
+        if spec["profile"] == "compute-d16-candidate"
+    )
+    if candidate_d16_demand > stable_d16_capacity:
+        raise ConfigError(
+            "D16 candidate demand exceeds the shared production compute capacity"
+        )
     return configs
 
 

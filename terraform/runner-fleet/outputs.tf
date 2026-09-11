@@ -34,6 +34,16 @@ output "maximum_fleet_vcpus" {
 }
 
 output "required_vcpu_quota" {
-  description = "Minimum approved DADSv5 and total regional quota before capacity is raised."
-  value       = local.required_vcpu_quota
+  description = "Minimum approved DADSv5 quota before capacity is raised."
+  value       = local.required_dadsv5_quota
+}
+
+output "required_fsv2_vcpu_quota" {
+  description = "Minimum approved FSv2-family quota for the blue/green candidate."
+  value       = local.required_fsv2_quota
+}
+
+output "required_total_vcpu_quota" {
+  description = "Minimum approved total regional quota for blue/green overlap."
+  value       = local.required_total_quota
 }

@@ -14,7 +14,8 @@ control-plane diagnostics.
 | --- | --- | --- | --- | --- |
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
 | socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
-| compute | Standard_D16ads_v5 | 0-5 | ephemeral | CPU-heavy socketless xcsh runners |
+| compute | Standard_D16ads_v5 | 0-9 | ephemeral | Production CPU-heavy socketless runners |
+| compute-f32 | Standard_F32s_v2 | 0-5 | ephemeral | Temporary blue/green density candidate |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
 Labels and NoSchedule taints enforce profile placement. Do not substitute
@@ -88,11 +89,22 @@ existing secrets server-side into the configured namespaces after verifying the
 source and destination namespaces; never print or persist the secret payloads.
 
 Finally export `SOCKETLESS_IMAGE` and `CONTAINER_BUILD_IMAGE` as immutable
-references and deploy the xcsh scale sets and pre-pullers:
+references. During the bounded optimization experiment, also export
+`COMPUTE_CANDIDATE_IMAGE`; when an ACR mirror is used, provide its equal
+`COMPUTE_CANDIDATE_SOURCE_IMAGE`. Deploy the xcsh scale sets and pre-pullers:
 
     scripts/arc-deploy.sh arc/repositories/xcsh.yaml runners
 
-The xcsh socketless, compute, and container-build scale sets are capped at 10, 5, and 3 respectively, all with zero idle runners. The original self-hosted-runner configuration retains its 20 and 5 limits. Every worker pool scales to zero; after demand drains, the autoscaler retains nodes for 60 minutes.
+Stable production compute routing remains unchanged while its capacity caps are
+raised to xcsh 4, enriched specs 2, and provider 3. The nine aggregate D16 slots
+map one runner per node. Temporary candidate labels remain isolated at zero idle
+runners: the D16 candidate shares that nine-node production pool and is capped
+at four jobs, while F32 density is capped at xcsh 4, enriched specs 2, and
+provider 3. The nine aggregate F32 runner slots stay below the ten physical slots
+available on five two-pod nodes. Candidate pods use a negative, non-preempting
+priority, so production runners retain priority if the shared D16 pool is
+contended. Every worker pool scales to zero; after demand drains, the autoscaler
+retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -106,7 +118,12 @@ docs-container-build.
 
 ## Capacity evidence and image mirror
 
-Do not raise node-pool limits until both Canada Central `standardDADSv5Family` and total regional `cores` quotas are at least 600. The maximum 30/5/5 worker fleet plus three system nodes consumes 412 vCPUs, leaving more than 20% headroom at that quota.
+Do not create the candidate pool until Canada Central quota is at least 600
+`standardDADSv5Family`, 200 `standardFSv2Family`, and 795 total regional `cores`.
+The blue/green maximum consumes 464 DADSv5, 160 FSv2, and 636 total vCPUs
+including three system nodes, retaining at least 20% headroom in every scope.
+The verified 2026-09-09 subscription snapshot was 600 DADSv5, 350 FSv2, and 850
+regional vCPUs; revalidate it immediately before applying the saved plan.
 
 The Premium `f5salesdemoarcca` registry is a deployment mirror; GHCR remains
 the publication authority. Anonymous pull is intentionally enabled for the
@@ -128,6 +145,28 @@ Capture a 30-day GitHub baseline and the live Kubernetes scheduling/metrics stat
 
     scripts/arc-capacity.py collect --repository f5-sales-demo/xcsh --days 30 --output arc-capacity.json
 
-`runner-profile --name <phase> --output <file> -- <command>` records only approved identity fields and cgroup-v2 counters; it never records command arguments, environment values, credentials, or payloads. Jobs upload uniquely named `workload-profile-*` artifacts for 30 days. The capacity collector downloads those artifacts, validates schema version 1, aggregates phase medians/p95/memory/stability, and emits candidate comparisons only after five digest-matched pairs. Dependency wait (`workflow created` to `job created`) is reported separately from runnable assignment (`job created` to `job started`). Post-migration cutoffs exclude legacy-label history.
+For an exact benchmark run, start both redacted lifecycle observers before the
+workflow. They append only Kubernetes identity, scheduling, resource, and
+termination fields and reconnect after an API watch ends:
+
+    scripts/arc-lifecycle-watch.sh pods evidence/pod-watch.jsonl &
+    pod_watch_pid=$!
+    scripts/arc-lifecycle-watch.sh nodes evidence/node-watch.jsonl &
+    node_watch_pid=$!
+
+After the workflow and its ephemeral runner pods finish, collect the immutable
+run and observer files together, then stop the observers:
+
+    scripts/arc-capacity.py collect \
+      --repository f5-sales-demo/xcsh \
+      --run-id <workflow-run-id> \
+      --pod-watch evidence/pod-watch.jsonl \
+      --node-watch evidence/node-watch.jsonl \
+      --price-evidence evidence/retail-prices.json \
+      --output evidence/collector.json
+    scripts/arc-capacity.py evaluate evidence/collector.json >evidence/evaluation.json
+    kill "$pod_watch_pid" "$node_watch_pid"
+
+`runner-profile --name <phase> --output <file> -- <command>` records only approved identity fields and cgroup-v2 counters; it never records command arguments, environment values, credentials, or payloads. Jobs upload uniquely named `workload-profile-*` artifacts for 30 days. The capacity collector downloads those artifacts, validates schema version 1, retains deleted-pod assignment and historical-node readiness from the observers, validates the node-filesystem sidecar and exact Canada Central price evidence, aggregates phase medians/p95/memory/stability, and emits five-pair hardware comparisons plus four-slot burst-clearance and cost comparisons. The 20% speedup gate applies to burst clearance; full hardware cells instead enforce the required p95 runtime non-regression. F32 eligibility also requires four successful burst jobs on four correlated runners and observed overlap of exactly two runners on at least one F32 node. Candidate qualification permits at most one percentage point of median CPU throttle-period regression and separately reports pod failures, evictions, container restarts, and OOM kills. Cost per successful workflow uses measured active runner-slot time; the independent peak gate evaluates the five-F32 and nine-D16 ceilings against twice the current five-D16 ceiling. Dependency wait (`workflow created` to `job created`) is reported separately from runnable assignment (`job created` to `job started`). Post-migration cutoffs exclude legacy-label history.
 
 The checked-in policy defines the 06:00-22:00 America/Toronto service window, warm (20-second p95) and cold (180-second p95) targets, two consecutive five-minute breach rule, ten-minute job wait, two-minute saturated-pool rule, 20% quota headroom, and deterministic repository cap formula. A start is warm only when a schedulable Ready node of the requested profile existed when the job entered the queue.

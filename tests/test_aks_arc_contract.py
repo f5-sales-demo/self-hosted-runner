@@ -26,6 +26,7 @@ class AksArcContractTests(unittest.TestCase):
             '"Standard_D4as_v5"',
             '"Standard_D8ads_v5"',
             '"Standard_D16ads_v5"',
+            '"Standard_F32s_v2"',
             "only_critical_addons_enabled = true",
             '"runner-profile=${each.value.profile}:NoSchedule"',
             'os_disk_type           = "Ephemeral"',
@@ -39,6 +40,8 @@ class AksArcContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("azurerm_role_assignment", source)
         self.assertNotIn("AcrPull", source)
+        self.assertIn("maximum      = 9", source)
+        self.assertIn("required_total_quota  = 795", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/runner-fleet/main.tf").read_text(
@@ -71,9 +74,13 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("kubectl get secret ghcr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
-        self.assertEqual(1, deploy.count("for profile in socketless container-build"))
+        self.assertIn("cache_profiles=(socketless container-build)", deploy)
+        self.assertIn("cache_profiles+=(compute-candidate)", deploy)
         self.assertIn("nodeProfiles[1]=compute", deploy)
+        self.assertIn("nodeProfiles[1]=compute-f32", deploy)
+        self.assertIn("COMPUTE_CANDIDATE_IMAGE", deploy)
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
+        self.assertIn("kubectl apply -f arc/candidate-priority-class.yaml", deploy)
         self.assertTrue((ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111)
         mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")
         self.assertLess(
@@ -88,6 +95,21 @@ class AksArcContractTests(unittest.TestCase):
             'if [[ "$mode" == runners || "$mode" == all ]]', 1
         )[1]
         self.assertNotIn("runner-image-cache arc/prepull", runners_block)
+
+    def test_candidate_priority_is_negative_and_non_preempting(self) -> None:
+        priority = (ROOT / "arc/candidate-priority-class.yaml").read_text(
+            encoding="utf-8"
+        )
+        d16 = (ROOT / "arc/compute-d16-candidate-values.yaml").read_text(
+            encoding="utf-8"
+        )
+        f32 = (ROOT / "arc/compute-f32-candidate-values.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("value: -1000", priority)
+        self.assertIn("preemptionPolicy: Never", priority)
+        self.assertIn("priorityClassName: runner-candidate", d16)
+        self.assertIn("priorityClassName: runner-candidate", f32)
 
     def test_controller_post_renderer_uses_python(self) -> None:
         post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"
@@ -118,6 +140,31 @@ class AksArcContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("scripts/validate-arc.sh arc/repositories/*.yaml", workflow)
+
+    def test_f32_candidate_has_two_pod_density_resources(self) -> None:
+        values = (ROOT / "arc/compute-f32-candidate-values.yaml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("runner-profile: compute-f32", values)
+        self.assertIn('cpu: "14"', values)
+        self.assertIn("memory: 28Gi", values)
+        self.assertIn("ephemeral-storage: 24Gi", values)
+        self.assertIn('cpu: "15"', values)
+        self.assertIn("memory: 30Gi", values)
+        self.assertIn("ephemeral-storage: 40Gi", values)
+
+    def test_lifecycle_watcher_is_redacted_and_reconnects(self) -> None:
+        watcher = ROOT / "scripts/arc-lifecycle-watch.sh"
+        self.assertTrue(watcher.stat().st_mode & 0o111)
+        source = watcher.read_text(encoding="utf-8")
+        self.assertIn("<pods|nodes> <output.jsonl>", source)
+        self.assertIn("actions.github.com/scale-set-name", source)
+        self.assertIn("--output-watch-events", source)
+        self.assertIn("container_statuses", source)
+        self.assertIn("unschedulable", source)
+        self.assertIn("reconnecting", source)
+        for forbidden in ("env:", "command:", "args:", "secret"):
+            self.assertNotIn(forbidden, source)
 
 
 if __name__ == "__main__":

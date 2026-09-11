@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import math
@@ -13,7 +14,7 @@ import sys
 import zipfile
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from statistics import median, quantiles
 from zoneinfo import ZoneInfo
 
@@ -75,6 +76,23 @@ DOCKER_PROFILE_REQUIRED = {
     "observer",
 }
 SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
+NODE_FILESYSTEM_REQUIRED = {
+    "filesystem_bytes",
+    "used_bytes",
+    "available_bytes",
+    "used_ratio",
+}
+BURST_PATTERNS = {
+    "baseline": re.compile(r"^Current D16 two-slot burst / slot-[1-4]$"),
+    "d16-four": re.compile(r"^Candidate D16 four-slot burst / slot-[1-4]$"),
+    "f32": re.compile(r"^F32 four-job burst / slot-[1-4]$"),
+}
+BURST_COST_MODEL = {
+    "baseline": {"sku": "d16", "runners_per_node": 1, "peak_nodes": 5},
+    "d16-four": {"sku": "d16", "runners_per_node": 1, "peak_nodes": 9},
+    "f32": {"sku": "f32", "runners_per_node": 2, "peak_nodes": 5},
+}
+MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO = 0.01
 
 
 def _integer_map(value: object, name: str) -> dict:
@@ -342,6 +360,27 @@ def validate_workload_profile(profile: object) -> dict:
     return profile
 
 
+def validate_node_filesystem(report: object) -> dict:
+    if not isinstance(report, dict) or set(report) != NODE_FILESYSTEM_REQUIRED:
+        raise TypeError("node filesystem report fields do not match the contract")
+    for key in ("filesystem_bytes", "used_bytes", "available_bytes"):
+        value = report[key]
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise TypeError(f"invalid node filesystem counter: {key}")
+    ratio = report["used_ratio"]
+    if (
+        isinstance(ratio, bool)
+        or not isinstance(ratio, (int, float))
+        or not 0 <= ratio <= 1
+    ):
+        raise TypeError("invalid node filesystem used ratio")
+    if report["used_bytes"] > report["filesystem_bytes"]:
+        raise ValueError("node filesystem used bytes exceed its capacity")
+    if report["available_bytes"] > report["filesystem_bytes"]:
+        raise ValueError("node filesystem available bytes exceed its capacity")
+    return report
+
+
 def parse_time(value: str | None) -> datetime | None:
     if not value:
         return None
@@ -364,13 +403,26 @@ def recommend_cap(
     )
 
 
-def classify_warm(queued_at: datetime, nodes: list[dict], profile: str) -> bool:
+def classify_warm(
+    demanded_at: datetime,
+    nodes: list[dict],
+    profile: str,
+    node_name: str | None = None,
+) -> bool:
     for node in nodes:
-        if node.get("profile") != profile or not node.get("schedulable", False):
+        if (
+            node.get("profile") != profile
+            or not node.get("schedulable", False)
+            or (node_name and node.get("name") != node_name)
+        ):
             continue
         ready = parse_time(node.get("ready_at"))
         removed = parse_time(node.get("removed_at"))
-        if ready and ready <= queued_at and (removed is None or queued_at < removed):
+        if (
+            ready
+            and ready <= demanded_at
+            and (removed is None or demanded_at < removed)
+        ):
             return True
     return False
 
@@ -384,6 +436,38 @@ def in_service_window(instant: datetime, policy: dict) -> bool:
     )
 
 
+def assignment_slo_summary(samples: list[dict], policy: dict) -> list[dict]:
+    reports = []
+    for kind, warm in (("warm", True), ("cold", False)):
+        values = []
+        for sample in samples:
+            if (
+                not sample.get("assignment_slo_eligible", True)
+                or sample.get("warm") is not warm
+            ):
+                continue
+            value = sample.get("assignment_seconds")
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and value >= 0
+            ):
+                values.append(float(value))
+        limit = policy["slo_seconds"][f"{kind}_assignment_p95"]
+        p95 = percentile95(values)
+        reports.append(
+            {
+                "class": kind,
+                "samples": len(values),
+                "median_seconds": median(values) if values else None,
+                "p95_seconds": p95,
+                "limit_seconds": limit,
+                "qualifies": p95 is not None and p95 <= limit,
+            }
+        )
+    return reports
+
+
 def evaluate(
     samples: list[dict], policy: dict, now: datetime, quotas: list[dict] | None = None
 ) -> dict:
@@ -394,17 +478,19 @@ def evaluate(
         eligible = sample.get("assignment_slo_eligible", True)
         queued = parse_time(sample.get("queued_at"))
         if eligible and queued and sample.get("started_at"):
-            started = parse_time(sample["started_at"])
-            assert started is not None
+            assignment = sample.get("assignment_seconds")
             boundary = queued.replace(
                 minute=(queued.minute // interval) * interval, second=0, microsecond=0
             )
             warm = sample.get("warm")
-            if warm is not None:
+            if (
+                warm is not None
+                and isinstance(assignment, (int, float))
+                and not isinstance(assignment, bool)
+                and assignment >= 0
+            ):
                 kind = "warm" if warm else "cold"
-                buckets.setdefault((kind, boundary), []).append(
-                    (started - queued).total_seconds()
-                )
+                buckets.setdefault((kind, boundary), []).append(float(assignment))
         wait = sample.get("assignment_seconds")
         if (
             eligible
@@ -471,6 +557,7 @@ def evaluate(
         "generated_at": now.astimezone(UTC).isoformat(),
         "paging": paging,
         "alerts": [{**item, "page": paging} for item in alerts],
+        "assignment_slo_summary": assignment_slo_summary(samples, policy),
     }
 
 
@@ -592,6 +679,17 @@ def summarize_kubernetes(resources: dict) -> dict:
         namespace = metadata.get("namespace", "default")
         name = metadata.get("name")
         status = item.get("status", {})
+        container_statuses = status.get("containerStatuses") or []
+        termination_reasons = [
+            termination.get("reason")
+            for container in container_statuses
+            if isinstance(container, dict)
+            for state_key in ("state", "lastState")
+            for termination in [
+                (container.get(state_key) or {}).get("terminated") or {}
+            ]
+            if isinstance(termination, dict) and termination.get("reason")
+        ]
         node_name = item.get("spec", {}).get("nodeName")
         scheduled = next(
             (
@@ -606,12 +704,15 @@ def summarize_kubernetes(resources: dict) -> dict:
             name,
             *[value for value in labels.values() if isinstance(value, str)],
         }
+        runner_profile = managed_profile(
+            [value for value in labels.values() if isinstance(value, str)]
+        ) or (nodes_by_name.get(node_name) or {}).get("profile")
         pods.append(
             {
                 "namespace": namespace,
                 "name": name,
                 "identities": sorted(identity for identity in identities if identity),
-                "profile": (nodes_by_name.get(node_name) or {}).get("profile"),
+                "profile": runner_profile,
                 "node": node_name,
                 "created_at": metadata.get("creationTimestamp"),
                 "scheduled_at": scheduled.get("lastTransitionTime")
@@ -619,14 +720,23 @@ def summarize_kubernetes(resources: dict) -> dict:
                 else None,
                 "started_at": status.get("startTime"),
                 "phase": status.get("phase"),
+                "reason": status.get("reason"),
+                "restart_count": sum(
+                    int(entry.get("restartCount", 0))
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
+                ),
+                "termination_reasons": termination_reasons,
                 "usage": pod_metrics.get(f"{namespace}/{name}"),
                 "images": [
                     entry.get("image")
-                    for entry in status.get("containerStatuses") or []
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
                 ],
                 "image_ids": [
                     entry.get("imageID")
-                    for entry in status.get("containerStatuses") or []
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
                 ],
                 "image_pull_events": sorted(
                     image_events.get((namespace, name), []),
@@ -648,7 +758,7 @@ def summarize_kubernetes(resources: dict) -> dict:
                 "running": status.get("runningRunners"),
             }
         )
-    quota_names = {"cores", "standardDADSv5Family"}
+    quota_names = {"cores", "standardDADSv5Family", "standardFSv2Family"}
     quotas = [
         {
             "name": item.get("name", {}).get("value"),
@@ -661,11 +771,314 @@ def summarize_kubernetes(resources: dict) -> dict:
     return {"nodes": nodes, "pods": pods, "runner_sets": runner_sets, "quotas": quotas}
 
 
+def load_pod_watch(path: Path) -> dict:
+    digest = hashlib.sha256()
+    latest: dict[tuple[str, str], dict] = {}
+    event_count = 0
+    with path.open("rb") as stream:
+        for line_number, raw_line in enumerate(stream, 1):
+            digest.update(raw_line)
+            if not raw_line.strip():
+                continue
+            try:
+                event = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError(
+                    f"invalid pod watch JSON on line {line_number}"
+                ) from error
+            pod = event.get("pod") if isinstance(event, dict) else None
+            namespace = pod.get("namespace") if isinstance(pod, dict) else None
+            name = pod.get("name") if isinstance(pod, dict) else None
+            if not isinstance(namespace, str) or not namespace:
+                raise ValueError(
+                    f"pod watch event on line {line_number} lacks a namespace"
+                )
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"pod watch event on line {line_number} lacks a name")
+            latest[(namespace, name)] = pod
+            event_count += 1
+
+    pods = []
+    for (namespace, name), pod in sorted(latest.items()):
+        conditions = pod.get("conditions") or []
+        container_statuses = pod.get("container_statuses") or []
+        if not isinstance(conditions, list) or not isinstance(container_statuses, list):
+            raise TypeError(f"invalid pod watch state for {namespace}/{name}")
+        scheduled = next(
+            (
+                condition
+                for condition in conditions
+                if isinstance(condition, dict)
+                and condition.get("type") == "PodScheduled"
+                and condition.get("status") == "True"
+            ),
+            {},
+        )
+        scale_set = pod.get("scale_set")
+        identities = {name}
+        if isinstance(scale_set, str) and scale_set:
+            identities.add(scale_set)
+        termination_reasons = [
+            termination.get("reason")
+            for container in container_statuses
+            if isinstance(container, dict)
+            for state_key in ("state", "lastState")
+            for termination in [
+                (container.get(state_key) or {}).get("terminated") or {}
+            ]
+            if isinstance(termination, dict) and termination.get("reason")
+        ]
+        pods.append(
+            {
+                "namespace": namespace,
+                "name": name,
+                "identities": sorted(identities),
+                "profile": managed_profile([scale_set])
+                if isinstance(scale_set, str)
+                else None,
+                "node": pod.get("node"),
+                "created_at": pod.get("created_at"),
+                "scheduled_at": scheduled.get("lastTransitionTime"),
+                "started_at": pod.get("started_at"),
+                "phase": pod.get("phase"),
+                "reason": pod.get("reason"),
+                "restart_count": sum(
+                    int(entry.get("restartCount", 0))
+                    for entry in container_statuses
+                    if isinstance(entry, dict)
+                ),
+                "termination_reasons": termination_reasons,
+                "usage": None,
+                "images": [
+                    status.get("image")
+                    for status in container_statuses
+                    if isinstance(status, dict)
+                ],
+                "image_ids": [
+                    status.get("imageID")
+                    for status in container_statuses
+                    if isinstance(status, dict)
+                ],
+                "image_pull_events": [],
+                "observed_deleted_at": pod.get("deleted_at"),
+            }
+        )
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{digest.hexdigest()}",
+        "event_count": event_count,
+        "pod_count": len(pods),
+        "pods": pods,
+    }
+
+
+def merge_observed_pods(summary: dict, observed_pods: list[dict]) -> None:
+    current = {
+        (pod.get("namespace"), pod.get("name")) for pod in summary.get("pods", [])
+    }
+    summary.setdefault("pods", []).extend(
+        pod
+        for pod in observed_pods
+        if (pod.get("namespace"), pod.get("name")) not in current
+    )
+    summary["pods"].sort(
+        key=lambda pod: (pod.get("namespace") or "", pod.get("name") or "")
+    )
+
+
+def summarize_pod_stability(pods: list[dict]) -> list[dict]:
+    groups: dict[str, list[dict]] = {}
+    for pod in pods:
+        namespace = str(pod.get("namespace") or "")
+        profile = pod.get("profile")
+        if not namespace.startswith("arc-runners-") or not profile:
+            continue
+        groups.setdefault(str(profile), []).append(pod)
+    return [
+        {
+            "runner_profile": profile,
+            "pods": len(values),
+            "failed_pods": sum(pod.get("phase") == "Failed" for pod in values),
+            "evictions": sum(pod.get("reason") == "Evicted" for pod in values),
+            "container_restarts": sum(
+                int(pod.get("restart_count") or 0) for pod in values
+            ),
+            "oom_kills": sum(
+                reason == "OOMKilled"
+                for pod in values
+                for reason in pod.get("termination_reasons") or []
+            ),
+            "stable": all(pod.get("phase") != "Failed" for pod in values)
+            and all(pod.get("reason") != "Evicted" for pod in values)
+            and all(int(pod.get("restart_count") or 0) == 0 for pod in values)
+            and all(
+                reason != "OOMKilled"
+                for pod in values
+                for reason in pod.get("termination_reasons") or []
+            ),
+        }
+        for profile, values in sorted(groups.items())
+    ]
+
+
+def f32_cotenancy_summary(samples: list[dict]) -> dict:
+    """Prove that the four-job F32 burst actually shared a node."""
+    burst_samples = [
+        sample
+        for sample in samples
+        if BURST_PATTERNS["f32"].match(str(sample.get("name") or ""))
+    ]
+    intervals_by_node: dict[str, list[tuple[datetime, datetime]]] = {}
+    correlated = 0
+    runner_names = set()
+    for sample in burst_samples:
+        pod = sample.get("pod")
+        started = parse_time(sample.get("started_at"))
+        completed = parse_time(sample.get("completed_at"))
+        node = pod.get("node") if isinstance(pod, dict) else None
+        runner_name = sample.get("runner_name")
+        if (
+            not isinstance(node, str)
+            or not node
+            or not isinstance(runner_name, str)
+            or not runner_name
+            or not started
+            or not completed
+            or completed <= started
+        ):
+            continue
+        correlated += 1
+        runner_names.add(runner_name)
+        intervals_by_node.setdefault(node, []).append((started, completed))
+
+    peak_by_node = {}
+    for node, intervals in intervals_by_node.items():
+        events = [
+            event
+            for started, completed in intervals
+            for event in ((started, 1), (completed, -1))
+        ]
+        concurrent = peak = 0
+        for _, delta in sorted(events, key=lambda event: (event[0], event[1])):
+            concurrent += delta
+            peak = max(peak, concurrent)
+        peak_by_node[node] = peak
+
+    cotenant_nodes = sorted(node for node, peak in peak_by_node.items() if peak >= 2)
+    maximum = max(peak_by_node.values(), default=0)
+    successful = sum(sample.get("conclusion") == "success" for sample in burst_samples)
+    return {
+        "jobs": len(burst_samples),
+        "successful_jobs": successful,
+        "correlated_jobs": correlated,
+        "unique_runners": len(runner_names),
+        "nodes": len(intervals_by_node),
+        "maximum_concurrent_runners_per_node": maximum,
+        "nodes_with_two_runner_overlap": cotenant_nodes,
+        "observed": bool(cotenant_nodes),
+        "qualifies": len(burst_samples) == 4
+        and successful == 4
+        and correlated == 4
+        and len(runner_names) == 4
+        and maximum == 2,
+    }
+
+
+def load_node_watch(path: Path) -> dict:
+    digest = hashlib.sha256()
+    latest: dict[str, tuple[str, str | None, dict]] = {}
+    event_count = 0
+    with path.open("rb") as stream:
+        for line_number, raw_line in enumerate(stream, 1):
+            digest.update(raw_line)
+            if not raw_line.strip():
+                continue
+            try:
+                event = json.loads(raw_line)
+            except (json.JSONDecodeError, UnicodeDecodeError) as error:
+                raise ValueError(
+                    f"invalid node watch JSON on line {line_number}"
+                ) from error
+            node = event.get("node") if isinstance(event, dict) else None
+            name = node.get("name") if isinstance(node, dict) else None
+            event_type = event.get("event_type") if isinstance(event, dict) else None
+            observed_at = event.get("observed_at") if isinstance(event, dict) else None
+            if not isinstance(name, str) or not name:
+                raise ValueError(f"node watch event on line {line_number} lacks a name")
+            if not isinstance(event_type, str) or not event_type:
+                raise ValueError(
+                    f"node watch event on line {line_number} lacks an event type"
+                )
+            if observed_at is not None and not isinstance(observed_at, str):
+                raise TypeError(
+                    f"node watch event on line {line_number} has an invalid timestamp"
+                )
+            latest[name] = (event_type, observed_at, node)
+            event_count += 1
+
+    nodes = []
+    for name, (event_type, observed_at, node) in sorted(latest.items()):
+        conditions = node.get("conditions") or []
+        if not isinstance(conditions, list):
+            raise TypeError(f"invalid node watch state for {name}")
+        ready = next(
+            (
+                condition
+                for condition in conditions
+                if isinstance(condition, dict) and condition.get("type") == "Ready"
+            ),
+            {},
+        )
+        nodes.append(
+            {
+                "name": name,
+                "profile": node.get("profile"),
+                "created_at": node.get("created_at"),
+                "ready_at": ready.get("lastTransitionTime")
+                if ready.get("status") == "True"
+                else None,
+                "removed_at": observed_at if event_type == "DELETED" else None,
+                "schedulable": not node.get("unschedulable", False)
+                and ready.get("status") == "True",
+                "usage": None,
+                "allocatable": node.get("allocatable") or {},
+            }
+        )
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{digest.hexdigest()}",
+        "event_count": event_count,
+        "node_count": len(nodes),
+        "nodes": nodes,
+    }
+
+
+def merge_observed_nodes(summary: dict, observed_nodes: list[dict]) -> None:
+    current = {node.get("name") for node in summary.get("nodes", [])}
+    summary.setdefault("nodes", []).extend(
+        node for node in observed_nodes if node.get("name") not in current
+    )
+    summary["nodes"].sort(key=lambda node: node.get("name") or "")
+
+
 def managed_profile(labels: list[str]) -> str | None:
-    for profile in ("compute", "container-build", "socketless"):
+    for profile in (
+        "compute-d16-candidate",
+        "compute-f32-candidate",
+        "compute",
+        "container-build",
+        "socketless",
+    ):
         if any(label == profile or label.endswith(f"-{profile}") for label in labels):
             return profile
     return None
+
+
+def node_profile_for_runner(profile: str) -> str:
+    return {
+        "compute-d16-candidate": "compute",
+        "compute-f32-candidate": "compute-f32",
+    }.get(profile, profile)
 
 
 def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
@@ -685,22 +1098,36 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
         profile = managed_profile(job.get("labels", [])) or (
             pod.get("profile") if pod else None
         )
+        pod_created = parse_time(pod.get("created_at")) if pod else None
         queued = parse_time(job.get("queued_at"))
+        demanded = queued or pod_created
         warm = (
-            classify_warm(queued, nodes, profile)
-            if queued and profile and pod
+            classify_warm(
+                demanded,
+                nodes,
+                node_profile_for_runner(profile),
+                pod.get("node"),
+            )
+            if demanded and profile and pod
             else None
         )
         scheduled = parse_time(pod.get("scheduled_at")) if pod else None
+        started = parse_time(job.get("started_at"))
+        arc_assignment_seconds = (
+            (started - pod_created).total_seconds() if started and pod_created else None
+        )
         sample = dict(job)
         sample.update(
             {
                 "profile": profile,
                 "warm": warm,
                 "pod": pod,
-                "assignment_slo_eligible": bool(profile),
-                "pod_schedule_seconds": (scheduled - queued).total_seconds()
-                if queued and scheduled
+                "github_queue_seconds": job.get("assignment_seconds"),
+                "assignment_seconds": arc_assignment_seconds,
+                "assignment_slo_eligible": bool(profile)
+                and arc_assignment_seconds is not None,
+                "pod_schedule_seconds": (scheduled - pod_created).total_seconds()
+                if pod_created and scheduled
                 else None,
             }
         )
@@ -708,18 +1135,29 @@ def correlate_jobs(jobs: list[dict], summary: dict) -> list[dict]:
     return samples
 
 
-def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
-    created = since.date().isoformat()
-    run_pages = command_json(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/runs?created=>={created}&per_page=100",
+def github_jobs(
+    repository: str,
+    since: datetime,
+    max_runs: int,
+    run_ids: list[int] | None = None,
+) -> list[dict]:
+    if run_ids:
+        runs = [
+            command_json(["gh", "api", f"repos/{repository}/actions/runs/{run_id}"])
+            for run_id in dict.fromkeys(run_ids)
         ]
-    )
-    runs = [run for page in run_pages for run in page["workflow_runs"]][:max_runs]
+    else:
+        created = since.date().isoformat()
+        run_pages = command_json(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/runs?created=>={created}&per_page=100",
+            ]
+        )
+        runs = [run for page in run_pages for run in page["workflow_runs"]][:max_runs]
     jobs = []
     for run in runs:
         run_created = parse_time(run.get("created_at"))
@@ -734,7 +1172,8 @@ def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
         )
         for job in (job for page in job_pages for job in page["jobs"]):
             queued = parse_time(job.get("created_at"))
-            started = parse_time(job.get("started_at"))
+            runner_name = job.get("runner_name")
+            started = parse_time(job.get("started_at")) if runner_name else None
             completed = parse_time(job.get("completed_at"))
             labels = job.get("labels", [])
             profile = managed_profile(labels)
@@ -760,11 +1199,12 @@ def github_jobs(repository: str, since: datetime, max_runs: int) -> list[dict]:
                     "run_created_at": run.get("created_at"),
                     "job_id": job["id"],
                     "name": job["name"],
+                    "status": job.get("status"),
                     "labels": labels,
-                    "runner_name": job.get("runner_name"),
+                    "runner_name": runner_name,
                     "runner_group_name": job.get("runner_group_name"),
                     "queued_at": job.get("created_at"),
-                    "started_at": job.get("started_at"),
+                    "started_at": job.get("started_at") if started else None,
                     "completed_at": job.get("completed_at"),
                     "dependency_wait_seconds": (queued - run_created).total_seconds()
                     if queued and run_created
@@ -866,20 +1306,277 @@ def aggregate_job_timings(jobs: list[dict]) -> list[dict]:
     ]
 
 
-def github_workload_profiles(
-    repository: str, since: datetime, max_artifacts: int = 200
-) -> tuple[list[dict], list[dict]]:
-    pages = command_json(
-        [
-            "gh",
-            "api",
-            "--paginate",
-            "--slurp",
-            f"repos/{repository}/actions/artifacts?per_page=100",
+def burst_job_groups(jobs: list[dict]) -> dict[tuple[str, int, str], list[dict]]:
+    groups: dict[tuple[str, int, str], list[dict]] = {}
+    for job in jobs:
+        name = str(job.get("name", ""))
+        variant = next(
+            (
+                candidate
+                for candidate, pattern in BURST_PATTERNS.items()
+                if pattern.fullmatch(name)
+            ),
+            None,
+        )
+        run_id = job.get("run_id")
+        repository = job.get("repository")
+        if variant is None or not isinstance(run_id, int) or not repository:
+            continue
+        groups.setdefault((str(repository), run_id, variant), []).append(job)
+    return groups
+
+
+def burst_clearance_comparisons(jobs: list[dict]) -> list[dict]:
+    groups = burst_job_groups(jobs)
+
+    reports = []
+    run_keys = sorted({(repository, run_id) for repository, run_id, _ in groups})
+    for repository, run_id in run_keys:
+        baseline = groups.get((repository, run_id, "baseline"), [])
+        baseline_queued = [parse_time(job.get("queued_at")) for job in baseline]
+        baseline_completed = [parse_time(job.get("completed_at")) for job in baseline]
+        baseline_durations = [
+            float(job["duration_seconds"])
+            for job in baseline
+            if isinstance(job.get("duration_seconds"), (int, float))
+            and not isinstance(job.get("duration_seconds"), bool)
         ]
-    )
+        baseline_clearance = (
+            (max(baseline_completed) - min(baseline_queued)).total_seconds()
+            if len(baseline) == 4 and all(baseline_queued) and all(baseline_completed)
+            else None
+        )
+        baseline_success = len(baseline) == 4 and all(
+            job.get("conclusion") == "success" for job in baseline
+        )
+        baseline_p95 = (
+            percentile95(baseline_durations)
+            if len(baseline_durations) == len(baseline) == 4
+            else None
+        )
+        for variant in ("d16-four", "f32"):
+            candidate = groups.get((repository, run_id, variant), [])
+            candidate_queued = [parse_time(job.get("queued_at")) for job in candidate]
+            candidate_completed = [
+                parse_time(job.get("completed_at")) for job in candidate
+            ]
+            candidate_durations = [
+                float(job["duration_seconds"])
+                for job in candidate
+                if isinstance(job.get("duration_seconds"), (int, float))
+                and not isinstance(job.get("duration_seconds"), bool)
+            ]
+            candidate_clearance = (
+                (max(candidate_completed) - min(candidate_queued)).total_seconds()
+                if len(candidate) == 4
+                and all(candidate_queued)
+                and all(candidate_completed)
+                else None
+            )
+            candidate_success = len(candidate) == 4 and all(
+                job.get("conclusion") == "success" for job in candidate
+            )
+            candidate_p95 = (
+                percentile95(candidate_durations)
+                if len(candidate_durations) == len(candidate) == 4
+                else None
+            )
+            improvement = (
+                (baseline_clearance - candidate_clearance) / baseline_clearance
+                if baseline_clearance and candidate_clearance is not None
+                else None
+            )
+            no_runtime_regression = (
+                baseline_p95 is not None
+                and candidate_p95 is not None
+                and candidate_p95 <= baseline_p95
+            )
+            reports.append(
+                {
+                    "repository": repository,
+                    "run_id": run_id,
+                    "variant": variant,
+                    "baseline_jobs": len(baseline),
+                    "candidate_jobs": len(candidate),
+                    "baseline_clearance_seconds": baseline_clearance,
+                    "candidate_clearance_seconds": candidate_clearance,
+                    "clearance_improvement_ratio": improvement,
+                    "minimum_clearance_improvement_ratio": 0.2,
+                    "baseline_p95_runtime_seconds": baseline_p95,
+                    "candidate_p95_runtime_seconds": candidate_p95,
+                    "no_p95_runtime_regression": no_runtime_regression,
+                    "stable": baseline_success and candidate_success,
+                    "qualifies": baseline_success
+                    and candidate_success
+                    and improvement is not None
+                    and improvement >= 0.2
+                    and no_runtime_regression,
+                }
+            )
+    return reports
+
+
+def load_price_evidence(path: Path) -> dict:
+    raw = path.read_bytes()
+    payload = json.loads(raw)
+    if not isinstance(payload, dict):
+        raise TypeError("price evidence must be a JSON object")
+    currency = payload.get("currency")
+    region = payload.get("region")
+    if not isinstance(currency, str) or not currency:
+        raise TypeError("price evidence currency must be a nonempty string")
+    if region != "canadacentral":
+        raise ValueError("price evidence must be for Canada Central")
+
+    rates = {}
+    expected_skus = {
+        "d16": "Standard_D16ads_v5",
+        "f32": "Standard_F32s_v2",
+    }
+    for key, expected_sku in expected_skus.items():
+        item = payload.get(key)
+        if not isinstance(item, dict) or item.get("armSkuName") != expected_sku:
+            raise ValueError(f"price evidence lacks exact {expected_sku} pricing")
+        if (
+            item.get("currencyCode") != currency
+            or item.get("unitOfMeasure") != "1 Hour"
+        ):
+            raise ValueError(f"price evidence has incompatible {expected_sku} units")
+        rate = item.get("unitPrice")
+        if isinstance(rate, bool) or not isinstance(rate, (int, float)) or rate <= 0:
+            raise TypeError(f"price evidence has invalid {expected_sku} hourly rate")
+        rates[key] = float(rate)
+
+    current_ceiling = rates["d16"] * BURST_COST_MODEL["baseline"]["peak_nodes"]
+    maximum_ceiling = current_ceiling * 2
+    peak_hourly_costs = {
+        variant: rates[model["sku"]] * model["peak_nodes"]
+        for variant, model in BURST_COST_MODEL.items()
+    }
+    return {
+        "path": str(path),
+        "sha256": f"sha256:{hashlib.sha256(raw).hexdigest()}",
+        "collected_at": payload.get("collected_at"),
+        "source": payload.get("source"),
+        "region": region,
+        "currency": currency,
+        "vm_hourly_rates": rates,
+        "runner_slot_hourly_rates": {
+            variant: rates[model["sku"]] / model["runners_per_node"]
+            for variant, model in BURST_COST_MODEL.items()
+        },
+        "current_peak_hourly_cost": current_ceiling,
+        "maximum_peak_hourly_cost": maximum_ceiling,
+        "candidate_peak_hourly_costs": {
+            key: peak_hourly_costs[key] for key in ("d16-four", "f32")
+        },
+        "candidate_peak_below_limit": {
+            key: peak_hourly_costs[key] < maximum_ceiling for key in ("d16-four", "f32")
+        },
+    }
+
+
+def _runner_cost(jobs: list[dict], slot_hourly_rate: float) -> dict:
+    durations = [
+        float(job["duration_seconds"])
+        for job in jobs
+        if isinstance(job.get("duration_seconds"), (int, float))
+        and not isinstance(job.get("duration_seconds"), bool)
+        and job["duration_seconds"] >= 0
+    ]
+    successes = sum(job.get("conclusion") == "success" for job in jobs)
+    complete = len(jobs) == len(durations) == 4
+    total_cost = sum(durations) * slot_hourly_rate / 3600 if complete else None
+    return {
+        "jobs": len(jobs),
+        "successful_jobs": successes,
+        "runner_slot_hours": sum(durations) / 3600 if complete else None,
+        "total_runner_cost": total_cost,
+        "cost_per_successful_workflow": total_cost / successes
+        if total_cost is not None and successes
+        else None,
+        "stable": complete and successes == 4,
+    }
+
+
+def burst_cost_comparisons(jobs: list[dict], pricing: dict | None) -> list[dict]:
+    if not pricing:
+        return []
+    groups = burst_job_groups(jobs)
+    rates = pricing["runner_slot_hourly_rates"]
+    peak_costs = pricing["candidate_peak_hourly_costs"]
+    peak_gate = pricing["candidate_peak_below_limit"]
+    reports = []
+    run_keys = sorted({(repository, run_id) for repository, run_id, _ in groups})
+    for repository, run_id in run_keys:
+        baseline = _runner_cost(
+            groups.get((repository, run_id, "baseline"), []), rates["baseline"]
+        )
+        for variant in ("d16-four", "f32"):
+            candidate = _runner_cost(
+                groups.get((repository, run_id, variant), []), rates[variant]
+            )
+            baseline_cost = baseline["cost_per_successful_workflow"]
+            candidate_cost = candidate["cost_per_successful_workflow"]
+            cost_not_increased = (
+                baseline_cost is not None
+                and candidate_cost is not None
+                and candidate_cost <= baseline_cost
+            )
+            reports.append(
+                {
+                    "repository": repository,
+                    "run_id": run_id,
+                    "variant": variant,
+                    "currency": pricing["currency"],
+                    "baseline": baseline,
+                    "candidate": candidate,
+                    "cost_not_increased": cost_not_increased,
+                    "candidate_peak_hourly_cost": peak_costs[variant],
+                    "maximum_peak_hourly_cost": pricing["maximum_peak_hourly_cost"],
+                    "peak_below_twice_current": peak_gate[variant],
+                    "qualifies": baseline["stable"]
+                    and candidate["stable"]
+                    and cost_not_increased
+                    and peak_gate[variant],
+                }
+            )
+    return reports
+
+
+def github_workload_profiles(
+    repository: str,
+    since: datetime,
+    max_artifacts: int = 200,
+    run_ids: list[int] | None = None,
+) -> tuple[list[dict], list[dict], list[dict]]:
+    if run_ids:
+        pages = []
+        for run_id in dict.fromkeys(run_ids):
+            pages.extend(
+                command_json(
+                    [
+                        "gh",
+                        "api",
+                        "--paginate",
+                        "--slurp",
+                        f"repos/{repository}/actions/runs/{run_id}/artifacts?per_page=100",
+                    ]
+                )
+            )
+    else:
+        pages = command_json(
+            [
+                "gh",
+                "api",
+                "--paginate",
+                "--slurp",
+                f"repos/{repository}/actions/artifacts?per_page=100",
+            ]
+        )
     artifacts = [artifact for page in pages for artifact in page.get("artifacts", [])]
-    profiles, rejected = [], []
+    selected_run_ids = {str(run_id) for run_id in run_ids or []}
+    profiles, filesystem_reports, rejected = [], [], []
     for artifact in artifacts:
         if len(profiles) >= max_artifacts:
             break
@@ -888,7 +1585,7 @@ def github_workload_profiles(
             not str(artifact.get("name", "")).startswith("workload-profile-")
             or artifact.get("expired")
             or not created
-            or created < since
+            or (not selected_run_ids and created < since)
         ):
             continue
         result = subprocess.run(
@@ -903,14 +1600,46 @@ def github_workload_profiles(
             continue
         try:
             artifact_profiles = []
+            artifact_filesystem = None
             with zipfile.ZipFile(io.BytesIO(result.stdout)) as archive:
                 for name in archive.namelist():
-                    if not name.endswith(".json"):
+                    member = PurePosixPath(name)
+                    if member == PurePosixPath("node-filesystem.json"):
+                        artifact_filesystem = validate_node_filesystem(
+                            json.loads(archive.read(name))
+                        )
+                        continue
+                    if member.suffix != ".json" or not (
+                        member.name == "profile.json" or "profiles" in member.parts
+                    ):
                         continue
                     profile = validate_workload_profile(json.loads(archive.read(name)))
-                    artifact_profiles.append(profile)
+                    if (
+                        not selected_run_ids
+                        or str(profile.get("run_id")) in selected_run_ids
+                    ):
+                        artifact_profiles.append(profile)
             if not artifact_profiles:
-                raise ValueError("artifact contains no workload profiles")
+                raise ValueError("artifact contains no selected workload profiles")
+            if artifact_filesystem:
+                identity = artifact_profiles[0]
+                filesystem_reports.append(
+                    {
+                        "artifact_id": artifact["id"],
+                        "artifact_name": artifact.get("name"),
+                        "repository": identity.get("repository"),
+                        "run_id": identity.get("run_id"),
+                        "job_id": identity.get("job_id"),
+                        "runner_name": identity.get("runner_name"),
+                        "runner_profile": identity.get("runner_profile"),
+                        "variant": identity.get("variant"),
+                        "pair_id": identity.get("pair_id"),
+                        "cache_state": identity.get("cache_state"),
+                        **artifact_filesystem,
+                        "disk_below_70_percent": artifact_filesystem["used_ratio"]
+                        < 0.7,
+                    }
+                )
             profiles.extend(artifact_profiles)
         except (
             ValueError,
@@ -922,7 +1651,54 @@ def github_workload_profiles(
             rejected.append(
                 {"artifact_id": artifact["id"], "reason": "invalid_profile"}
             )
-    return profiles, rejected
+    return profiles, filesystem_reports, rejected
+
+
+def aggregate_node_filesystems(reports: list[dict]) -> list[dict]:
+    groups: dict[tuple, list[dict]] = {}
+    for report in reports:
+        key = (
+            report.get("repository"),
+            report.get("variant"),
+            report.get("cache_state"),
+            report.get("runner_profile"),
+        )
+        groups.setdefault(key, []).append(report)
+    return [
+        {
+            "repository": key[0],
+            "variant": key[1],
+            "cache_state": key[2],
+            "runner_profile": key[3],
+            "runs": len(values),
+            "max_used_ratio": max(value["used_ratio"] for value in values),
+            "disk_below_70_percent": all(
+                value["disk_below_70_percent"] for value in values
+            ),
+        }
+        for key, values in sorted(
+            groups.items(), key=lambda item: tuple(str(part) for part in item[0])
+        )
+    ]
+
+
+def cpu_throttling_ratio(profile: dict) -> float | None:
+    cpu = profile.get("cpu")
+    if not isinstance(cpu, dict):
+        return None
+    periods = cpu.get("nr_periods")
+    throttled = cpu.get("nr_throttled")
+    if (
+        isinstance(periods, bool)
+        or not isinstance(periods, int)
+        or periods < 0
+        or isinstance(throttled, bool)
+        or not isinstance(throttled, int)
+        or throttled < 0
+        or throttled > periods
+    ):
+        return None
+    return throttled / periods if periods else 0.0
 
 
 def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
@@ -942,8 +1718,34 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
     ):
         durations = [float(value["duration_seconds"]) for value in values]
         memory = [value.get("memory", {}).get("peak_limit_ratio") for value in values]
+        throttle_ratios = [
+            ratio
+            for value in values
+            if (ratio := cpu_throttling_ratio(value)) is not None
+        ]
         docker_values = [
             value for value in values if value.get("profile_kind") == "docker_action"
+        ]
+        workload_values = [
+            value for value in values if value.get("profile_kind") != "docker_action"
+        ]
+        cpu_utilization = [
+            float(value["cpu"]["utilization_ratio"])
+            for value in workload_values
+            if isinstance(value.get("cpu", {}).get("utilization_ratio"), (int, float))
+            and not isinstance(value["cpu"]["utilization_ratio"], bool)
+        ]
+        io_read_bytes = [
+            int(value["io"]["rbytes"])
+            for value in workload_values
+            if isinstance(value.get("io", {}).get("rbytes"), int)
+            and not isinstance(value["io"]["rbytes"], bool)
+        ]
+        io_write_bytes = [
+            int(value["io"]["wbytes"])
+            for value in workload_values
+            if isinstance(value.get("io", {}).get("wbytes"), int)
+            and not isinstance(value["io"]["wbytes"], bool)
         ]
         reports.append(
             {
@@ -957,6 +1759,34 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                 "p95_seconds": percentile95(durations),
                 "max_peak_memory_ratio": max(
                     (value for value in memory if value is not None), default=None
+                ),
+                "median_cpu_throttle_ratio": median(throttle_ratios)
+                if throttle_ratios
+                else None,
+                "p95_cpu_throttle_ratio": percentile95(throttle_ratios),
+                "median_cpu_utilization_ratio": median(cpu_utilization)
+                if cpu_utilization
+                else None,
+                "p95_cpu_utilization_ratio": percentile95(cpu_utilization),
+                "median_io_read_bytes": median(io_read_bytes)
+                if io_read_bytes
+                else None,
+                "median_io_write_bytes": median(io_write_bytes)
+                if io_write_bytes
+                else None,
+                "image_digests": sorted(
+                    {
+                        str(value["image_digest"])
+                        for value in workload_values
+                        if value.get("image_digest")
+                    }
+                ),
+                "output_digests": sorted(
+                    {
+                        str(value["output_digest"])
+                        for value in workload_values
+                        if value.get("output_digest")
+                    }
                 ),
                 "failures": sum(
                     (
@@ -1035,6 +1865,11 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             }
         )
         for variant in variants:
+            burst_phase = str(key[1]).endswith("-burst")
+            minimum_improvement = (
+                0.2 if burst_phase else None
+            )
+            required_pairs = 4 if burst_phase else 5
             candidate = {
                 item.get("pair_id"): item
                 for item in values
@@ -1043,16 +1878,61 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             pairs = sorted(set(baseline) & set(candidate))
             base_values = [baseline[pair]["duration_seconds"] for pair in pairs]
             candidate_values = [candidate[pair]["duration_seconds"] for pair in pairs]
+            baseline_commit_values = [baseline[pair].get("commit") for pair in pairs]
+            candidate_commit_values = [candidate[pair].get("commit") for pair in pairs]
+            baseline_image_values = [
+                baseline[pair].get("image_digest") for pair in pairs
+            ]
+            candidate_image_values = [
+                candidate[pair].get("image_digest") for pair in pairs
+            ]
+            baseline_commits = set(baseline_commit_values)
+            candidate_commits = set(candidate_commit_values)
+            baseline_images = set(baseline_image_values)
+            candidate_images = set(candidate_image_values)
+            frozen_commit = (
+                len(baseline_commit_values)
+                == len(candidate_commit_values)
+                == len(pairs)
+                and None not in baseline_commits
+                and None not in candidate_commits
+                and len(baseline_commits) == len(candidate_commits) == 1
+                and baseline_commits == candidate_commits
+            )
+            immutable_images = (
+                len(baseline_image_values) == len(candidate_image_values) == len(pairs)
+                and None not in baseline_images
+                and None not in candidate_images
+                and len(baseline_images) == len(candidate_images) == 1
+                and all(
+                    isinstance(image, str) and SHA256_PATTERN.fullmatch(image)
+                    for image in (*baseline_images, *candidate_images)
+                )
+            )
+            hardware_image_equivalent = (
+                baseline_images == candidate_images
+            )
             base_median = median(base_values) if base_values else None
             candidate_median = median(candidate_values) if candidate_values else None
             improvement = (
                 (base_median - candidate_median) / base_median if base_median else None
             )
-            correct = bool(pairs) and all(
+            pairwise_output_equivalent = bool(pairs) and all(
                 baseline[pair].get("output_digest") is not None
                 and baseline[pair].get("output_digest")
                 == candidate[pair].get("output_digest")
                 for pair in pairs
+            )
+            baseline_output_digests = {
+                baseline[pair].get("output_digest") for pair in pairs
+            }
+            candidate_output_digests = {
+                candidate[pair].get("output_digest") for pair in pairs
+            }
+            outputs_repeatable = (
+                None not in baseline_output_digests
+                and None not in candidate_output_digests
+                and len(baseline_output_digests) == len(candidate_output_digests) == 1
             )
             stable = all(
                 item.get("exit", {}).get("code") == 0
@@ -1066,18 +1946,49 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
             memory_ok = bool(memory_ratios) and all(
                 ratio is not None and ratio < 0.8 for ratio in memory_ratios
             )
+            base_throttle = [cpu_throttling_ratio(baseline[pair]) for pair in pairs]
+            candidate_throttle = [
+                cpu_throttling_ratio(candidate[pair]) for pair in pairs
+            ]
+            throttle_evidence_complete = bool(pairs) and all(
+                ratio is not None for ratio in (*base_throttle, *candidate_throttle)
+            )
+            base_throttle_values = [
+                float(ratio) for ratio in base_throttle if ratio is not None
+            ]
+            candidate_throttle_values = [
+                float(ratio) for ratio in candidate_throttle if ratio is not None
+            ]
+            base_throttle_median = (
+                median(base_throttle_values) if base_throttle_values else None
+            )
+            candidate_throttle_median = (
+                median(candidate_throttle_values) if candidate_throttle_values else None
+            )
+            no_sustained_throttling_regression = (
+                throttle_evidence_complete
+                and base_throttle_median is not None
+                and candidate_throttle_median is not None
+                and candidate_throttle_median
+                <= base_throttle_median + MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO
+            )
             base_p95 = percentile95(base_values)
             candidate_p95 = percentile95(candidate_values)
             qualifies = (
-                len(pairs) >= 5
+                len(pairs) >= required_pairs
                 and improvement is not None
-                and improvement >= 0.2
+                and (minimum_improvement is None or improvement >= minimum_improvement)
                 and candidate_p95 is not None
                 and base_p95 is not None
                 and candidate_p95 <= base_p95
-                and correct
+                and pairwise_output_equivalent
+                and outputs_repeatable
                 and stable
                 and memory_ok
+                and no_sustained_throttling_regression
+                and frozen_commit
+                and immutable_images
+                and hardware_image_equivalent
             )
             results.append(
                 {
@@ -1086,14 +1997,42 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     "cache_state": key[2],
                     "variant": variant,
                     "paired_runs": len(pairs),
+                    "required_pairs": required_pairs,
                     "baseline_median_seconds": base_median,
                     "candidate_median_seconds": candidate_median,
                     "median_improvement_ratio": improvement,
+                    "minimum_median_improvement_ratio": minimum_improvement,
                     "baseline_p95_seconds": base_p95,
                     "candidate_p95_seconds": candidate_p95,
-                    "output_equivalent": correct,
+                    "output_equivalent": pairwise_output_equivalent,
+                    "outputs_repeatable": outputs_repeatable,
+                    "baseline_output_digests": sorted(
+                        str(item) for item in baseline_output_digests
+                    ),
+                    "candidate_output_digests": sorted(
+                        str(item) for item in candidate_output_digests
+                    ),
+                    "frozen_commit": frozen_commit,
+                    "baseline_image_digests": sorted(
+                        str(item) for item in baseline_images
+                    ),
+                    "candidate_image_digests": sorted(
+                        str(item) for item in candidate_images
+                    ),
+                    "immutable_image_evidence": immutable_images,
+                    "hardware_image_equivalent": hardware_image_equivalent,
                     "stable": stable,
                     "memory_below_80_percent": memory_ok,
+                    "baseline_median_cpu_throttle_ratio": base_throttle_median,
+                    "baseline_p95_cpu_throttle_ratio": percentile95(
+                        base_throttle_values
+                    ),
+                    "candidate_median_cpu_throttle_ratio": candidate_throttle_median,
+                    "candidate_p95_cpu_throttle_ratio": percentile95(
+                        candidate_throttle_values
+                    ),
+                    "maximum_sustained_throttle_regression_ratio": MAX_SUSTAINED_THROTTLE_REGRESSION_RATIO,
+                    "no_sustained_cpu_throttling_regression": no_sustained_throttling_regression,
                     "qualifies": qualifies,
                 }
             )
@@ -1159,9 +2098,9 @@ def cap_recommendations(samples: list[dict], policy: dict, existing: dict) -> di
 def collect(args, policy: dict) -> dict:
     now = datetime.now(UTC)
     since = now - timedelta(days=args.days)
-    jobs, profiles, rejected = [], [], []
+    jobs, profiles, filesystem_reports, rejected = [], [], [], []
     for repository in args.repository:
-        repository_jobs = github_jobs(repository, since, args.max_runs)
+        repository_jobs = github_jobs(repository, since, args.max_runs, args.run_id)
         cutoff = parse_time(policy.get("baseline_not_before", {}).get(repository))
         if cutoff:
             repository_jobs = [
@@ -1170,28 +2109,67 @@ def collect(args, policy: dict) -> dict:
                 if (parse_time(job.get("run_created_at")) or since) >= cutoff
             ]
         jobs.extend(repository_jobs)
-        found, invalid = github_workload_profiles(repository, since, args.max_artifacts)
+        found, found_filesystems, invalid = github_workload_profiles(
+            repository, since, args.max_artifacts, args.run_id
+        )
         profiles.extend(found)
+        filesystem_reports.extend(found_filesystems)
         rejected.extend({"repository": repository, **item} for item in invalid)
     kubernetes = kubernetes_snapshot()
     summary = summarize_kubernetes(kubernetes)
+    pod_observer = load_pod_watch(args.pod_watch) if args.pod_watch else None
+    node_observer = load_node_watch(args.node_watch) if args.node_watch else None
+    if node_observer:
+        merge_observed_nodes(summary, node_observer["nodes"])
+    if pod_observer:
+        merge_observed_pods(summary, pod_observer["pods"])
     samples = correlate_jobs(jobs, summary)
+    selected_pods = {
+        (sample["pod"].get("namespace"), sample["pod"].get("name")): sample["pod"]
+        for sample in samples
+        if isinstance(sample.get("pod"), dict)
+    }
+    price_evidence = (
+        load_price_evidence(args.price_evidence) if args.price_evidence else None
+    )
     return {
         "schema_version": 2,
         "collected_at": now.isoformat(),
         "range": {"start": since.isoformat(), "end": now.isoformat()},
+        "selected_run_ids": [str(run_id) for run_id in args.run_id or []],
         "policy": policy,
         "samples": samples,
         "workload_profiles": profiles,
         "rejected_workload_profiles": rejected,
         "job_timing_reports": aggregate_job_timings(jobs),
+        "assignment_slo_summary": assignment_slo_summary(samples, policy),
+        "burst_clearance_comparisons": burst_clearance_comparisons(jobs),
+        "price_evidence": price_evidence,
+        "burst_cost_comparisons": burst_cost_comparisons(jobs, price_evidence),
         "workload_reports": aggregate_workload_profiles(profiles),
+        "node_filesystem_reports": filesystem_reports,
+        "node_filesystem_summary": aggregate_node_filesystems(filesystem_reports),
         "performance_comparisons": performance_comparisons(profiles),
         "repository_cap_recommendations": cap_recommendations(
             samples, policy, repository_caps()
         ),
         "kubernetes": kubernetes,
         "kubernetes_summary": summary,
+        "pod_stability_summary": summarize_pod_stability(summary["pods"]),
+        "selected_run_pod_stability_summary": summarize_pod_stability(
+            list(selected_pods.values())
+        ),
+        "f32_cotenancy_summary": f32_cotenancy_summary(samples),
+        "pod_observer": {
+            key: value for key, value in pod_observer.items() if key != "pods"
+        }
+        if pod_observer
+        else None,
+        "node_observer": {
+            key: value for key, value in node_observer.items() if key != "nodes"
+        }
+        if node_observer
+        else None,
     }
 
 
@@ -1204,10 +2182,33 @@ def main(argv=None) -> int:
     collect_parser.add_argument("--days", type=int, default=30)
     collect_parser.add_argument("--max-runs", type=int, default=200)
     collect_parser.add_argument("--max-artifacts", type=int, default=200)
+    collect_parser.add_argument(
+        "--pod-watch",
+        type=Path,
+        help="pod lifecycle JSONL captured while the selected workflow ran",
+    )
+    collect_parser.add_argument(
+        "--node-watch",
+        type=Path,
+        help="node lifecycle JSONL captured while the selected workflow ran",
+    )
+    collect_parser.add_argument(
+        "--run-id",
+        action="append",
+        type=int,
+        help="collect only this workflow run (repeatable; requires one repository)",
+    )
+    collect_parser.add_argument(
+        "--price-evidence",
+        type=Path,
+        help="validated Canada Central D16/F32 hourly price evidence",
+    )
     collect_parser.add_argument("--output", type=Path)
     evaluate_parser = subparsers.add_parser("evaluate")
     evaluate_parser.add_argument("evidence", type=Path)
     args = parser.parse_args(argv)
+    if args.command == "collect" and args.run_id and len(args.repository) != 1:
+        collect_parser.error("--run-id requires exactly one --repository")
     policy = json.loads(args.policy.read_text(encoding="utf-8"))
     if args.command == "collect":
         result = collect(args, policy)
@@ -1227,13 +2228,24 @@ def main(argv=None) -> int:
         for key in (
             "repository_cap_recommendations",
             "job_timing_reports",
+            "burst_clearance_comparisons",
+            "price_evidence",
+            "burst_cost_comparisons",
+            "pod_stability_summary",
+            "selected_run_pod_stability_summary",
+            "f32_cotenancy_summary",
             "workload_reports",
+            "node_filesystem_reports",
+            "node_filesystem_summary",
             "performance_comparisons",
             "rejected_workload_profiles",
         ):
-            result[key] = evidence.get(
-                key, [] if key != "repository_cap_recommendations" else {}
-            )
+            default = {} if key == "repository_cap_recommendations" else []
+            if key == "price_evidence":
+                default = None
+            elif key == "f32_cotenancy_summary":
+                default = f32_cotenancy_summary([])
+            result[key] = evidence.get(key, default)
         print(json.dumps(result, sort_keys=True))
     return 0
 

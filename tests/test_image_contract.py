@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -65,6 +67,16 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotIn("SPDX SBOM", (ROOT / "scripts/verify-promotion.sh").read_text(encoding="utf-8"))
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
+
+    def test_no_bun_qualification_image_or_manual_publisher_remains(self) -> None:
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        publish = (ROOT / ".github/workflows/publish.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("compute-bun", dockerfile)
+        self.assertNotIn("BUN_CANDIDATE", dockerfile)
+        self.assertNotIn("compute-bun", publish)
+        self.assertFalse((ROOT / "scripts/configure-bun-candidate.py").exists())
 
     def test_snapshot_packages_are_verified_and_fetched_concurrently(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")

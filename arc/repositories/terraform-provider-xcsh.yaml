@@ -26,7 +26,16 @@
       "runner_scale_set_name": "terraform-provider-xcsh-compute",
       "values": "arc/compute-values.yaml",
       "min_runners": 0,
-      "max_runners": 2
+      "max_runners": 3
+    },
+    {
+      "profile": "compute-f32-candidate",
+      "namespace": "arc-runners-terraform-provider-xcsh-compute-f32-candidate",
+      "release": "terraform-provider-xcsh-compute-f32-candidate",
+      "runner_scale_set_name": "terraform-provider-xcsh-compute-f32-candidate",
+      "values": "arc/compute-f32-candidate-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
     }
   ]
 }

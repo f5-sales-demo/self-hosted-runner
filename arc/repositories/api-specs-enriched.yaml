@@ -27,6 +27,15 @@
       "values": "arc/compute-values.yaml",
       "min_runners": 0,
       "max_runners": 2
+    },
+    {
+      "profile": "compute-f32-candidate",
+      "namespace": "arc-runners-api-specs-enriched-compute-f32-candidate",
+      "release": "api-specs-enriched-compute-f32-candidate",
+      "runner_scale_set_name": "api-specs-enriched-compute-f32-candidate",
+      "values": "arc/compute-f32-candidate-values.yaml",
+      "min_runners": 0,
+      "max_runners": 2
     }
   ]
 }
