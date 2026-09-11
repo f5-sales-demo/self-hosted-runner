@@ -90,15 +90,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
     ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
-    CARGO_HOME=/opt/cargo \
+    CARGO_HOME=/home/runner/.cargo \
     DOTNET_ROOT=/opt/dotnet \
     POWERSHELL_TELEMETRY_OPTOUT=1 \
-    RUSTUP_HOME=/opt/rustup \
+    RUSTUP_HOME=/home/runner/.rustup \
     RUSTUP_TOOLCHAIN=nightly-2026-09-03 \
     RUNNER_MANUALLY_TRAP_SIG=1 \
     ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1 \
     ImageOS=ubuntu24 \
-    PATH=/opt/cargo/bin:/opt/go/bin:/opt/dotnet:/opt/powershell:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}
+    PATH=/home/runner/.cargo/bin:/opt/go/bin:/opt/dotnet:/opt/powershell:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}
 
 # The snapshot fixes the complete apt package set. Resolve package URIs from its
 # signed indexes, fetch them concurrently through APT's checksum-verifying
@@ -123,7 +123,7 @@ RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmak
     && ln -s /usr/bin/convert /usr/local/bin/magick \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
-    && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime /opt/cargo /opt/rustup "$AGENT_TOOLSDIRECTORY"
+    && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime /home/runner/.cargo /home/runner/.rustup "$AGENT_TOOLSDIRECTORY"
 
 ARG PNPM_VERSION=11.3.0
 ARG PNPM_SHA256=5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474
@@ -216,7 +216,7 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
     rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/zig.tar.xz /tmp/channel-rust-nightly.toml /tmp/cargo-nextest.tar.gz /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
-    chown -R runner:runner /home/runner /opt/actions-runner /opt/cargo /opt/rustup /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
+    chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
