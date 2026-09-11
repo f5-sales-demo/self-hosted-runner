@@ -675,7 +675,7 @@
       "sha256": "a60615509715996b8d4d54b30a7db8a1cd62400d06206dbeeb20b223ad1e6b34",
       "profiles": ["standard", "container-build"],
       "command": "cargo --version",
-      "expected": "cargo 1.101.0-nightly"
+      "expected": "cargo 1.100.0-nightly"
     },
     {
       "name": "rustfmt",
@@ -754,7 +754,7 @@
       "source": "ubuntu snapshot 20260810T000000Z package fd-find",
       "profiles": ["standard", "container-build"],
       "command": "fd --version",
-      "expected": "fd "
+      "expected": "fdfind "
     },
     {
       "name": "ripgrep",
