@@ -21,6 +21,8 @@ listenerTemplate:
             memory: 512Mi
 template:
   metadata:
+    annotations:
+      cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
       runner-profile: compute-f32-candidate
   spec:
