@@ -26,6 +26,21 @@ def main() -> int:
     args = parser.parse_args()
     raw = json.loads(args.catalog.read_text(encoding="utf-8"))
     failures: list[str] = []
+    if os.geteuid() != 1001:
+        failures.append("image verification must run as runner UID 1001")
+    else:
+        print("[ok] runner UID 1001")
+    for forbidden in (
+        Path("/home/runner/node_modules"),
+        Path("/home/runner/.cargo/registry"),
+        Path("/runner-runtime/node_modules"),
+        Path("/runner-runtime/target"),
+        Path("/opt/cargo/registry"),
+    ):
+        if forbidden.exists():
+            failures.append(f"image contains forbidden source-bound cache or build output {forbidden}")
+        else:
+            print(f"[ok] absent source-bound cache {forbidden}")
     for runner_root in (Path("/home/runner"), Path("/opt/actions-runner")):
         for executable in ("config.sh", "run.sh"):
             path = runner_root / executable

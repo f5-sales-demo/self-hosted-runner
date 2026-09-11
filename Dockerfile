@@ -48,10 +48,14 @@ ARG KUBECTL_VERSION=1.36.3
 ARG KUBECTL_SHA256=ebbd080e7c2e275093b55915722043257eb24004363e20acb3c4d71919f88336
 ARG KUSTOMIZE_VERSION=5.8.1
 ARG KUSTOMIZE_SHA256=029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d
-ARG BUN_VERSION=1.3.14
-ARG BUN_SHA256=951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f
-ARG ZIG_VERSION=0.15.2
-ARG ZIG_SHA256=02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239
+ARG BUN_VERSION=1.4.2
+ARG BUN_SHA256=36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913
+ARG ZIG_VERSION=0.16.0
+ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+ARG RUST_TOOLCHAIN=nightly-2026-09-03
+ARG RUST_DIST_MANIFEST_SHA256=df7a2f1a117645520b1019cf2f23d75411be359d431a09e28c31ab97ff710094
+ARG CARGO_NEXTEST_VERSION=0.9.143
+ARG CARGO_NEXTEST_SHA256=66786b9abe23920d022a182d1416b1bbc8130dd4872a9553d76985a1708dcd1e
 ARG TERRAFORM_VERSION=1.15.8
 ARG TERRAFORM_SHA256=d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d
 ARG NODE20_VERSION=20.19.6
@@ -86,18 +90,21 @@ ENV DEBIAN_FRONTEND=noninteractive \
     AGENT_TOOLSDIRECTORY=/opt/hostedtoolcache \
     ANDROID_HOME=/opt/android-sdk \
     ANDROID_SDK_ROOT=/opt/android-sdk \
+    CARGO_HOME=/opt/cargo \
     DOTNET_ROOT=/opt/dotnet \
     POWERSHELL_TELEMETRY_OPTOUT=1 \
+    RUSTUP_HOME=/opt/rustup \
+    RUSTUP_TOOLCHAIN=nightly-2026-09-03 \
     RUNNER_MANUALLY_TRAP_SIG=1 \
     ACTIONS_RUNNER_PRINT_LOG_TO_STDOUT=1 \
     ImageOS=ubuntu24 \
-    PATH=/opt/go/bin:/opt/dotnet:/opt/powershell:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}
+    PATH=/opt/cargo/bin:/opt/go/bin:/opt/dotnet:/opt/powershell:/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:${PATH}
 
 # The snapshot fixes the complete apt package set. Resolve package URIs from its
 # signed indexes, fetch them concurrently through APT's checksum-verifying
 # helper, and then prohibit network access during installation. No service is
 # enabled or started here; every target runs as the unprivileged runner user.
-RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross sqlite3 sudo swig unzip wget xz-utils zip zstd libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth' \
+RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales llvm make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross sqlite3 sudo swig unzip wget xz-utils zip zstd libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth' \
     && rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
     && for attempt in 1 2 3 4 5 6 7 8; do \
@@ -116,7 +123,7 @@ RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmak
     && ln -s /usr/bin/convert /usr/local/bin/magick \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
     && useradd --create-home --uid 1001 --shell /bin/bash runner \
-    && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime "$AGENT_TOOLSDIRECTORY"
+    && install -d -o runner -g runner /home/runner /opt/actions-runner /runner-runtime /opt/cargo /opt/rustup "$AGENT_TOOLSDIRECTORY"
 
 ARG PNPM_VERSION=11.3.0
 ARG PNPM_SHA256=5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474
@@ -160,6 +167,12 @@ RUN set -eux; \
     echo "${BUN_SHA256}  /tmp/bun.zip" | sha256sum --check --strict; unzip -q /tmp/bun.zip -d /opt && ln -s /opt/bun-linux-x64/bun /usr/local/bin/bun; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/zig.tar.xz "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"; \
     echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict; mkdir -p /opt/zig && tar --extract --xz --file /tmp/zig.tar.xz --directory /opt/zig --strip-components=1 && ln -s /opt/zig/zig /usr/local/bin/zig; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/channel-rust-nightly.toml "https://static.rust-lang.org/dist/2026-09-03/channel-rust-nightly.toml"; \
+    echo "${RUST_DIST_MANIFEST_SHA256}  /tmp/channel-rust-nightly.toml" | sha256sum --check --strict; \
+    su -s /bin/bash runner -c "rustup toolchain install ${RUST_TOOLCHAIN} --profile minimal --component rustfmt --component clippy --component rust-analyzer --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-msvc --target aarch64-unknown-linux-gnu --no-self-update"; \
+    su -s /bin/bash runner -c "rustup default ${RUST_TOOLCHAIN}"; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/cargo-nextest.tar.gz "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${CARGO_NEXTEST_VERSION}/cargo-nextest-${CARGO_NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz"; \
+    echo "${CARGO_NEXTEST_SHA256}  /tmp/cargo-nextest.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/cargo-nextest.tar.gz --directory /usr/local/bin cargo-nextest; chmod 0555 /usr/local/bin/cargo-nextest; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"; \
     echo "${TERRAFORM_SHA256}  /tmp/terraform.zip" | sha256sum --check --strict; unzip -q /tmp/terraform.zip -d /usr/local/bin; \
 curl --fail --location --proto =https --tlsv1.2 --output /tmp/node20.tar.xz "https://nodejs.org/dist/v${NODE20_VERSION}/node-v${NODE20_VERSION}-linux-x64.tar.xz"; \
@@ -202,8 +215,8 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp && install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
-    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/zig.tar.xz /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
-    chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
+    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/zig.tar.xz /tmp/channel-rust-nightly.toml /tmp/cargo-nextest.tar.gz /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
+    chown -R runner:runner /home/runner /opt/actions-runner /opt/cargo /opt/rustup /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
