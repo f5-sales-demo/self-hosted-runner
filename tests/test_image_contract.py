@@ -67,6 +67,7 @@ class ImageContractTests(unittest.TestCase):
         self.assertNotIn("SPDX SBOM", (ROOT / "scripts/verify-promotion.sh").read_text(encoding="utf-8"))
         self.assertNotRegex(verify, r"runs-on:\s*\[?self-hosted")
         self.assertNotRegex(publish, r"runs-on:\s*\[?self-hosted")
+        self.assertEqual(2, verify.count("--network none --user 1001:1001 --entrypoint verify-runner-tools"))
 
     def test_no_bun_qualification_image_or_manual_publisher_remains(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
@@ -195,19 +196,19 @@ class ImageContractTests(unittest.TestCase):
     def test_zig_is_a_pinned_immutable_image_tool(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         zig = next(tool for tool in catalog["tools"] if tool["name"] == "zig")
-        self.assertEqual("0.15.2", zig["version"])
+        self.assertEqual("0.16.0", zig["version"])
         self.assertEqual(
-            "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+            "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
             zig["sha256"],
         )
         self.assertEqual(["standard", "container-build"], zig["profiles"])
         self.assertEqual("zig version", zig["command"])
-        self.assertEqual("0.15.2", zig["expected"])
+        self.assertEqual("0.16.0", zig["expected"])
 
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn("ARG ZIG_VERSION=0.15.2", dockerfile)
+        self.assertIn("ARG ZIG_VERSION=0.16.0", dockerfile)
         self.assertIn(
-            "ARG ZIG_SHA256=02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+            "ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
             dockerfile,
         )
         self.assertIn(
@@ -216,6 +217,45 @@ class ImageContractTests(unittest.TestCase):
         )
         self.assertIn('echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict', dockerfile)
         self.assertIn("ln -s /opt/zig/zig /usr/local/bin/zig", dockerfile)
+
+    def test_xcsh_performance_toolchain_is_baked_and_pinned(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        tools = {tool["name"]: tool for tool in catalog["tools"]}
+        expected_versions = {
+            "bun": "1.4.2",
+            "zig": "0.16.0",
+            "rust-toolchain-manifest": "nightly-2026-09-03",
+            "rustc": "1.100.0-nightly (2e2b193f8 2026-09-02)",
+            "cargo": "0.101.0-nightly (b2e9d5f9d 2026-09-02)",
+            "rustfmt": "nightly-2026-09-03",
+            "clippy": "nightly-2026-09-03",
+            "rust-analyzer": "nightly-2026-09-03",
+            "rust-std-linux-x64": "nightly-2026-09-03",
+            "rust-std-windows-x64": "nightly-2026-09-03",
+            "rust-std-linux-arm64": "nightly-2026-09-03",
+            "cargo-nextest": "0.9.143",
+            "llvm-nm": "18.1.3",
+        }
+        for name, version in expected_versions.items():
+            self.assertEqual(version, tools[name]["version"])
+        for name in expected_versions.keys() - {"llvm-nm"}:
+            self.assertRegex(tools[name]["sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(["1.4.2"], catalog["setup_actions"]["oven-sh/setup-bun"]["versions"])
+
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        self.assertIn("ARG BUN_VERSION=1.4.2", dockerfile)
+        self.assertIn("ARG RUST_TOOLCHAIN=nightly-2026-09-03", dockerfile)
+        self.assertIn("ARG CARGO_NEXTEST_VERSION=0.9.143", dockerfile)
+        self.assertIn("--component rustfmt --component clippy --component rust-analyzer", dockerfile)
+        for target in ("x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-unknown-linux-gnu"):
+            self.assertIn(f"--target {target}", dockerfile)
+        self.assertIn("packages='ant bash build-essential clang", dockerfile)
+        self.assertIn(" locales llvm make ", dockerfile)
+        self.assertNotIn("cargo install cargo-nextest", dockerfile)
+
+        verifier = (ROOT / "scripts/verify-tools.py").read_text(encoding="utf-8")
+        self.assertIn("os.geteuid() != 1001", verifier)
+        self.assertIn('Path("/opt/cargo/registry")', verifier)
 
 if __name__ == "__main__":
     unittest.main()

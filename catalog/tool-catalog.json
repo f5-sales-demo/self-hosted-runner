@@ -109,7 +109,7 @@
       "tool": "bun",
       "field": "bun-version",
       "versions": [
-        "1.3.14"
+        "1.4.2"
       ]
     },
     "hashicorp/setup-terraform": {
@@ -651,6 +651,136 @@
       "expected": ""
     },
     {
+      "name": "rust-toolchain-manifest",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/channel-rust-nightly.toml",
+      "sha256": "df7a2f1a117645520b1019cf2f23d75411be359d431a09e28c31ab97ff710094",
+      "profiles": ["standard", "container-build"],
+      "command": "rustup show active-toolchain",
+      "expected": "nightly-2026-09-03-x86_64-unknown-linux-gnu"
+    },
+    {
+      "name": "rustc",
+      "version": "1.100.0-nightly (2e2b193f8 2026-09-02)",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "bd1f0986150596835e808635d81786c60ab9da3981687dfb00918329925e837a",
+      "profiles": ["standard", "container-build"],
+      "command": "rustc --version",
+      "expected": "rustc 1.100.0-nightly (2e2b193f8 2026-09-02)"
+    },
+    {
+      "name": "cargo",
+      "version": "0.101.0-nightly (b2e9d5f9d 2026-09-02)",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "a60615509715996b8d4d54b30a7db8a1cd62400d06206dbeeb20b223ad1e6b34",
+      "profiles": ["standard", "container-build"],
+      "command": "cargo --version",
+      "expected": "cargo 1.101.0-nightly"
+    },
+    {
+      "name": "rustfmt",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "78d96443d9d7effe410c46e27b2c103d674ca18fda645e41da7e3408795d8e21",
+      "profiles": ["standard", "container-build"],
+      "command": "rustfmt --version",
+      "expected": "nightly"
+    },
+    {
+      "name": "clippy",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "9715b53a8e80261f85eeddc6096e82e6038218ddd81e9fd8d7d5d558d076191b",
+      "profiles": ["standard", "container-build"],
+      "command": "cargo clippy --version",
+      "expected": "clippy 0.1.100"
+    },
+    {
+      "name": "rust-analyzer",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rust-analyzer-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "a5276dad0411b6213a9e40e855d80b2578b54128a7d6ecc45dc52083b2cdd989",
+      "profiles": ["standard", "container-build"],
+      "command": "rust-analyzer --version",
+      "expected": "rust-analyzer"
+    },
+    {
+      "name": "rust-std-linux-x64",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz",
+      "sha256": "7bfd37eda0920b04ef50b4785475c5fa2cea8df19c24f3879d0b5cac6e4dcdbc",
+      "profiles": ["standard", "container-build"],
+      "command": "rustup target list --installed --toolchain nightly-2026-09-03",
+      "expected": "x86_64-unknown-linux-gnu"
+    },
+    {
+      "name": "rust-std-windows-x64",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-x86_64-pc-windows-msvc.tar.xz",
+      "sha256": "075661d74da5a65b8d5c8adb9375a868fea80d5b0e5c131af6f4cd059d6b3113",
+      "profiles": ["standard", "container-build"],
+      "command": "rustup target list --installed --toolchain nightly-2026-09-03",
+      "expected": "x86_64-pc-windows-msvc"
+    },
+    {
+      "name": "rust-std-linux-arm64",
+      "version": "nightly-2026-09-03",
+      "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-aarch64-unknown-linux-gnu.tar.xz",
+      "sha256": "3a0e57f9f0251db8d9d2e2f9900e82b5806ab3a9bf4297d5d27ffc361c80d5ed",
+      "profiles": ["standard", "container-build"],
+      "command": "rustup target list --installed --toolchain nightly-2026-09-03",
+      "expected": "aarch64-unknown-linux-gnu"
+    },
+    {
+      "name": "cargo-nextest",
+      "version": "0.9.143",
+      "source": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.143/cargo-nextest-0.9.143-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "66786b9abe23920d022a182d1416b1bbc8130dd4872a9553d76985a1708dcd1e",
+      "profiles": ["standard", "container-build"],
+      "command": "cargo nextest --version",
+      "expected": "cargo-nextest 0.9.143"
+    },
+    {
+      "name": "llvm-nm",
+      "version": "18.1.3",
+      "source": "ubuntu snapshot 20260810T000000Z package llvm",
+      "profiles": ["standard", "container-build"],
+      "command": "llvm-nm --version",
+      "expected": "Ubuntu LLVM version 18.1.3"
+    },
+    {
+      "name": "fd",
+      "version": "ubuntu-snapshot",
+      "source": "ubuntu snapshot 20260810T000000Z package fd-find",
+      "profiles": ["standard", "container-build"],
+      "command": "fd --version",
+      "expected": "fd "
+    },
+    {
+      "name": "ripgrep",
+      "version": "ubuntu-snapshot",
+      "source": "ubuntu snapshot 20260810T000000Z package ripgrep",
+      "profiles": ["standard", "container-build"],
+      "command": "rg --version",
+      "expected": "ripgrep "
+    },
+    {
+      "name": "imagemagick",
+      "version": "ubuntu-snapshot",
+      "source": "ubuntu snapshot 20260810T000000Z package imagemagick",
+      "profiles": ["standard", "container-build"],
+      "command": "magick --version",
+      "expected": "ImageMagick"
+    },
+    {
+      "name": "xcsh-native-libraries",
+      "version": "ubuntu-snapshot",
+      "source": "ubuntu snapshot 20260810T000000Z development packages",
+      "profiles": ["standard", "container-build"],
+      "command": "pkg-config --exists cairo pango libjpeg libgif librsvg-2.0",
+      "expected": ""
+    },
+    {
       "name": "gcc-aarch64-linux-gnu",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z",
@@ -660,27 +790,27 @@
     },
     {
       "name": "bun",
-      "version": "1.3.14",
-      "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.3.14/bun-linux-x64.zip",
-      "sha256": "951ee2aee855f08595aeec6225226a298d3fea83a3dcd6465c09cbccdf7e848f",
+      "version": "1.4.2",
+      "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.2/bun-linux-x64.zip",
+      "sha256": "36368faef7527875d5ffa52e53cd48021741f2a83eb6208a8dd64068d422a913",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "bun --version",
-      "expected": "1.3.14"
+      "expected": "1.4.2"
     },
     {
       "name": "zig",
-      "version": "0.15.2",
-      "source": "https://ziglang.org/download/0.15.2/zig-x86_64-linux-0.15.2.tar.xz",
-      "sha256": "02aa270f183da276e5b5920b1dac44a63f1a49e55050ebde3aecc9eb82f93239",
+      "version": "0.16.0",
+      "source": "https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz",
+      "sha256": "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "zig version",
-      "expected": "0.15.2"
+      "expected": "0.16.0"
     },
     {
       "name": "terraform",

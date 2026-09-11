@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx build --progress=plain --no-cache --load --target standard --tag local/self-hosted-runner:standard .
-          docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
+          docker run --rm --network none --user 1001:1001 --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
       - name: Prove standard target is socketless
         run: |
           set -euo pipefail
@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx build --progress=plain --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
-          docker run --rm --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
+          docker run --rm --network none --user 1001:1001 --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
       - name: Smoke-test selected Docker action profiling
         env:
           SMOKE_DIGEST: sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
