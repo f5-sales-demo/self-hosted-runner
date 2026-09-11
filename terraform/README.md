@@ -103,8 +103,10 @@ at four jobs, while F32 density is capped at xcsh 4, enriched specs 2, and
 provider 3. The nine aggregate F32 runner slots stay below the ten physical slots
 available on five two-pod nodes. Candidate pods use a negative, non-preempting
 priority, so production runners retain priority if the shared D16 pool is
-contended. Every worker pool scales to zero; after demand drains, the autoscaler
-retains nodes for 60 minutes.
+contended. Candidate pods are explicitly unsafe to evict so the cluster
+autoscaler cannot remove their nodes while benchmark work is active. Every
+worker pool scales to zero; after demand drains, the autoscaler retains nodes
+for 60 minutes.
 
 Validate the complete repository set together before deployment:
 

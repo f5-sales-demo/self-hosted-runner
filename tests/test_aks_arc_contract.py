@@ -110,6 +110,11 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("preemptionPolicy: Never", priority)
         self.assertIn("priorityClassName: runner-candidate", d16)
         self.assertIn("priorityClassName: runner-candidate", f32)
+        for candidate in (d16, f32):
+            self.assertIn(
+                'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"',
+                candidate,
+            )
 
     def test_controller_post_renderer_uses_python(self) -> None:
         post_renderer = ROOT / "scripts/arc-controller-post-renderer.py"
