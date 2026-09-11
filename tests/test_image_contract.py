@@ -238,6 +238,8 @@ class ImageContractTests(unittest.TestCase):
         }
         for name, version in expected_versions.items():
             self.assertEqual(version, tools[name]["version"])
+        self.assertEqual("cargo 1.100.0-nightly", tools["cargo"]["expected"])
+        self.assertEqual("fdfind ", tools["fd"]["expected"])
         for name in expected_versions.keys() - {"llvm-nm"}:
             self.assertRegex(tools[name]["sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(["1.4.2"], catalog["setup_actions"]["oven-sh/setup-bun"]["versions"])
