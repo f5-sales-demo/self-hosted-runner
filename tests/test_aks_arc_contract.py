@@ -101,8 +101,12 @@ class AksArcContractTests(unittest.TestCase):
         )[1]
         self.assertNotIn("runner-image-cache arc/prepull", runners_block)
 
-    def test_candidate_priority_is_negative_and_non_preempting(self) -> None:
+    def test_candidate_priorities_are_isolated_and_non_preempting(self) -> None:
         priority = (ROOT / "arc/candidate-priority-class.yaml").read_text(
+            encoding="utf-8"
+        )
+        deploy = (ROOT / "scripts/arc-deploy.sh").read_text(encoding="utf-8")
+        d16_priority = (ROOT / "arc/d16-candidate-priority-class.yaml").read_text(
             encoding="utf-8"
         )
         d16 = (ROOT / "arc/compute-d16-candidate-values.yaml").read_text(
@@ -113,10 +117,14 @@ class AksArcContractTests(unittest.TestCase):
         )
         self.assertIn("value: -1000", priority)
         self.assertIn("preemptionPolicy: Never", priority)
-        self.assertIn("priorityClassName: runner-candidate", d16)
+        self.assertIn("name: runner-d16-candidate", d16_priority)
+        self.assertIn("value: 0", d16_priority)
+        self.assertIn("preemptionPolicy: Never", d16_priority)
+        self.assertIn("priorityClassName: runner-d16-candidate", d16)
         self.assertIn("priorityClassName: runner-candidate", f32)
         self.assertIn("runner-profile: compute-d16-candidate", d16)
         self.assertIn("value: compute-d16-candidate", d16)
+        self.assertIn("arc/d16-candidate-priority-class.yaml", deploy)
         for candidate in (d16, f32):
             self.assertIn(
                 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"',

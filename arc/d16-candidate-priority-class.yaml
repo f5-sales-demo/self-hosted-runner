@@ -1,0 +1,8 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: runner-d16-candidate
+value: 0
+globalDefault: false
+preemptionPolicy: Never
+description: Dedicated D16 qualification runners may scale from zero but never preempt production work.
