@@ -50,7 +50,7 @@ locals {
   maximum_system_vcpus  = 3 * 4
   required_dadsv5_quota = 600
   required_fsv2_quota   = 200
-  required_total_quota  = 795
+  required_total_quota  = 815
 }
 
 resource "azurerm_resource_group" "runner" {

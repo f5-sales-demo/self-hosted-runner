@@ -120,7 +120,7 @@ docs-container-build.
 ## Capacity evidence and image mirror
 
 Do not create the candidate pool until Canada Central quota is at least 600
-`standardDADSv5Family`, 200 `standardFSv2Family`, and 795 total regional `cores`.
+`standardDADSv5Family`, 200 `standardFSv2Family`, and 815 total regional `cores`.
 The blue/green maximum consumes 480 DADSv5, 160 FSv2, and 652 total vCPUs
 including three system nodes, retaining at least 20% headroom in every scope.
 The verified 2026-09-09 subscription snapshot was 600 DADSv5, 350 FSv2, and 850

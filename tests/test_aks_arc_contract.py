@@ -45,7 +45,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn('profile      = "compute-d16-candidate"', source)
         self.assertIn("maximum      = 1", source)
         self.assertIn("maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16", source)
-        self.assertIn("required_total_quota  = 795", source)
+        self.assertIn("required_total_quota  = 815", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/runner-fleet/main.tf").read_text(
