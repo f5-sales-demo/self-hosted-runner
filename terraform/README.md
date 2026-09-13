@@ -15,6 +15,7 @@ control-plane diagnostics.
 | system | Standard_D4as_v5 | 1-3 | managed | AKS, ARC controller, listeners |
 | socketless | Standard_D8ads_v5 | 0-30 | ephemeral | socketless runners |
 | compute | Standard_D16ads_v5 | 0-9 | ephemeral | Production CPU-heavy socketless runners |
+| compute-d16-candidate | Standard_D16ads_v5 | 0-1 | ephemeral | One-at-a-time D16 qualification runner |
 | compute-f32 | Standard_F32s_v2 | 0-5 | ephemeral | Temporary blue/green density candidate |
 | build | Standard_D16ads_v5 | 0-5 | ephemeral | DinD runners |
 
@@ -97,16 +98,14 @@ references. During the bounded optimization experiment, also export
 
 Stable production compute routing remains unchanged while its capacity caps are
 raised to xcsh 4, enriched specs 2, and provider 3. The nine aggregate D16 slots
-map one runner per node. Temporary candidate labels remain isolated at zero idle
-runners: the D16 candidate shares that nine-node production pool and is capped
-at four jobs, while F32 density is capped at xcsh 4, enriched specs 2, and
-provider 3. The nine aggregate F32 runner slots stay below the ten physical slots
-available on five two-pod nodes. Candidate pods use a negative, non-preempting
-priority, so production runners retain priority if the shared D16 pool is
-contended. Candidate pods are explicitly unsafe to evict so the cluster
-autoscaler cannot remove their nodes while benchmark work is active. Every
-worker pool scales to zero; after demand drains, the autoscaler retains nodes
-for 60 minutes.
+map one runner per node. The D16 candidate is a separate zero-idle, one-node
+pool, so one-at-a-time qualification cannot be preempted by stable compute
+work. F32 density remains capped at xcsh 4, enriched specs 2, and provider 3.
+The nine aggregate F32 runner slots stay below the ten physical slots available
+on five two-pod nodes. Candidate pods use a negative, non-preempting priority
+and are explicitly unsafe to evict so the cluster autoscaler cannot remove their
+nodes while benchmark work is active. Every worker pool scales to zero; after
+demand drains, the autoscaler retains nodes for 60 minutes.
 
 Validate the complete repository set together before deployment:
 
@@ -122,7 +121,7 @@ docs-container-build.
 
 Do not create the candidate pool until Canada Central quota is at least 600
 `standardDADSv5Family`, 200 `standardFSv2Family`, and 795 total regional `cores`.
-The blue/green maximum consumes 464 DADSv5, 160 FSv2, and 636 total vCPUs
+The blue/green maximum consumes 480 DADSv5, 160 FSv2, and 652 total vCPUs
 including three system nodes, retaining at least 20% headroom in every scope.
 The verified 2026-09-09 subscription snapshot was 600 DADSv5, 350 FSv2, and 850
 regional vCPUs; revalidate it immediately before applying the saved plan.

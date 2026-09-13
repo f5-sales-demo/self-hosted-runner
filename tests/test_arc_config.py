@@ -42,7 +42,7 @@ class ArcConfigTests(unittest.TestCase):
                     "arc-runners-xcsh-compute-d16-candidate",
                     "xcsh-compute-d16-candidate",
                     0,
-                    4,
+                    1,
                 ),
                 "compute-f32-candidate": (
                     "arc-runners-xcsh-compute-f32-candidate",
@@ -215,15 +215,9 @@ class ArcConfigTests(unittest.TestCase):
             observed[repository] = candidate["max_runners"]
         self.assertEqual(9, sum(observed.values()))
 
-    def test_d16_candidate_demand_is_bounded_by_the_shared_production_pool(self) -> None:
+    def test_d16_candidate_demand_is_exactly_one_on_its_dedicated_pool(self) -> None:
         configs = MODULE.validate_complete_config_set(
             sorted(CONFIG_DIR.glob("*.yaml")), ROOT
-        )
-        stable_capacity = sum(
-            spec["max_runners"]
-            for config in configs
-            for spec in config["scale_sets"]
-            if spec["profile"] == "compute"
         )
         candidate_demand = sum(
             spec["max_runners"]
@@ -231,8 +225,7 @@ class ArcConfigTests(unittest.TestCase):
             for spec in config["scale_sets"]
             if spec["profile"] == "compute-d16-candidate"
         )
-        self.assertEqual(9, stable_capacity)
-        self.assertLessEqual(candidate_demand, stable_capacity)
+        self.assertEqual(1, candidate_demand)
 
     def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(

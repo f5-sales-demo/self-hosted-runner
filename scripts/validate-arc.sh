@@ -62,7 +62,7 @@ for profile in socketless compute-candidate container-build; do
     prepull_args+=(--set-string "nodeProfiles[1]=compute")
     prepull_args+=(--set-string "renovateImage=$renovate_image")
   elif [[ "$profile" == compute-candidate ]]; then
-    prepull_args+=(--set-string "nodeProfiles[0]=compute")
+    prepull_args+=(--set-string "nodeProfiles[0]=compute-d16-candidate")
     prepull_args+=(--set-string "nodeProfiles[1]=compute-f32")
   elif [[ "$profile" == container-build ]]; then
     prepull_args+=(--set-string "additionalImages[0]=$dind_image")

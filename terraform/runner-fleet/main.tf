@@ -16,6 +16,14 @@ locals {
       os_disk_size = 128
       profile      = "compute"
     }
+    compute_d16_candidate = {
+      name         = "computecand"
+      vm_size      = "Standard_D16ads_v5"
+      minimum      = 0
+      maximum      = 1
+      os_disk_size = 128
+      profile      = "compute-d16-candidate"
+    }
     compute_f32 = {
       name         = "computef32"
       vm_size      = "Standard_F32s_v2"
@@ -36,7 +44,7 @@ locals {
 
   # DADSv5 and FSv2 quotas are independent, while total regional quota covers
   # the blue/green overlap. Each declared requirement retains >=20% headroom.
-  maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 5 * 16
+  maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16
   maximum_fsv2_vcpus    = 5 * 32
   maximum_runner_vcpus  = local.maximum_dadsv5_vcpus + local.maximum_fsv2_vcpus
   maximum_system_vcpus  = 3 * 4

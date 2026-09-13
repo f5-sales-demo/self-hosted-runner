@@ -30,11 +30,11 @@ template:
     imagePullSecrets:
       - name: ghcr-pull
     nodeSelector:
-      runner-profile: compute
+      runner-profile: compute-d16-candidate
     tolerations:
       - key: runner-profile
         operator: Equal
-        value: compute
+        value: compute-d16-candidate
         effect: NoSchedule
     securityContext:
       fsGroup: 1001

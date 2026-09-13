@@ -109,7 +109,7 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
     if [[ "$profile" == socketless ]]; then
       cache_args+=(--set-string "nodeProfiles[1]=compute")
     elif [[ "$profile" == compute-candidate ]]; then
-      cache_args+=(--set-string "nodeProfiles[0]=compute")
+      cache_args+=(--set-string "nodeProfiles[0]=compute-d16-candidate")
       cache_args+=(--set-string "nodeProfiles[1]=compute-f32")
     elif [[ "$profile" == container-build ]]; then
       cache_args+=(--set-string "additionalImages[0]=$dind_image")

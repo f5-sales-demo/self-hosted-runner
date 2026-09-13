@@ -1076,7 +1076,7 @@ def managed_profile(labels: list[str]) -> str | None:
 
 def node_profile_for_runner(profile: str) -> str:
     return {
-        "compute-d16-candidate": "compute",
+        "compute-d16-candidate": "compute-d16-candidate",
         "compute-f32-candidate": "compute-f32",
     }.get(profile, profile)
 
