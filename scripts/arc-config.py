@@ -117,7 +117,7 @@ EXPECTED_CAPS = {
 }
 CANDIDATE_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": {
-        "compute-d16-candidate": 4,
+        "compute-d16-candidate": 1,
         "compute-f32-candidate": 4,
     },
     "https://github.com/f5-sales-demo/api-specs-enriched": {
@@ -315,21 +315,15 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                 raise ConfigError(
                     f"{field} value {value} collides between {previous} and {repository}"
                 )
-    stable_d16_capacity = sum(
-        spec["max_runners"]
-        for config in configs
-        for spec in config["scale_sets"]
-        if spec["profile"] == "compute"
-    )
     candidate_d16_demand = sum(
         spec["max_runners"]
         for config in configs
         for spec in config["scale_sets"]
         if spec["profile"] == "compute-d16-candidate"
     )
-    if candidate_d16_demand > stable_d16_capacity:
+    if candidate_d16_demand > 1:
         raise ConfigError(
-            "D16 candidate demand exceeds the shared production compute capacity"
+            "dedicated D16 candidate demand exceeds one qualification runner"
         )
     return configs
 

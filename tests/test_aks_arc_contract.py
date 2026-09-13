@@ -41,6 +41,10 @@ class AksArcContractTests(unittest.TestCase):
         self.assertNotIn("azurerm_role_assignment", source)
         self.assertNotIn("AcrPull", source)
         self.assertIn("maximum      = 9", source)
+        self.assertIn('name         = "computecand"', source)
+        self.assertIn('profile      = "compute-d16-candidate"', source)
+        self.assertIn("maximum      = 1", source)
+        self.assertIn("maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16", source)
         self.assertIn("required_total_quota  = 795", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
@@ -76,6 +80,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
         self.assertIn("cache_profiles=(socketless container-build)", deploy)
         self.assertIn("cache_profiles+=(compute-candidate)", deploy)
+        self.assertIn("nodeProfiles[0]=compute-d16-candidate", deploy)
         self.assertIn("nodeProfiles[1]=compute", deploy)
         self.assertIn("nodeProfiles[1]=compute-f32", deploy)
         self.assertIn("COMPUTE_CANDIDATE_IMAGE", deploy)
@@ -110,6 +115,8 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("preemptionPolicy: Never", priority)
         self.assertIn("priorityClassName: runner-candidate", d16)
         self.assertIn("priorityClassName: runner-candidate", f32)
+        self.assertIn("runner-profile: compute-d16-candidate", d16)
+        self.assertIn("value: compute-d16-candidate", d16)
         for candidate in (d16, f32):
             self.assertIn(
                 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"',

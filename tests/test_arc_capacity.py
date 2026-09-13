@@ -425,7 +425,7 @@ class ArcCapacityTests(unittest.TestCase):
 
     def test_candidate_runner_profiles_map_to_underlying_node_profiles(self) -> None:
         self.assertEqual(
-            "compute",
+            "compute-d16-candidate",
             MODULE.node_profile_for_runner("compute-d16-candidate"),
         )
         self.assertEqual(
@@ -589,7 +589,7 @@ class ArcCapacityTests(unittest.TestCase):
                         "node": {
                             "name": "compute-node-a",
                             "created_at": "2026-09-10T08:58:00Z",
-                            "profile": "compute",
+                            "profile": "compute-d16-candidate",
                             "unschedulable": False,
                             "allocatable": {"cpu": "15740m", "memory": "62Gi"},
                             "conditions": [

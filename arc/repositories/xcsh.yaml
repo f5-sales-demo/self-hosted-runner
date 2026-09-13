@@ -35,7 +35,7 @@
       "runner_scale_set_name": "xcsh-compute-d16-candidate",
       "values": "arc/compute-d16-candidate-values.yaml",
       "min_runners": 0,
-      "max_runners": 4
+      "max_runners": 1
     },
     {
       "profile": "compute-f32-candidate",
