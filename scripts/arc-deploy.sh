@@ -121,6 +121,7 @@ fi
 
 if [[ "$mode" == runners || "$mode" == all ]]; then
   kubectl apply -f arc/candidate-priority-class.yaml
+  kubectl apply -f arc/d16-candidate-priority-class.yaml
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
   scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
 
