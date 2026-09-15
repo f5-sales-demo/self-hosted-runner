@@ -38,15 +38,15 @@ class ArcConfigTests(unittest.TestCase):
                     0,
                     4,
                 ),
-                "compute-d16-candidate": (
-                    "arc-runners-xcsh-compute-d16-candidate",
-                    "xcsh-compute-d16-candidate",
+                "compute-16-vcpu-candidate": (
+                    "arc-runners-xcsh-compute-16-vcpu-candidate",
+                    "xcsh-compute-16-vcpu-candidate",
                     0,
                     1,
                 ),
-                "compute-f32-candidate": (
-                    "arc-runners-xcsh-compute-f32-candidate",
-                    "xcsh-compute-f32-candidate",
+                "compute-32-vcpu-density-candidate": (
+                    "arc-runners-xcsh-c32-density",
+                    "xcsh-compute-32-vcpu-density-candidate",
                     0,
                     4,
                 ),
@@ -204,12 +204,16 @@ class ArcConfigTests(unittest.TestCase):
             candidate = next(
                 item
                 for item in config["scale_sets"]
-                if item["profile"] == "compute-f32-candidate"
+                if item["profile"] == "compute-32-vcpu-density-candidate"
             )
             self.assertEqual(0, candidate["min_runners"])
             self.assertEqual(maximum, candidate["max_runners"])
             self.assertEqual(
-                f"{repository}-compute-f32-candidate",
+                (
+                    "xcsh-compute-32-vcpu-density-candidate"
+                    if repository == "xcsh"
+                    else f"{repository}-32vcpu-candidate"
+                ),
                 candidate["runner_scale_set_name"],
             )
             observed[repository] = candidate["max_runners"]
@@ -223,7 +227,7 @@ class ArcConfigTests(unittest.TestCase):
             spec["max_runners"]
             for config in configs
             for spec in config["scale_sets"]
-            if spec["profile"] == "compute-d16-candidate"
+            if spec["profile"] == "compute-16-vcpu-candidate"
         )
         self.assertEqual(1, candidate_demand)
 

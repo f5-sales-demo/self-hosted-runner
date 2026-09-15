@@ -7,7 +7,9 @@ This repository is the sole image authority for the F5 Sales Demo ephemeral GitH
 | `standard` | General repository-scoped self-hosted jobs | No Docker client or socket |
 | `container-build` | The existing trust-gated container-build profile | Docker CLI, Buildx, and Compose; no daemon |
 
-Every production reference is an immutable `ghcr.io/f5-sales-demo/self-hosted-runner@sha256:…` digest. Tags are discovery aids only and must never be placed in runner policy.
+Every production reference is an immutable GHCR, ACR, or ECR digest. GHCR is
+the publication authority; provider registries are byte-identical deployment
+mirrors. Tags are discovery aids only and must never be placed in runner policy.
 
 ## What is pinned
 
@@ -61,18 +63,18 @@ python3 scripts/check-tool-updates.py --format json
 
 See [docs/rollout.md](docs/rollout.md) for the required downstream handoff.
 
-## AKS execution platform
+## Portable execution platform
 
-Stage 1 uses AKS and GitHub Actions Runner Controller. Terraform owns Azure
-infrastructure; interactive Helm owns ARC, the repository-scoped scale sets,
-and image pre-pullers. The standard image remains socketless. The
+Independent Terraform roots manage Azure AKS and AWS EKS without shared state.
+Interactive Helm owns ARC, the repository-scoped scale sets, and image
+pre-pullers. The standard image remains socketless. The
 container-build image connects only to a privileged, pod-local DinD daemon.
 All repository scale sets use zero idle runners. Two shared image-cache
 DaemonSets run in `arc-runner-cache`, one per node profile; repository
 namespaces do not carry duplicate cache releases.
 
-See [terraform/README.md](terraform/README.md) for the backend, AKS, ARC, and
-pilot procedure. Runtime image digests, GitHub App material, Terraform inputs,
+See [terraform/README.md](terraform/README.md) for cloud selection and the
+provider-specific backend, cluster, ARC, and pilot procedures. Runtime image digests, GitHub App material, Terraform inputs,
 plans, state, and kubeconfig are never committed.
 
 Every runner is treated as eligible to execute multi-customer xcsh work. Before

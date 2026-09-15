@@ -189,16 +189,16 @@ class WorkloadReportTests(unittest.TestCase):
     def test_pod_stability_reports_failures_evictions_restarts_and_ooms(self) -> None:
         pods = [
             {
-                "namespace": "arc-runners-xcsh-compute-f32-candidate",
-                "profile": "compute-f32-candidate",
+                "namespace": "arc-runners-xcsh-c32-density",
+                "profile": "compute-32-vcpu-density-candidate",
                 "phase": "Succeeded",
                 "reason": None,
                 "restart_count": 0,
                 "termination_reasons": ["Completed"],
             },
             {
-                "namespace": "arc-runners-xcsh-compute-f32-candidate",
-                "profile": "compute-f32-candidate",
+                "namespace": "arc-runners-xcsh-c32-density",
+                "profile": "compute-32-vcpu-density-candidate",
                 "phase": "Failed",
                 "reason": "Evicted",
                 "restart_count": 1,
@@ -206,7 +206,7 @@ class WorkloadReportTests(unittest.TestCase):
             },
             {
                 "namespace": "arc-systems",
-                "profile": "compute-f32-candidate",
+                "profile": "compute-32-vcpu-density-candidate",
                 "phase": "Running",
                 "reason": None,
                 "restart_count": 0,
@@ -624,7 +624,7 @@ class WorkloadReportTests(unittest.TestCase):
                 "repository": "f5-sales-demo/xcsh",
                 "variant": "f32",
                 "cache_state": "cold",
-                "runner_profile": "compute-f32-candidate",
+                "runner_profile": "compute-32-vcpu-density-candidate",
                 "used_ratio": ratio,
                 "disk_below_70_percent": ratio < 0.7,
             }

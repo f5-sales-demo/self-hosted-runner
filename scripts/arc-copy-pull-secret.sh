@@ -7,7 +7,7 @@ shift || true
   echo "usage: $0 <source-namespace> <repository-config> [...]" >&2
   exit 2
 }
-: "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
+: "${KUBECONFIG:?KUBECONFIG must point to the protected cluster administrator config}"
 case "$(stat -c '%a' "$KUBECONFIG")" in 400|600) ;; *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1;; esac
 [[ "$source_namespace" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$ ]] || exit 2
 repo_root=$(git rev-parse --show-toplevel)

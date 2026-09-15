@@ -1063,8 +1063,8 @@ def merge_observed_nodes(summary: dict, observed_nodes: list[dict]) -> None:
 
 def managed_profile(labels: list[str]) -> str | None:
     for profile in (
-        "compute-d16-candidate",
-        "compute-f32-candidate",
+        "compute-16-vcpu-candidate",
+        "compute-32-vcpu-density-candidate",
         "compute",
         "container-build",
         "socketless",
@@ -1076,8 +1076,8 @@ def managed_profile(labels: list[str]) -> str | None:
 
 def node_profile_for_runner(profile: str) -> str:
     return {
-        "compute-d16-candidate": "compute-d16-candidate",
-        "compute-f32-candidate": "compute-f32",
+        "compute-16-vcpu-candidate": "compute-16-vcpu-candidate",
+        "compute-32-vcpu-density-candidate": "compute-32-vcpu-density-candidate",
     }.get(profile, profile)
 
 

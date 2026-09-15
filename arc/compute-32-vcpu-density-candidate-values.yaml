@@ -24,17 +24,17 @@ template:
     annotations:
       cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
-      runner-profile: compute-f32-candidate
+      runner-profile: compute-32-vcpu-density-candidate
   spec:
     priorityClassName: runner-candidate
     imagePullSecrets:
       - name: ghcr-pull
     nodeSelector:
-      runner-profile: compute-f32
+      runner-profile: compute-32-vcpu-density-candidate
     tolerations:
       - key: runner-profile
         operator: Equal
-        value: compute-f32
+        value: compute-32-vcpu-density-candidate
         effect: NoSchedule
     securityContext:
       fsGroup: 1001
@@ -46,7 +46,7 @@ template:
         args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
         env:
           - name: RUNNER_PROFILE
-            value: compute-f32-candidate
+            value: compute-32-vcpu-density-candidate
           - name: RUNNER_IMAGE_DIGEST
             value: RUNNER_IMAGE_REQUIRED
         securityContext:

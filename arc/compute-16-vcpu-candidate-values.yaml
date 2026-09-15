@@ -24,17 +24,17 @@ template:
     annotations:
       cluster-autoscaler.kubernetes.io/safe-to-evict: "false"
     labels:
-      runner-profile: compute-d16-candidate
+      runner-profile: compute-16-vcpu-candidate
   spec:
-    priorityClassName: runner-d16-candidate
+    priorityClassName: runner-16-vcpu-candidate
     imagePullSecrets:
       - name: ghcr-pull
     nodeSelector:
-      runner-profile: compute-d16-candidate
+      runner-profile: compute-16-vcpu-candidate
     tolerations:
       - key: runner-profile
         operator: Equal
-        value: compute-d16-candidate
+        value: compute-16-vcpu-candidate
         effect: NoSchedule
     securityContext:
       fsGroup: 1001
@@ -46,7 +46,7 @@ template:
         args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
         env:
           - name: RUNNER_PROFILE
-            value: compute-d16-candidate
+            value: compute-16-vcpu-candidate
           - name: RUNNER_IMAGE_DIGEST
             value: RUNNER_IMAGE_REQUIRED
         securityContext:

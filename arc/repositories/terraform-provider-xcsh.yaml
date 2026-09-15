@@ -29,11 +29,11 @@
       "max_runners": 3
     },
     {
-      "profile": "compute-f32-candidate",
-      "namespace": "arc-runners-terraform-provider-xcsh-compute-f32-candidate",
-      "release": "terraform-provider-xcsh-compute-f32-candidate",
-      "runner_scale_set_name": "terraform-provider-xcsh-compute-f32-candidate",
-      "values": "arc/compute-f32-candidate-values.yaml",
+      "profile": "compute-32-vcpu-density-candidate",
+      "namespace": "arc-runners-terraform-provider-xcsh-32vcpu-candidate",
+      "release": "terraform-provider-xcsh-32vcpu-candidate",
+      "runner_scale_set_name": "terraform-provider-xcsh-32vcpu-candidate",
+      "values": "arc/compute-32-vcpu-density-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 3
     }

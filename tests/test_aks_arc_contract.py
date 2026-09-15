@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class AksArcContractTests(unittest.TestCase):
     def test_terraform_is_aks_only_and_profile_isolated(self) -> None:
-        source = (ROOT / "terraform/runner-fleet/main.tf").read_text(encoding="utf-8")
+        source = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text(encoding="utf-8")
         for forbidden in (
             "linux_virtual_machine_scale_set",
             "shared_image_gallery",
@@ -42,13 +42,13 @@ class AksArcContractTests(unittest.TestCase):
         self.assertNotIn("AcrPull", source)
         self.assertIn("maximum      = 9", source)
         self.assertIn('name         = "computecand"', source)
-        self.assertIn('profile      = "compute-d16-candidate"', source)
+        self.assertIn('profile      = "compute-16-vcpu-candidate"', source)
         self.assertIn("maximum      = 1", source)
         self.assertIn("maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16", source)
         self.assertIn("required_total_quota  = 815", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
-        source = (ROOT / "terraform/runner-fleet/main.tf").read_text(
+        source = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text(
             encoding="utf-8"
         )
         self.assertIn(
@@ -80,9 +80,9 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
         self.assertIn("cache_profiles=(socketless container-build)", deploy)
         self.assertIn("cache_profiles+=(compute-candidate)", deploy)
-        self.assertIn("nodeProfiles[0]=compute-d16-candidate", deploy)
+        self.assertIn("nodeProfiles[0]=compute-16-vcpu-candidate", deploy)
         self.assertIn("nodeProfiles[1]=compute", deploy)
-        self.assertIn("nodeProfiles[1]=compute-f32", deploy)
+        self.assertIn("nodeProfiles[1]=compute-32-vcpu-density-candidate", deploy)
         self.assertIn("COMPUTE_CANDIDATE_IMAGE", deploy)
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
         self.assertIn("kubectl apply -f arc/candidate-priority-class.yaml", deploy)
@@ -106,25 +106,25 @@ class AksArcContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         deploy = (ROOT / "scripts/arc-deploy.sh").read_text(encoding="utf-8")
-        d16_priority = (ROOT / "arc/d16-candidate-priority-class.yaml").read_text(
+        d16_priority = (ROOT / "arc/compute-16-vcpu-candidate-priority-class.yaml").read_text(
             encoding="utf-8"
         )
-        d16 = (ROOT / "arc/compute-d16-candidate-values.yaml").read_text(
+        d16 = (ROOT / "arc/compute-16-vcpu-candidate-values.yaml").read_text(
             encoding="utf-8"
         )
-        f32 = (ROOT / "arc/compute-f32-candidate-values.yaml").read_text(
+        f32 = (ROOT / "arc/compute-32-vcpu-density-candidate-values.yaml").read_text(
             encoding="utf-8"
         )
         self.assertIn("value: -1000", priority)
         self.assertIn("preemptionPolicy: Never", priority)
-        self.assertIn("name: runner-d16-candidate", d16_priority)
+        self.assertIn("name: runner-16-vcpu-candidate", d16_priority)
         self.assertIn("value: 0", d16_priority)
         self.assertIn("preemptionPolicy: Never", d16_priority)
-        self.assertIn("priorityClassName: runner-d16-candidate", d16)
+        self.assertIn("priorityClassName: runner-16-vcpu-candidate", d16)
         self.assertIn("priorityClassName: runner-candidate", f32)
-        self.assertIn("runner-profile: compute-d16-candidate", d16)
-        self.assertIn("value: compute-d16-candidate", d16)
-        self.assertIn("arc/d16-candidate-priority-class.yaml", deploy)
+        self.assertIn("runner-profile: compute-16-vcpu-candidate", d16)
+        self.assertIn("value: compute-16-vcpu-candidate", d16)
+        self.assertIn("arc/compute-16-vcpu-candidate-priority-class.yaml", deploy)
         for candidate in (d16, f32):
             self.assertIn(
                 'cluster-autoscaler.kubernetes.io/safe-to-evict: "false"',
@@ -150,6 +150,9 @@ class AksArcContractTests(unittest.TestCase):
             2,
             len(re.findall(r"runs-on: self-hosted-runner-container-build", workflow)),
         )
+        self.assertEqual(
+            1, len(re.findall(r"runs-on: self-hosted-runner-compute", workflow))
+        )
         self.assertIn("verify-runner-tools standard", workflow)
         self.assertIn("verify-runner-tools container-build", workflow)
         self.assertIn("docker buildx build", workflow)
@@ -162,10 +165,10 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("scripts/validate-arc.sh arc/repositories/*.yaml", workflow)
 
     def test_f32_candidate_has_two_pod_density_resources(self) -> None:
-        values = (ROOT / "arc/compute-f32-candidate-values.yaml").read_text(
+        values = (ROOT / "arc/compute-32-vcpu-density-candidate-values.yaml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("runner-profile: compute-f32", values)
+        self.assertIn("runner-profile: compute-32-vcpu-density-candidate", values)
         self.assertIn('cpu: "14"', values)
         self.assertIn("memory: 28Gi", values)
         self.assertIn("ephemeral-storage: 24Gi", values)

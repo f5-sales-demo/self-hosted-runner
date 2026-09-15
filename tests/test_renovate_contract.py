@@ -67,13 +67,14 @@ class RenovateContractTests(unittest.TestCase):
         verify = (ROOT / ".github/workflows/verify.yml").read_text()
         self.assertIn("scripts/verify-renovate-runtime.sh local/renovate:test", verify)
 
-    def test_promotion_and_deployment_reject_tags_and_non_acr_runtime(self):
+    def test_promotion_and_deployment_reject_tags_and_accept_approved_registries(self):
         promote = ROOT / "scripts/promote-renovate-image.sh"
         for invalid in ("ghcr.io/f5-sales-demo/renovate:latest", f"docker.io/renovate/renovate@sha256:{ZERO}"):
             result = subprocess.run([promote, invalid, "a" * 40, "/tmp/unused"], cwd=ROOT, text=True, capture_output=True)
             self.assertEqual(2, result.returncode)
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
-        self.assertIn("^f5salesdemoarcca\\.azurecr\\.io/renovate@", deploy)
+        self.assertIn("dkr\\.ecr\\.us-east-1\\.amazonaws\\.com", deploy)
+        self.assertIn("ghcr\\.io/f5-sales-demo", deploy)
         self.assertNotIn("renovate:latest", deploy)
         self.assertIn("git diff --quiet \"$commit\" --", deploy)
         for runtime_input in (
@@ -88,30 +89,31 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn("gh attestation verify", promotion)
         self.assertIn("--deny-self-hosted-runners", promotion)
 
-    def test_socketless_prepull_accepts_only_acr_renovate_digest(self):
+    def test_socketless_prepull_accepts_approved_renovate_digests(self):
         schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
         pattern = re.compile(schema["properties"]["renovateImage"]["pattern"])
         self.assertIsNotNone(pattern.fullmatch(f"f5salesdemoarcca.azurecr.io/renovate@sha256:{ONE}"))
-        self.assertIsNone(pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}"))
+        self.assertIsNotNone(pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}"))
+        self.assertIsNotNone(pattern.fullmatch(f"123456789012.dkr.ecr.us-east-1.amazonaws.com/renovate@sha256:{ONE}"))
         self.assertIsNone(pattern.fullmatch("f5salesdemoarcca.azurecr.io/renovate:latest"))
 
-    def test_anonymous_acr_pull_has_no_renovate_secret_interface(self):
+    def test_pull_secret_is_optional_and_only_supports_private_ghcr(self):
         schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
-        self.assertNotIn("imagePullSecrets", schema["required"])
-        self.assertNotIn("imagePullSecrets", schema["properties"])
+        self.assertIn("imagePullSecrets", schema["required"])
+        self.assertIn("imagePullSecrets", schema["properties"])
         chart = (ROOT / "renovate-system/templates/cronjob.yaml").read_text()
-        self.assertNotIn("imagePullSecrets", chart)
+        self.assertIn("imagePullSecrets", chart)
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertNotIn("RENOVATE_ACR_PULL_SECRET", deploy)
         self.assertNotIn("renovate-acr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
-        self.assertIn('.auths | keys == ["ghcr.io"]', deploy)
+        self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
         helper = ROOT / "scripts/renovate-acr-pull-secret.sh"
         self.assertFalse(helper.exists())
 
     def test_socketless_prepuller_uses_only_private_ghcr_secret(self):
         schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
-        self.assertEqual(["ghcr-pull"], schema["properties"]["imagePullSecrets"]["const"])
+        self.assertEqual("ghcr-pull", schema["properties"]["imagePullSecrets"]["items"]["const"])
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertNotIn("imagePullSecrets[1]", deploy)
 

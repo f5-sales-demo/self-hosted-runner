@@ -29,11 +29,11 @@
       "max_runners": 2
     },
     {
-      "profile": "compute-f32-candidate",
-      "namespace": "arc-runners-api-specs-enriched-compute-f32-candidate",
-      "release": "api-specs-enriched-compute-f32-candidate",
-      "runner_scale_set_name": "api-specs-enriched-compute-f32-candidate",
-      "values": "arc/compute-f32-candidate-values.yaml",
+      "profile": "compute-32-vcpu-density-candidate",
+      "namespace": "arc-runners-api-specs-enriched-32vcpu-candidate",
+      "release": "api-specs-enriched-32vcpu-candidate",
+      "runner_scale_set_name": "api-specs-enriched-32vcpu-candidate",
+      "values": "arc/compute-32-vcpu-density-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 2
     }

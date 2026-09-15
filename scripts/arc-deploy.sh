@@ -15,7 +15,7 @@ esac
   exit 2
 }
 
-: "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
+: "${KUBECONFIG:?KUBECONFIG must point to the protected cluster administrator config}"
 case "$(stat -c '%a' "$KUBECONFIG")" in
 400 | 600) ;;
 *)
@@ -64,9 +64,9 @@ if [[ "$mode" == controller || "$mode" == all ]]; then
 fi
 
 if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
-  : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable GHCR reference}"
-  : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable GHCR reference}"
-  image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io)/self-hosted-runner@sha256:[0-9a-f]{64}$'
+  : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable approved registry reference}"
+  : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable approved registry reference}"
+  image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io|[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
   candidate_required=$(jq -r 'any(.scale_sets[]; (.profile | endswith("-candidate")))' <<<"$config_json")
@@ -74,15 +74,15 @@ if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
     : "${COMPUTE_CANDIDATE_IMAGE:?COMPUTE_CANDIDATE_IMAGE must be an immutable candidate reference}"
     [[ "$COMPUTE_CANDIDATE_IMAGE" =~ $image_pattern ]]
   fi
-  if [[ "$SOCKETLESS_IMAGE" == f5salesdemoarcca.azurecr.io/* ]]; then
+  if [[ "$SOCKETLESS_IMAGE" != ghcr.io/* ]]; then
     : "${SOCKETLESS_SOURCE_IMAGE:?SOCKETLESS_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$SOCKETLESS_SOURCE_IMAGE" "$SOCKETLESS_IMAGE" >/dev/null
   fi
-  if [[ "$CONTAINER_BUILD_IMAGE" == f5salesdemoarcca.azurecr.io/* ]]; then
+  if [[ "$CONTAINER_BUILD_IMAGE" != ghcr.io/* ]]; then
     : "${CONTAINER_BUILD_SOURCE_IMAGE:?CONTAINER_BUILD_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$CONTAINER_BUILD_SOURCE_IMAGE" "$CONTAINER_BUILD_IMAGE" >/dev/null
   fi
-  if [[ "${COMPUTE_CANDIDATE_IMAGE:-}" == f5salesdemoarcca.azurecr.io/* ]]; then
+  if [[ -n "${COMPUTE_CANDIDATE_IMAGE:-}" && "$COMPUTE_CANDIDATE_IMAGE" != ghcr.io/* ]]; then
     : "${COMPUTE_CANDIDATE_SOURCE_IMAGE:?COMPUTE_CANDIDATE_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$COMPUTE_CANDIDATE_SOURCE_IMAGE" "$COMPUTE_CANDIDATE_IMAGE" >/dev/null
   fi
@@ -90,7 +90,6 @@ fi
 
 if [[ "$mode" == cache || "$mode" == all ]]; then
   cache_namespace=arc-runner-cache
-  kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
   cache_profiles=(socketless container-build)
   [[ "$candidate_required" != true ]] || cache_profiles+=(compute-candidate)
   for profile in "${cache_profiles[@]}"; do
@@ -102,17 +101,20 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
       --namespace "$cache_namespace"
       --set-string "profile=$profile"
       --set-string "image=$image"
-      --set-string 'imagePullSecrets[0]=ghcr-pull'
       --set-string "nodeProfiles[0]=$profile"
       --wait --timeout 10m
     )
     if [[ "$profile" == socketless ]]; then
       cache_args+=(--set-string "nodeProfiles[1]=compute")
     elif [[ "$profile" == compute-candidate ]]; then
-      cache_args+=(--set-string "nodeProfiles[0]=compute-d16-candidate")
-      cache_args+=(--set-string "nodeProfiles[1]=compute-f32")
+      cache_args+=(--set-string "nodeProfiles[0]=compute-16-vcpu-candidate")
+      cache_args+=(--set-string "nodeProfiles[1]=compute-32-vcpu-density-candidate")
     elif [[ "$profile" == container-build ]]; then
       cache_args+=(--set-string "additionalImages[0]=$dind_image")
+    fi
+    if [[ "$image" == ghcr.io/* ]]; then
+      kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
+      cache_args+=(--set-string 'imagePullSecrets[0]=ghcr-pull')
     fi
     helm "${cache_args[@]}"
     kubectl rollout status "daemonset/runner-image-prepull-$profile" -n "$cache_namespace" --timeout=10m
@@ -121,7 +123,7 @@ fi
 
 if [[ "$mode" == runners || "$mode" == all ]]; then
   kubectl apply -f arc/candidate-priority-class.yaml
-  kubectl apply -f arc/d16-candidate-priority-class.yaml
+  kubectl apply -f arc/compute-16-vcpu-candidate-priority-class.yaml
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
   scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
 
@@ -138,9 +140,13 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
     [[ "$profile" != *-candidate ]] || image=$COMPUTE_CANDIDATE_IMAGE
 
     kubectl get secret arc-github-app -n "$namespace" >/dev/null
-    kubectl get secret ghcr-pull -n "$namespace" >/dev/null
+    [[ "$image" != ghcr.io/* ]] || kubectl get secret ghcr-pull -n "$namespace" >/dev/null
     rendered_values="$tmpdir/$profile-values.yaml"
-    sed "s|RUNNER_IMAGE_REQUIRED|$image|g" "$values" >"$rendered_values"
+    if [[ "$image" == ghcr.io/* ]]; then
+      sed "s|RUNNER_IMAGE_REQUIRED|$image|g" "$values" >"$rendered_values"
+    else
+      sed "s|RUNNER_IMAGE_REQUIRED|$image|g" "$values" | sed '/imagePullSecrets:/,+1d' >"$rendered_values"
+    fi
     helm upgrade --install "$release" "$scale_set_chart" \
       --namespace "$namespace" \
       --values "$rendered_values" \

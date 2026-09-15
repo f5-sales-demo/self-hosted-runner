@@ -73,7 +73,7 @@ spec:
       {{- end }}
       containers:
         - name: hold-runner-image
-          image: {{ required "image must be an immutable GHCR digest" .Values.image | quote }}
+          image: {{ required "image must be an immutable approved registry digest" .Values.image | quote }}
           imagePullPolicy: IfNotPresent
           command: [/bin/bash, -c, "trap 'exit 0' TERM INT; while true; do sleep 3600; done"]
           securityContext:
