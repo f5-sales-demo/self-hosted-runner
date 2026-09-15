@@ -42,7 +42,7 @@ jobs:
           tar -xzf /tmp/helm.tgz -C /tmp
           sudo install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm
           curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/actionlint.tgz \
-            https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_linux_x86_64.tar.gz
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/actionlint.tgz" | sha256sum --check --strict
           tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
           sudo install -m 0555 /tmp/actionlint /usr/local/bin/actionlint
