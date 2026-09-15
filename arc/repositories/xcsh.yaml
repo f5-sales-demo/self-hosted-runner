@@ -29,20 +29,20 @@
       "max_runners": 4
     },
     {
-      "profile": "compute-d16-candidate",
-      "namespace": "arc-runners-xcsh-compute-d16-candidate",
-      "release": "xcsh-compute-d16-candidate",
-      "runner_scale_set_name": "xcsh-compute-d16-candidate",
-      "values": "arc/compute-d16-candidate-values.yaml",
+      "profile": "compute-16-vcpu-candidate",
+      "namespace": "arc-runners-xcsh-compute-16-vcpu-candidate",
+      "release": "xcsh-compute-16-vcpu-candidate",
+      "runner_scale_set_name": "xcsh-compute-16-vcpu-candidate",
+      "values": "arc/compute-16-vcpu-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 1
     },
     {
-      "profile": "compute-f32-candidate",
-      "namespace": "arc-runners-xcsh-compute-f32-candidate",
-      "release": "xcsh-compute-f32-candidate",
-      "runner_scale_set_name": "xcsh-compute-f32-candidate",
-      "values": "arc/compute-f32-candidate-values.yaml",
+      "profile": "compute-32-vcpu-density-candidate",
+      "namespace": "arc-runners-xcsh-c32-density",
+      "release": "xcsh-compute-32-vcpu-density-candidate",
+      "runner_scale_set_name": "xcsh-compute-32-vcpu-density-candidate",
+      "values": "arc/compute-32-vcpu-density-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 4
     }

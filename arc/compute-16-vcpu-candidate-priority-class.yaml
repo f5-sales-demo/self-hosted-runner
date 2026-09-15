@@ -1,0 +1,8 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: runner-16-vcpu-candidate
+value: 0
+globalDefault: false
+preemptionPolicy: Never
+description: Dedicated 16-vCPU qualification runners may scale from zero but never preempt production work.

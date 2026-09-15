@@ -38,6 +38,12 @@ spec:
             seccompProfile: {type: RuntimeDefault}
           nodeSelector:
 {{ toYaml .Values.nodeSelector | indent 12 }}
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- range . }}
+            - name: {{ . | quote }}
+            {{- end }}
+          {{- end }}
           tolerations:
             - {key: runner-profile, operator: Equal, value: socketless, effect: NoSchedule}
           initContainers:

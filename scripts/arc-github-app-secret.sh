@@ -3,7 +3,7 @@ set -euo pipefail
 
 config=${1:-}
 [[ -n "$config" ]] || { echo "usage: scripts/arc-github-app-secret.sh <repository-config>" >&2; exit 2; }
-: "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
+: "${KUBECONFIG:?KUBECONFIG must point to the protected cluster administrator config}"
 : "${GITHUB_APP_ID:?GITHUB_APP_ID is required}"
 : "${GITHUB_APP_INSTALLATION_ID:?GITHUB_APP_INSTALLATION_ID is required}"
 : "${GITHUB_APP_PRIVATE_KEY_FILE:?GITHUB_APP_PRIVATE_KEY_FILE is required}"

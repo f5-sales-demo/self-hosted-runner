@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "provider": "aws",
+  "region": "us-east-1",
+  "instance_type": "m6a.4xlarge",
+  "production_workers": 0,
+  "max_concurrency": 2,
+  "concurrent_flag_allowed": false,
+  "active_candidates": 1,
+  "cache_states": ["cold", "warm"],
+  "initial_variants": [
+    {"name": "serial", "workers": 0, "samples_per_cache_state": 5},
+    {"name": "parallel-2", "workers": 2, "samples_per_cache_state": 5},
+    {"name": "parallel-4", "workers": 4, "samples_per_cache_state": 5}
+  ],
+  "conditional_variants": [
+    {"name": "parallel-6", "workers": 6, "samples_per_cache_state": 5},
+    {"name": "parallel-8", "workers": 8, "samples_per_cache_state": 5}
+  ],
+  "required_evidence": [
+    "source_commit",
+    "runner_image_digest",
+    "aws_quota",
+    "cloudwatch_node_pressure",
+    "cpu_throttling",
+    "memory_peak_ratio",
+    "disk_io",
+    "assignment_delay",
+    "restarts",
+    "evictions",
+    "ooms",
+    "output_digest"
+  ],
+  "promotion_gates": {
+    "matched_comparisons": 10,
+    "byte_identical_output": true,
+    "maximum_failures": 0,
+    "maximum_ooms": 0,
+    "maximum_evictions": 0,
+    "maximum_restarts": 0,
+    "maximum_memory_ratio": 0.8,
+    "p95_regression_allowed": false,
+    "minimum_median_typescript_improvement": 0.2
+  }
+}

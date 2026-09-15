@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "pools": {
+    "system": {
+      "profile": "system",
+      "minimum": 1,
+      "maximum": 3,
+      "vcpus": 4,
+      "azure_instance_type": "Standard_D4as_v5",
+      "aws_instance_type": "m6a.xlarge",
+      "enabled": true
+    },
+    "socketless": {
+      "profile": "socketless",
+      "minimum": 0,
+      "maximum": 30,
+      "vcpus": 8,
+      "azure_instance_type": "Standard_D8ads_v5",
+      "aws_instance_type": "m6a.2xlarge",
+      "enabled": true
+    },
+    "compute": {
+      "profile": "compute",
+      "minimum": 0,
+      "maximum": 9,
+      "vcpus": 16,
+      "azure_instance_type": "Standard_D16ads_v5",
+      "aws_instance_type": "m6a.4xlarge",
+      "enabled": true
+    },
+    "compute_16_vcpu_candidate": {
+      "profile": "compute-16-vcpu-candidate",
+      "minimum": 0,
+      "maximum": 1,
+      "vcpus": 16,
+      "azure_instance_type": "Standard_D16ads_v5",
+      "aws_instance_type": "m6a.4xlarge",
+      "enabled": true
+    },
+    "container_build": {
+      "profile": "container-build",
+      "minimum": 0,
+      "maximum": 5,
+      "vcpus": 16,
+      "azure_instance_type": "Standard_D16ads_v5",
+      "aws_instance_type": "m6a.4xlarge",
+      "enabled": true
+    },
+    "compute_32_vcpu_density_candidate": {
+      "profile": "compute-32-vcpu-density-candidate",
+      "minimum": 0,
+      "maximum": 5,
+      "vcpus": 32,
+      "azure_instance_type": "Standard_F32s_v2",
+      "aws_instance_type": "c6a.8xlarge",
+      "enabled": false
+    }
+  },
+  "capacity": {
+    "initial_maximum_vcpus": 492,
+    "initial_quota_floor": 615,
+    "density_enabled_maximum_vcpus": 652,
+    "density_enabled_quota_floor": 815,
+    "minimum_headroom_ratio": 0.2
+  }
+}

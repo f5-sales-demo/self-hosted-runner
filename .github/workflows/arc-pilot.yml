@@ -1,4 +1,4 @@
-name: Validate AKS ARC pilot
+name: Validate ARC runner platform pilot
 
 on:
   workflow_dispatch:
@@ -33,6 +33,30 @@ jobs:
             echo "socketless runner unexpectedly exposes Docker" >&2
             exit 1
           fi
+
+  compute:
+    runs-on: self-hosted-runner-compute
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Verify compute tool and identity contract
+        run: |
+          set -euo pipefail
+          verify-runner-tools standard
+          test "$RUNNER_PROFILE" = compute
+          [[ "$RUNNER_IMAGE_DIGEST" =~ ^.+@sha256:[0-9a-f]{64}$ ]]
+      - name: Profile compute smoke
+        run: runner-profile --name compute-smoke --output "$RUNNER_TEMP/workload-profile.json" -- true
+      - name: Upload workload profile
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: workload-profile-compute-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/workload-profile.json
+          if-no-files-found: error
+          retention-days: 30
 
   container-build:
     runs-on: self-hosted-runner-container-build

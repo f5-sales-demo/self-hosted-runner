@@ -13,10 +13,10 @@ PROFILES = {
     "socketless",
     "container-build",
     "compute",
-    "compute-d16-candidate",
-    "compute-f32-candidate",
+    "compute-16-vcpu-candidate",
+    "compute-32-vcpu-density-candidate",
 }
-COMPUTE_PROFILES = {"compute", "compute-d16-candidate", "compute-f32-candidate"}
+COMPUTE_PROFILES = {"compute", "compute-16-vcpu-candidate", "compute-32-vcpu-density-candidate"}
 REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
@@ -117,14 +117,14 @@ EXPECTED_CAPS = {
 }
 CANDIDATE_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": {
-        "compute-d16-candidate": 1,
-        "compute-f32-candidate": 4,
+        "compute-16-vcpu-candidate": 1,
+        "compute-32-vcpu-density-candidate": 4,
     },
     "https://github.com/f5-sales-demo/api-specs-enriched": {
-        "compute-f32-candidate": 2,
+        "compute-32-vcpu-density-candidate": 2,
     },
     "https://github.com/f5-sales-demo/terraform-provider-xcsh": {
-        "compute-f32-candidate": 3,
+        "compute-32-vcpu-density-candidate": 3,
     },
 }
 
@@ -247,8 +247,17 @@ def load_config(path: Path, repository_root: Path):
                 )
         if repository in MANAGED_COHORT:
             name = repository.rsplit("/", 1)[1]
-            expected_namespace = f"arc-runners-{name}-{spec['profile']}"
-            expected_release = f"{name}-{spec['profile']}"
+            namespace_profile = (
+                "32vcpu-candidate"
+                if spec["profile"] == "compute-32-vcpu-density-candidate"
+                else spec["profile"]
+            )
+            expected_namespace = f"arc-runners-{name}-{namespace_profile}"
+            expected_release = (
+                f"{name}-32vcpu-candidate"
+                if spec["profile"] == "compute-32-vcpu-density-candidate"
+                else f"{name}-{spec['profile']}"
+            )
             if spec["namespace"] != expected_namespace:
                 raise ConfigError(
                     f"{repository} {spec['profile']} namespace must equal {expected_namespace}"
@@ -315,15 +324,15 @@ def validate_config_set(paths: list[Path], repository_root: Path):
                 raise ConfigError(
                     f"{field} value {value} collides between {previous} and {repository}"
                 )
-    candidate_d16_demand = sum(
+    candidate_16_vcpu_demand = sum(
         spec["max_runners"]
         for config in configs
         for spec in config["scale_sets"]
-        if spec["profile"] == "compute-d16-candidate"
+        if spec["profile"] == "compute-16-vcpu-candidate"
     )
-    if candidate_d16_demand > 1:
+    if candidate_16_vcpu_demand > 1:
         raise ConfigError(
-            "dedicated D16 candidate demand exceeds one qualification runner"
+            "dedicated 16-vCPU candidate demand exceeds one qualification runner"
         )
     return configs
 

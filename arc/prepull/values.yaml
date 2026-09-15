@@ -3,5 +3,4 @@ nodeProfiles: []
 image: ""
 additionalImages: []
 renovateImage: ""
-imagePullSecrets:
-  - ghcr-pull
+imagePullSecrets: []

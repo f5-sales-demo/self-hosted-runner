@@ -1,4 +1,5 @@
 locals {
+  runner_pool_contract = jsondecode(file("${path.module}/../../runner-pools.json"))
   runner_pools = {
     socketless = {
       name         = "socketless"
@@ -22,7 +23,7 @@ locals {
       minimum      = 0
       maximum      = 1
       os_disk_size = 128
-      profile      = "compute-d16-candidate"
+      profile      = "compute-16-vcpu-candidate"
     }
     compute_f32 = {
       name         = "computef32"
@@ -30,7 +31,7 @@ locals {
       minimum      = 0
       maximum      = 5
       os_disk_size = 128
-      profile      = "compute-f32"
+      profile      = "compute-32-vcpu-density-candidate"
     }
     container_build = {
       name         = "build"
@@ -51,6 +52,19 @@ locals {
   required_dadsv5_quota = 600
   required_fsv2_quota   = 200
   required_total_quota  = 815
+}
+
+check "shared_runner_pool_contract" {
+  assert {
+    condition = (
+      local.runner_pools.socketless.maximum == local.runner_pool_contract.pools.socketless.maximum &&
+      local.runner_pools.compute.maximum == local.runner_pool_contract.pools.compute.maximum &&
+      local.runner_pools.compute_d16_candidate.profile == local.runner_pool_contract.pools.compute_16_vcpu_candidate.profile &&
+      local.runner_pools.compute_f32.profile == local.runner_pool_contract.pools.compute_32_vcpu_density_candidate.profile &&
+      local.runner_pools.container_build.maximum == local.runner_pool_contract.pools.container_build.maximum
+    )
+    error_message = "Azure pool capacities and cloud-neutral runner profiles must match the shared contract."
+  }
 }
 
 resource "azurerm_resource_group" "runner" {

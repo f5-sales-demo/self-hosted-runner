@@ -3,7 +3,7 @@ set -euo pipefail
 
 config=${1:-}
 [[ -n "$config" ]] || { echo "usage: scripts/arc-ghcr-pull-secret.sh <repository-config>" >&2; exit 2; }
-: "${KUBECONFIG:?KUBECONFIG must point to the protected AKS administrator config}"
+: "${KUBECONFIG:?KUBECONFIG must point to the protected cluster administrator config}"
 : "${GHCR_USERNAME:?GHCR_USERNAME is required}"
 : "${GHCR_TOKEN:?GHCR_TOKEN must be a read-only package token}"
 

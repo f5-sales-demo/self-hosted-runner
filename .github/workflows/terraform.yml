@@ -1,24 +1,22 @@
-name: Validate AKS runner platform
+name: Validate portable runner platform
 
 on:
   pull_request:
     paths:
       - "arc/**"
+      - "config/arc-capacity.json"
       - "terraform/**"
-      - "scripts/arc-*.sh"
-      - "scripts/arc-*.py"
-      - "scripts/check-committed-artifacts.sh"
-      - "tests/test_aks_arc_contract.py"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/terraform.yml"
   push:
     branches: [main]
     paths:
       - "arc/**"
+      - "config/arc-capacity.json"
       - "terraform/**"
-      - "scripts/arc-*.sh"
-      - "scripts/arc-*.py"
-      - "scripts/check-committed-artifacts.sh"
-      - "tests/test_aks_arc_contract.py"
+      - "scripts/**"
+      - "tests/**"
       - ".github/workflows/terraform.yml"
 
 permissions:
@@ -35,24 +33,43 @@ jobs:
         with:
           terraform_version: "1.14.4"
           terraform_wrapper: false
-      - name: Install pinned Helm
+      - name: Install pinned Helm and actionlint
         run: |
           set -euo pipefail
-          curl --fail --location --proto '=https' --tlsv1.2             --output /tmp/helm.tgz             https://get.helm.sh/helm-v3.21.3-linux-amd64.tar.gz
-          echo "15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0  /tmp/helm.tgz" |
-            sha256sum --check --strict
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/helm.tgz \
+            https://get.helm.sh/helm-v3.21.3-linux-amd64.tar.gz
+          echo "15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0  /tmp/helm.tgz" | sha256sum --check --strict
           tar -xzf /tmp/helm.tgz -C /tmp
           sudo install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm
+          curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/actionlint.tgz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_linux_x86_64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/actionlint.tgz" | sha256sum --check --strict
+          tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
+          sudo install -m 0555 /tmp/actionlint /usr/local/bin/actionlint
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive terraform
-      - name: Validate Terraform without a backend
+      - name: Validate every independent Terraform root without a backend
         run: |
           set -euo pipefail
-          terraform -chdir=terraform/bootstrap init -backend=false
-          terraform -chdir=terraform/bootstrap validate
-          terraform -chdir=terraform/runner-fleet init -backend=false
-          terraform -chdir=terraform/runner-fleet validate
-      - name: Validate ARC Helm rendering
+          for root in \
+            terraform/azure/bootstrap \
+            terraform/azure/runner-fleet \
+            terraform/aws/bootstrap \
+            terraform/aws/runner-fleet; do
+            terraform -chdir="$root" init -backend=false
+            terraform -chdir="$root" validate
+          done
+      - name: Validate provider contracts and mocked plan policy
+        run: python3 -m unittest tests.test_aks_arc_contract tests.test_runner_platform_contract tests.test_aws_plan_preflight
+      - name: Render every ARC scale set and shared chart
         run: scripts/validate-arc.sh arc/repositories/*.yaml
-      - name: Refuse committed runtime and secret artifacts
-        run: scripts/check-committed-artifacts.sh
+      - name: Render pinned AWS platform add-ons
+        env:
+          EKS_CLUSTER_NAME: contract-test
+        run: scripts/aws-addons.sh validate
+      - name: Run shell, workflow, security, and artifact checks
+        run: |
+          set -euo pipefail
+          shellcheck scripts/*.sh
+          actionlint -config-file .github/actionlint.yaml
+          scripts/check-committed-artifacts.sh
