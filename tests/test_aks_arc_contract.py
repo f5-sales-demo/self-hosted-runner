@@ -78,6 +78,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("kubectl get secret ghcr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
+        self.assertIn('--namespace "$cache_namespace"\n      --create-namespace', deploy)
         self.assertIn("cache_profiles=(socketless container-build)", deploy)
         self.assertIn("cache_profiles+=(compute-candidate)", deploy)
         self.assertIn("nodeProfiles[0]=compute-16-vcpu-candidate", deploy)
