@@ -72,28 +72,21 @@ vcpu_quota=$(jq -er '.Quota.Value | floor' "$tmpdir/vcpu-quota.json")
 
 aws_json "$tmpdir/eip-quota.json" service-quotas get-service-quota --service-code ec2 --quota-code L-0263D0A3
 aws_json "$tmpdir/eips.json" ec2 describe-addresses
-eip_quota=$(jq -er '.Quota.Value | floor' "$tmpdir/eip-quota.json")
-eip_allocated=$(jq -er '.Addresses | length' "$tmpdir/eips.json")
-(( eip_quota >= 8 && eip_quota - eip_allocated >= 3 )) || {
-  echo "Elastic IP quota must be at least 8 with three unused slots; quota=$eip_quota allocated=$eip_allocated" >&2
-  exit 1
-}
-
 aws_json "$tmpdir/vpcs.json" ec2 describe-vpcs
-python3 - "$tmpdir/vpcs.json" <<'PY'
-import ipaddress
-import json
-import sys
-
-target = ipaddress.ip_network("10.42.0.0/16")
-with open(sys.argv[1], encoding="utf-8") as stream:
-    payload = json.load(stream)
-for vpc in payload["Vpcs"]:
-    for association in vpc.get("CidrBlockAssociationSet", []):
-        observed = ipaddress.ip_network(association["CidrBlock"])
-        if target.overlaps(observed):
-            raise SystemExit(f"10.42.0.0/16 overlaps VPC {vpc['VpcId']} CIDR {observed}")
-PY
+state_root=$(git rev-parse --show-toplevel)/terraform/aws/runner-fleet
+if ! terraform -chdir="$state_root" show -json >"$tmpdir/state.json" 2>"$tmpdir/state.err"; then
+  sed -n '1,20p' "$tmpdir/state.err" >&2
+  exit 1
+fi
+if [[ ! -s "$tmpdir/state.json" ]]; then
+  jq -n '{format_version: "1.0"}' >"$tmpdir/state.json"
+fi
+jq -e . "$tmpdir/state.json" >/dev/null
+scripts/aws-live-preflight.py \
+  --eip-quota "$tmpdir/eip-quota.json" \
+  --eips "$tmpdir/eips.json" \
+  --vpcs "$tmpdir/vpcs.json" \
+  --state "$tmpdir/state.json"
 
 if [[ $# -eq 1 ]]; then
   terraform show -json "$1" >"$tmpdir/plan.json" 2>"$tmpdir/plan.err" || {
