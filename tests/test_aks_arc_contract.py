@@ -86,6 +86,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("nodeProfiles[1]=compute-32-vcpu-density-candidate", deploy)
         self.assertIn("COMPUTE_CANDIDATE_IMAGE", deploy)
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
+        self.assertIn("scripts/reconcile-arc-listeners.py", deploy)
         self.assertIn("kubectl apply -f arc/candidate-priority-class.yaml", deploy)
         self.assertTrue((ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111)
         mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")

@@ -157,4 +157,10 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
       --set maxRunners="$max_runners" \
       --wait --timeout 10m
   done < <(jq -c '.scale_sets[]' <<<"$config_json")
+
+  runner_namespaces=()
+  while IFS= read -r namespace; do
+    runner_namespaces+=("$namespace")
+  done < <(jq -er '.scale_sets[].namespace' <<<"$config_json")
+  python3 scripts/reconcile-arc-listeners.py "${runner_namespaces[@]}"
 fi
