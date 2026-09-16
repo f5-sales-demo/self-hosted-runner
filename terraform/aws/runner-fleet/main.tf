@@ -27,6 +27,15 @@ locals {
     "k8s.io/cluster-autoscaler/enabled"             = "true"
     "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
   }
+  bootstrap_addon_names = toset(["vpc-cni", "eks-pod-identity-agent"])
+  bootstrap_addons = {
+    for name, version in var.addon_versions : name => version
+    if contains(local.bootstrap_addon_names, name)
+  }
+  node_addons = {
+    for name, version in var.addon_versions : name => version
+    if !contains(local.bootstrap_addon_names, name)
+  }
 }
 
 check "authenticated_account" {
@@ -365,7 +374,10 @@ resource "aws_eks_node_group" "system" {
   tags = local.cluster_autoscaler_tags
 
   lifecycle { ignore_changes = [scaling_config[0].desired_size] }
-  depends_on = [aws_iam_role_policy_attachment.node]
+  depends_on = [
+    aws_iam_role_policy_attachment.node,
+    aws_eks_pod_identity_association.vpc_cni,
+  ]
 }
 
 resource "aws_eks_node_group" "runner" {
@@ -471,8 +483,18 @@ resource "aws_iam_role_policy" "cluster_autoscaler" {
   })
 }
 
-resource "aws_eks_addon" "managed" {
-  for_each = var.addon_versions
+resource "aws_eks_addon" "bootstrap" {
+  for_each = local.bootstrap_addons
+
+  cluster_name                = aws_eks_cluster.runner.name
+  addon_name                  = each.key
+  addon_version               = each.value
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+}
+
+resource "aws_eks_addon" "node" {
+  for_each = local.node_addons
 
   cluster_name                = aws_eks_cluster.runner.name
   addon_name                  = each.key
@@ -488,7 +510,7 @@ resource "aws_eks_pod_identity_association" "vpc_cni" {
   namespace       = "kube-system"
   service_account = "aws-node"
   role_arn        = aws_iam_role.pod_identity["vpc-cni"].arn
-  depends_on      = [aws_eks_addon.managed["eks-pod-identity-agent"]]
+  depends_on      = [aws_eks_addon.bootstrap["eks-pod-identity-agent"]]
 }
 
 resource "aws_eks_pod_identity_association" "cluster_autoscaler" {
@@ -496,7 +518,7 @@ resource "aws_eks_pod_identity_association" "cluster_autoscaler" {
   namespace       = "kube-system"
   service_account = "cluster-autoscaler"
   role_arn        = aws_iam_role.pod_identity["cluster-autoscaler"].arn
-  depends_on      = [aws_eks_addon.managed["eks-pod-identity-agent"]]
+  depends_on      = [aws_eks_addon.bootstrap["eks-pod-identity-agent"]]
 }
 
 resource "aws_kms_key" "ecr" {

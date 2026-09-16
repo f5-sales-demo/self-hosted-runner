@@ -96,6 +96,10 @@ class RunnerPlatformContractTests(unittest.TestCase):
             'for_each = toset(["self-hosted-runner", "renovate"])',
             'image_tag_mutability = "IMMUTABLE"',
             "scan_on_push = true",
+            'bootstrap_addon_names = toset(["vpc-cni", "eks-pod-identity-agent"])',
+            "aws_eks_pod_identity_association.vpc_cni,",
+            'resource "aws_eks_addon" "bootstrap"',
+            'resource "aws_eks_addon" "node"',
         ):
             self.assertIn(required, source)
         self.assertNotIn("SPOT", source)
