@@ -15,7 +15,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
-config_json=$(python3 scripts/arc-config.py "$config")
+config_json=$(python3 scripts/arc-config.py --enabled-only "$config")
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 chmod 0700 "$tmpdir"

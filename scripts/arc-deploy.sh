@@ -26,7 +26,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
-config_json=$(python3 scripts/arc-config.py "$config")
+config_json=$(python3 scripts/arc-config.py --enabled-only "$config")
 github_config_url=$(jq -er .repository <<<"$config_json")
 chart_version=0.14.2
 controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452

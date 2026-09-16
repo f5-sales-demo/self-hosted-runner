@@ -22,7 +22,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
-config_json=$(python3 scripts/arc-config.py "$config")
+config_json=$(python3 scripts/arc-config.py --enabled-only "$config")
 while IFS= read -r namespace; do
   kubectl create namespace "$namespace" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
   manifest=$(mktemp)
