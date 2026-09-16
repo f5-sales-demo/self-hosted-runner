@@ -59,6 +59,15 @@ class RunnerPlatformContractTests(unittest.TestCase):
         )
         self.assertIn("trap restore_backend_declaration EXIT", helper)
         self.assertIn('terraform -chdir="$root" init -reconfigure', helper)
+        self.assertIn(
+            'terraform -chdir="$root" init -migrate-state -force-copy', helper
+        )
+        self.assertIn(
+            'output -json >"$plan_dir/$cloud-$stack.outputs.json"', helper
+        )
+        self.assertIn(
+            'chmod 0600 "$plan_dir/$cloud-$stack.outputs.json"', helper
+        )
         self.assertEqual(
             3, helper.count('terraform -chdir="$root" show -json "$plan"')
         )

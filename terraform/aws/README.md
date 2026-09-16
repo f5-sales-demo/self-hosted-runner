@@ -36,7 +36,8 @@ scripts/runner-platform.sh aws show
 scripts/runner-platform.sh aws apply
 chmod 0600 terraform/aws/bootstrap/terraform.tfstate
 cp terraform/aws/bootstrap/backend.hcl.example terraform/aws/bootstrap/backend.hcl
-# Replace the bucket and KMS identifiers using the applied bootstrap outputs.
+# Replace the bucket and KMS identifiers using the protected
+# .plans/aws-bootstrap.outputs.json written by the apply command.
 MIGRATE_STATE=yes scripts/runner-platform.sh aws init
 ```
 
