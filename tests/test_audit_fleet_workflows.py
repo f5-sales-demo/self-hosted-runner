@@ -26,8 +26,22 @@ class FleetAuditTests(unittest.TestCase):
 
     def test_manifest_contains_the_governed_fleet(self) -> None:
         fleet = json.loads((ROOT / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(fleet["repositories"]), 39)
+        self.assertEqual(len(fleet["repositories"]), 40)
         self.assertIn("f5-sales-demo/docs-control", fleet["repositories"])
+        self.assertIn("f5-sales-demo/herdr", fleet["repositories"])
+
+    def test_managed_labels_are_audited_as_self_hosted_profiles(self) -> None:
+        workflows = {".github/workflows/test.yml": workflow([
+            "name: test", "on: push", "jobs:", "  verify:",
+            "    runs-on: managed-container-build", "    steps:",
+            "      - uses: docker/login-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ])}
+        profiles = {tool["name"]: set(tool["profiles"]) for tool in self.catalog["tools"]}
+        findings = AUDIT.audit_workflows(
+            "f5-sales-demo/fixture", workflows, self.catalog["setup_actions"],
+            self.catalog["marketplace_actions"], profiles, {},
+        )
+        self.assertFalse([item for item in findings if item.level == "error"])
 
     def test_exact_cached_setup_and_lockfile_install_pass(self) -> None:
         workflows = {".github/workflows/test.yml": workflow([
