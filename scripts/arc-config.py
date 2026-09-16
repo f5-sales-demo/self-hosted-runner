@@ -353,6 +353,37 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     return configs
 
 
+def enabled_config(config: dict, repository_root: Path) -> dict:
+    """Return only scale sets backed by enabled runner pools."""
+    contract = strict_json(repository_root / "terraform/runner-pools.json")
+    pools = contract.get("pools")
+    if not isinstance(pools, dict):
+        raise ConfigError("runner-pool contract must contain a pools object")
+    profiles = {
+        pool.get("profile")
+        for pool in pools.values()
+        if isinstance(pool, dict) and pool.get("profile") in PROFILES
+    }
+    missing = PROFILES - profiles
+    if missing:
+        raise ConfigError(
+            f"runner-pool contract is missing ARC profiles: {sorted(missing)}"
+        )
+    enabled = {
+        pool["profile"]
+        for pool in pools.values()
+        if isinstance(pool, dict)
+        and pool.get("profile") in PROFILES
+        and pool.get("enabled") is True
+    }
+    return {
+        **config,
+        "scale_sets": [
+            spec for spec in config["scale_sets"] if spec["profile"] in enabled
+        ],
+    }
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("configuration", type=Path, nargs="+")
@@ -360,6 +391,11 @@ def main(argv=None):
         "--validate-set",
         action="store_true",
         help="validate cross-configuration identities and emit a normalized array",
+    )
+    parser.add_argument(
+        "--enabled-only",
+        action="store_true",
+        help="emit only scale sets backed by enabled runner pools",
     )
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
@@ -370,6 +406,11 @@ def main(argv=None):
             result = load_config(args.configuration[0], root)
         else:
             parser.error("multiple configurations require --validate-set")
+        if args.enabled_only:
+            if args.validate_set:
+                result = [enabled_config(config, root) for config in result]
+            else:
+                result = enabled_config(result, root)
     except ConfigError as exc:
         print(f"ARC configuration error: {exc}", file=sys.stderr)
         return 1

@@ -231,6 +231,26 @@ class ArcConfigTests(unittest.TestCase):
         )
         self.assertEqual(1, candidate_demand)
 
+    def test_enabled_config_omits_the_disabled_density_candidate(self) -> None:
+        config = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
+        enabled = MODULE.enabled_config(config, ROOT)
+        profiles = {spec["profile"] for spec in enabled["scale_sets"]}
+        self.assertIn("compute-16-vcpu-candidate", profiles)
+        self.assertNotIn("compute-32-vcpu-density-candidate", profiles)
+        self.assertEqual(4, len(profiles))
+
+    def test_deployment_helpers_request_only_enabled_profiles(self) -> None:
+        for relative in (
+            "scripts/arc-deploy.sh",
+            "scripts/arc-github-app-secret.sh",
+            "scripts/arc-ghcr-pull-secret.sh",
+        ):
+            with self.subTest(relative=relative):
+                self.assertIn(
+                    "scripts/arc-config.py --enabled-only",
+                    (ROOT / relative).read_text(),
+                )
+
     def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(
             (ROOT / "catalog/governed-repositories.json").read_text(encoding="utf-8")
