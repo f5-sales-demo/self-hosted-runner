@@ -59,6 +59,10 @@ class RunnerPlatformContractTests(unittest.TestCase):
         )
         self.assertIn("trap restore_backend_declaration EXIT", helper)
         self.assertIn('terraform -chdir="$root" init -reconfigure', helper)
+        self.assertEqual(
+            3, helper.count('terraform -chdir="$root" show -json "$plan"')
+        )
+        self.assertNotIn('      terraform show -json "$plan"', helper)
         readme = (ROOT / "terraform/aws/README.md").read_text()
         self.assertLess(
             readme.index("scripts/runner-platform.sh aws apply"),

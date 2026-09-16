@@ -74,7 +74,7 @@ case "$action" in
     mkdir -p "$plan_dir"
     terraform -chdir="$root" plan -out="$plan"
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" "$plan.json"
     fi
@@ -87,7 +87,7 @@ case "$action" in
   apply)
     [[ -f "$plan" ]] || { echo "saved plan does not exist: $plan" >&2; exit 1; }
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" "$plan.json"
     fi
@@ -103,7 +103,7 @@ case "$action" in
     mkdir -p "$plan_dir"
     terraform -chdir="$root" plan -destroy -out="$plan"
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" --allow-destroy "$plan.json"
     fi
