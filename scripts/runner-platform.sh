@@ -17,6 +17,24 @@ plan_dir="$repo_root/.plans"
 plan="$plan_dir/$cloud-$stack.tfplan"
 [[ -d "$root" ]] || { echo "Terraform root does not exist: $root" >&2; exit 2; }
 
+backend_declaration="$root/backend.tf"
+disabled_backend_declaration="$root/.backend.tf.runner-platform-local"
+restore_backend_declaration() {
+  if [[ -f "$disabled_backend_declaration" ]]; then
+    mv -- "$disabled_backend_declaration" "$backend_declaration"
+  fi
+}
+if [[ -e "$disabled_backend_declaration" ]]; then
+  [[ ! -e "$backend_declaration" ]] || { echo "both active and disabled backend declarations exist" >&2; exit 1; }
+  restore_backend_declaration
+fi
+if [[ "$stack" == bootstrap && ! -f "$backend" ]]; then
+  [[ ${MIGRATE_STATE:-no} != yes ]] || { echo "create ignored backend.hcl before migrating bootstrap state" >&2; exit 1; }
+  [[ -f "$backend_declaration" ]] || { echo "bootstrap backend declaration is missing" >&2; exit 1; }
+  mv -- "$backend_declaration" "$disabled_backend_declaration"
+  trap restore_backend_declaration EXIT
+fi
+
 check_identity() {
   if [[ "$cloud" == aws ]]; then
     : "${AWS_ACCOUNT_ID:?AWS_ACCOUNT_ID must identify the target account}"
@@ -32,9 +50,9 @@ check_identity() {
 }
 
 init_backend() {
-  if [[ "$stack" == bootstrap && ${MIGRATE_STATE:-no} != yes ]]; then
+  if [[ "$stack" == bootstrap && ! -f "$backend" ]]; then
     umask 077
-    terraform -chdir="$root" init -backend=false
+    terraform -chdir="$root" init -reconfigure
     return
   fi
   [[ -f "$backend" ]] || { echo "copy backend.hcl.example to ignored backend.hcl and replace identifiers" >&2; exit 1; }
@@ -56,7 +74,7 @@ case "$action" in
     mkdir -p "$plan_dir"
     terraform -chdir="$root" plan -out="$plan"
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" "$plan.json"
     fi
@@ -69,7 +87,7 @@ case "$action" in
   apply)
     [[ -f "$plan" ]] || { echo "saved plan does not exist: $plan" >&2; exit 1; }
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" "$plan.json"
     fi
@@ -85,7 +103,7 @@ case "$action" in
     mkdir -p "$plan_dir"
     terraform -chdir="$root" plan -destroy -out="$plan"
     if [[ "$cloud" == aws ]]; then
-      terraform show -json "$plan" >"$plan.json"
+      terraform -chdir="$root" show -json "$plan" >"$plan.json"
       jq -e . "$plan.json" >/dev/null
       "$repo_root/scripts/aws-plan-preflight.py" --allow-destroy "$plan.json"
     fi
