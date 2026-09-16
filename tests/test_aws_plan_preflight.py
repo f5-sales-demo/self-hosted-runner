@@ -28,7 +28,18 @@ def plan(
                 "change": {"actions": actions or ["create"]},
             }
         ],
-        "planned_values": values or {},
+        "planned_values": {
+            "root_module": {
+                "resources": [
+                    {
+                        "address": f"{resource_type}.test",
+                        "mode": "managed",
+                        "type": resource_type,
+                        "values": values or {},
+                    }
+                ]
+            }
+        },
     }
 
 
@@ -80,6 +91,22 @@ class AwsPlanPreflightTests(unittest.TestCase):
             MODULE.validate_plan(
                 plan(values={"addon_name": "coredns", "addon_version": "latest"})
             )
+
+    def test_ignores_provider_identity_metadata(self) -> None:
+        value = plan(
+            resource_type="aws_eks_addon",
+            values={
+                "addon_name": "eks-pod-identity-agent",
+                "addon_version": "v1.3.8-eksbuild.2",
+            },
+        )
+        value["planned_values"]["root_module"]["resources"][0]["identity"] = {
+            "account_id": "123456789012",
+            "addon_name": "eks-pod-identity-agent",
+            "cluster_name": "github-actions-runners",
+            "region": "us-east-1",
+        }
+        MODULE.validate_plan(value)
 
 
 if __name__ == "__main__":

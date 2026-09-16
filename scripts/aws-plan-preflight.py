@@ -79,6 +79,13 @@ def walk(value):
             yield from walk(nested)
 
 
+def planned_resource_values(module):
+    for resource in module.get("resources", []):
+        yield resource.get("values", {})
+    for child in module.get("child_modules", []):
+        yield from planned_resource_values(child)
+
+
 def validate_plan(plan: dict, *, allow_destroy: bool = False) -> None:
     provider_config = plan.get("configuration", {}).get("provider_config", {})
     provider_names = {
@@ -102,31 +109,40 @@ def validate_plan(plan: dict, *, allow_destroy: bool = False) -> None:
         if "delete" in actions and not allow_destroy:
             raise PlanError(f"delete or replacement is not allowed: {address}")
 
-    planned = plan.get("planned_values", {})
-    for item in walk(planned):
-        if (
-            item.get("map_public_ip_on_launch") is True
-            or item.get("associate_public_ip_address") is True
-        ):
-            raise PlanError("public node/subnet addressing is forbidden")
-        if "0.0.0.0/0" in item.get("public_access_cidrs", []):
-            raise PlanError("the EKS public API cannot be open to the Internet")
-        if item.get("capacity_type") == "SPOT":
-            raise PlanError("Spot node capacity is forbidden")
-        if "ami_type" in item and item["ami_type"] != "AL2023_x86_64_STANDARD":
-            raise PlanError("node groups must use pinned AL2023 images")
-        if "release_version" in item and item["release_version"] != "1.35.7-20260911":
-            raise PlanError("node groups must use AL2023 release 1.35.7-20260911")
-        addon_name = item.get("addon_name")
-        if (
-            addon_name in PINNED_ADDONS
-            and item.get("addon_version") != PINNED_ADDONS[addon_name]
-        ):
-            raise PlanError(f"managed add-on is not pinned: {addon_name}")
-        for key in ("image", "image_uri"):
-            image = item.get(key)
-            if isinstance(image, str) and "@sha256:" not in image:
-                raise PlanError(f"unpinned image reference in {key}")
+    root_module = plan.get("planned_values", {}).get("root_module", {})
+    for values in planned_resource_values(root_module):
+        for item in walk(values):
+            if (
+                item.get("map_public_ip_on_launch") is True
+                or item.get("associate_public_ip_address") is True
+            ):
+                raise PlanError("public node/subnet addressing is forbidden")
+            if "0.0.0.0/0" in item.get("public_access_cidrs", []):
+                raise PlanError("the EKS public API cannot be open to the Internet")
+            if item.get("capacity_type") == "SPOT":
+                raise PlanError("Spot node capacity is forbidden")
+            if (
+                "ami_type" in item
+                and item["ami_type"] != "AL2023_x86_64_STANDARD"
+            ):
+                raise PlanError("node groups must use pinned AL2023 images")
+            if (
+                "release_version" in item
+                and item["release_version"] != "1.35.7-20260911"
+            ):
+                raise PlanError(
+                    "node groups must use AL2023 release 1.35.7-20260911"
+                )
+            addon_name = item.get("addon_name")
+            if (
+                addon_name in PINNED_ADDONS
+                and item.get("addon_version") != PINNED_ADDONS[addon_name]
+            ):
+                raise PlanError(f"managed add-on is not pinned: {addon_name}")
+            for key in ("image", "image_uri"):
+                image = item.get(key)
+                if isinstance(image, str) and "@sha256:" not in image:
+                    raise PlanError(f"unpinned image reference in {key}")
 
 
 def main(argv: list[str] | None = None) -> int:
