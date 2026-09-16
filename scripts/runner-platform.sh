@@ -57,7 +57,7 @@ init_backend() {
   fi
   [[ -f "$backend" ]] || { echo "copy backend.hcl.example to ignored backend.hcl and replace identifiers" >&2; exit 1; }
   if [[ "$stack" == bootstrap && ${MIGRATE_STATE:-no} == yes ]]; then
-    terraform -chdir="$root" init -migrate-state -backend-config=backend.hcl
+    terraform -chdir="$root" init -migrate-state -force-copy -backend-config=backend.hcl
   else
     terraform -chdir="$root" init -reconfigure -backend-config=backend.hcl
   fi
@@ -94,6 +94,8 @@ case "$action" in
     terraform -chdir="$root" apply "$plan"
     if [[ "$stack" == bootstrap && -f "$root/terraform.tfstate" ]]; then
       chmod 0600 "$root/terraform.tfstate"
+      terraform -chdir="$root" output -json >"$plan_dir/$cloud-$stack.outputs.json"
+      chmod 0600 "$plan_dir/$cloud-$stack.outputs.json"
     fi
     ;;
   destroy-plan)
