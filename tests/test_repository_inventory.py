@@ -39,7 +39,7 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_exact_inventory_and_clean_break_config(self):
         repositories = MODULE.inventory(ROOT)
-        self.assertEqual(39, len(repositories))
+        self.assertEqual(40, len(repositories))
         config = MODULE.global_config(repositories)
         self.assertEqual("ignored", config["requireConfig"])
         self.assertFalse(config["onboarding"])

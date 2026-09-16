@@ -24,6 +24,7 @@ ENV_VERSION = re.compile(r"^\$\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*}}$")
 INSTALLER = re.compile(r"\b(?:sudo|apt(?:-get)?\s+(?:install|update)|apk\s+add|brew\s+install|choco\s+install|npm\s+install\s+-g|pip(?:3)?\s+install(?!\s+(?:-r|--requirement))|go\s+install|cargo\s+install|gem\s+install|composer\s+global|curl[^\n]*\|\s*(?:ba)?sh|wget[^\n]*(?:\|\s*(?:ba)?sh|-O\s*/(?:usr|opt|tmp)))")
 ACTION_SHA = re.compile(r"^[0-9a-f]{40}$")
 LOCKFILE_INSTALL = re.compile(r"\b(?:npm\s+ci|bun\s+install\s+--frozen-lockfile|pip(?:3)?\s+install\s+(?:-r|--requirement)|poetry\s+install|composer\s+install|pnpm\s+install\s+--frozen-lockfile)\b")
+SELF_HOSTED_LABELS = {"self-hosted", "managed-socketless", "managed-container-build"}
 
 
 @dataclass(frozen=True)
@@ -110,8 +111,8 @@ def load_json(path: Path) -> dict:
 
 def is_self_hosted(value: object) -> bool:
     if isinstance(value, str):
-        return value == "self-hosted"
-    return isinstance(value, list) and "self-hosted" in value
+        return value in SELF_HOSTED_LABELS
+    return isinstance(value, list) and bool(SELF_HOSTED_LABELS.intersection(value))
 
 
 def action_name(value: str) -> str:
@@ -132,8 +133,8 @@ def exact(value: object) -> bool:
 def target_profile(job: dict) -> str:
     labels = job.get("runs-on")
     if isinstance(labels, str):
-        return "container-build" if labels == "container-build" else "standard"
-    return "container-build" if "container-build" in labels else "standard"
+        return "container-build" if labels in {"container-build", "managed-container-build"} else "standard"
+    return "container-build" if {"container-build", "managed-container-build"}.intersection(labels) else "standard"
 
 
 def record_action(inventory: dict[str, dict], name: str, reference: str, profile: str, location: str, config: dict | None) -> None:
@@ -239,7 +240,7 @@ def github_workflows(repository: str, ref: str, github: GitHubClient) -> dict[st
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit all 39 governed self-hosted workflows")
+    parser = argparse.ArgumentParser(description="Audit all 40 governed self-hosted workflows")
     parser.add_argument("--catalog", type=Path, default=CATALOG_PATH)
     parser.add_argument("--fleet", type=Path, default=FLEET_PATH)
     parser.add_argument("--checkouts-root", type=Path)
@@ -255,8 +256,8 @@ def main() -> int:
         parser.error("select exactly one of --checkouts-root or --github")
     catalog = load_json(args.catalog)
     repositories = args.repository or load_json(args.fleet)["repositories"]
-    if len(repositories) != 39 and not args.repository:
-        raise SystemExit("fleet manifest must contain exactly 39 repositories")
+    if len(repositories) != 40 and not args.repository:
+        raise SystemExit("fleet manifest must contain exactly 40 repositories")
     if args.github_timeout <= 0 or args.github_attempts < 1 or args.github_minimum_interval < 0:
         parser.error("GitHub timeout and attempts must be positive; minimum interval cannot be negative")
     findings: list[Finding] = []
