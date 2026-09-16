@@ -60,7 +60,7 @@ jobs:
             terraform -chdir="$root" validate
           done
       - name: Validate provider contracts and mocked plan policy
-        run: python3 -m unittest tests.test_aks_arc_contract tests.test_runner_platform_contract tests.test_aws_plan_preflight
+        run: python3 -m unittest tests.test_aks_arc_contract tests.test_runner_platform_contract tests.test_aws_live_preflight tests.test_aws_plan_preflight
       - name: Render every ARC scale set and shared chart
         run: scripts/validate-arc.sh arc/repositories/*.yaml
       - name: Render pinned AWS platform add-ons
