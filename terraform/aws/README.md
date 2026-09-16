@@ -20,9 +20,10 @@ GitHub OIDC apply workflow, or new operator role is created.
 
 ## Bootstrap and state migration
 
-Create ignored `terraform.tfvars` files in both roots and copy each
-`backend.hcl.example` to `backend.hcl`. Backend files contain identifiers only.
-Never add credentials to Terraform files.
+Create ignored `terraform.tfvars` files in both roots. Do not create the
+bootstrap `backend.hcl` until its local apply has created the state bucket and
+KMS key. Backend files contain identifiers only. Never add credentials to
+Terraform files.
 
 Bootstrap starts with local mode-0600 state:
 
@@ -30,15 +31,20 @@ Bootstrap starts with local mode-0600 state:
 umask 077
 export AWS_ACCOUNT_ID=123456789012 AWS_REGION=us-east-1
 export RUNNER_PLATFORM_STACK=bootstrap
-terraform -chdir=terraform/aws/bootstrap init -backend=false
-terraform -chdir=terraform/aws/bootstrap plan -out=.bootstrap.tfplan
-terraform -chdir=terraform/aws/bootstrap apply .bootstrap.tfplan
+scripts/runner-platform.sh aws plan
+scripts/runner-platform.sh aws show
+scripts/runner-platform.sh aws apply
 chmod 0600 terraform/aws/bootstrap/terraform.tfstate
+cp terraform/aws/bootstrap/backend.hcl.example terraform/aws/bootstrap/backend.hcl
+# Replace the bucket and KMS identifiers using the applied bootstrap outputs.
 MIGRATE_STATE=yes scripts/runner-platform.sh aws init
 ```
 
-Confirm the migrated key is exactly `aws/bootstrap.tfstate`. The fleet backend
-key is exactly `aws/runner-fleet.tfstate`.
+The runner helper temporarily removes the tracked S3 backend declaration from
+Terraform's input only while the bootstrap backend configuration is absent, so
+the first saved plan and apply genuinely use local state. Confirm the migrated
+key is exactly `aws/bootstrap.tfstate`. Then create the fleet `backend.hcl`;
+its key is exactly `aws/runner-fleet.tfstate`.
 
 ## Reviewed saved-plan deployment
 

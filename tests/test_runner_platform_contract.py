@@ -49,6 +49,25 @@ class RunnerPlatformContractTests(unittest.TestCase):
             for forbidden in ("access_key", "secret_key", "profile", "role_arn"):
                 self.assertNotIn(forbidden, backend)
 
+    def test_bootstrap_stays_local_until_backend_identifiers_exist(self) -> None:
+        helper = (ROOT / "scripts/runner-platform.sh").read_text()
+        self.assertIn(
+            'if [[ "$stack" == bootstrap && ! -f "$backend" ]]', helper
+        )
+        self.assertIn(
+            'mv -- "$backend_declaration" "$disabled_backend_declaration"', helper
+        )
+        self.assertIn("trap restore_backend_declaration EXIT", helper)
+        self.assertIn('terraform -chdir="$root" init -reconfigure', helper)
+        readme = (ROOT / "terraform/aws/README.md").read_text()
+        self.assertLess(
+            readme.index("scripts/runner-platform.sh aws apply"),
+            readme.index(
+                "cp terraform/aws/bootstrap/backend.hcl.example "
+                "terraform/aws/bootstrap/backend.hcl"
+            ),
+        )
+
     def test_aws_security_and_node_contract(self) -> None:
         source = (ROOT / "terraform/aws/runner-fleet/main.tf").read_text()
         for required in (
