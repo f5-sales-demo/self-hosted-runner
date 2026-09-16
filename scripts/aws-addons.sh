@@ -8,7 +8,7 @@ region=${AWS_REGION:-us-east-1}
 
 cilium_version=1.18.2
 metrics_chart_version=3.13.0
-autoscaler_chart_version=9.50.1
+autoscaler_chart_version=9.59.0
 autoscaler_repository=registry.k8s.io/autoscaling/cluster-autoscaler
 autoscaler_tag=v1.35.0
 
@@ -55,10 +55,17 @@ autoscaler_args=(
   --set extraArgs.scale-down-unneeded-time=60m
 )
 
+autoscaler_manifest=$(helm template cluster-autoscaler autoscaler/cluster-autoscaler "${common[@]}" "${autoscaler_args[@]}")
+for resource in resourceclaims resourceslices deviceclasses; do
+  grep -Eq "^[[:space:]]+- $resource$" <<<"$autoscaler_manifest" || {
+    echo "Cluster Autoscaler chart RBAC is missing Kubernetes 1.35 resource: $resource" >&2
+    exit 1
+  }
+done
+
 if [[ $1 == validate ]]; then
   helm template cilium cilium/cilium "${common[@]}" "${cilium_args[@]}" >/dev/null
   helm template metrics-server metrics-server/metrics-server "${common[@]}" "${metrics_args[@]}" >/dev/null
-  helm template cluster-autoscaler autoscaler/cluster-autoscaler "${common[@]}" "${autoscaler_args[@]}" >/dev/null
   echo "pinned Cilium, Metrics Server, and Cluster Autoscaler charts render successfully"
   exit 0
 fi

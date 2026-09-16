@@ -105,6 +105,13 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertNotIn("SPOT", source)
         self.assertNotIn("remote_access", source)
 
+    def test_aws_autoscaler_matches_kubernetes_minor_and_rbac(self) -> None:
+        source = (ROOT / "scripts/aws-addons.sh").read_text()
+        self.assertIn("autoscaler_chart_version=9.59.0", source)
+        self.assertIn("autoscaler_tag=v1.35.0", source)
+        for resource in ("resourceclaims", "resourceslices", "deviceclasses"):
+            self.assertIn(resource, source)
+
     def test_registry_contract_accepts_only_immutable_approved_references(self) -> None:
         prepull = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
         renovate = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
