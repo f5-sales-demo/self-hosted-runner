@@ -99,6 +99,7 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
     cache_args=(
       upgrade --install "runner-image-cache-$profile" arc/prepull
       --namespace "$cache_namespace"
+      --create-namespace
       --set-string "profile=$profile"
       --set-string "image=$image"
       --set-string "nodeProfiles[0]=$profile"
