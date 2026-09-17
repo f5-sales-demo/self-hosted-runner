@@ -8,15 +8,9 @@
   "concurrent_flag_allowed": false,
   "active_candidates": 1,
   "cache_states": ["cold", "warm"],
-  "initial_variants": [
-    {"name": "serial", "workers": 0, "samples_per_cache_state": 5},
-    {"name": "parallel-2", "workers": 2, "samples_per_cache_state": 5},
-    {"name": "parallel-4", "workers": 4, "samples_per_cache_state": 5}
-  ],
-  "conditional_variants": [
-    {"name": "parallel-6", "workers": 6, "samples_per_cache_state": 5},
-    {"name": "parallel-8", "workers": 8, "samples_per_cache_state": 5}
-  ],
+  "worker_bounds": {"minimum": 0, "maximum": 32},
+  "screening": {"first_probe": 10, "step_improvement_ratio": 0.03, "stop_memory_ratio": 0.75},
+  "qualification": {"samples_per_cache_state": 5, "rotating_order": true},
   "required_evidence": [
     "source_commit",
     "runner_image_digest",
