@@ -137,12 +137,9 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertEqual(0, contract["production_workers"])
         self.assertEqual(2, contract["max_concurrency"])
         self.assertFalse(contract["concurrent_flag_allowed"])
-        self.assertEqual(
-            [0, 2, 4], [item["workers"] for item in contract["initial_variants"]]
-        )
-        self.assertEqual(
-            [6, 8], [item["workers"] for item in contract["conditional_variants"]]
-        )
+        self.assertEqual({"minimum": 0, "maximum": 32}, contract["worker_bounds"])
+        self.assertEqual(10, contract["screening"]["first_probe"])
+        self.assertEqual(5, contract["qualification"]["samples_per_cache_state"])
         gates = contract["promotion_gates"]
         self.assertEqual(10, gates["matched_comparisons"])
         self.assertEqual(0.2, gates["minimum_median_typescript_improvement"])
