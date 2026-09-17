@@ -11,6 +11,7 @@ from typing import Any
 
 REPOSITORY = "f5-sales-demo/xcsh"
 WORKFLOW = "compute-benchmark.yml"
+WORKFLOW_REF = "main"
 
 
 def load_state(path: Path, source_sha: str, image_digest: str) -> dict[str, Any]:
@@ -181,14 +182,18 @@ def next_dispatch(state: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def dispatch(source_sha: str, action: dict[str, Any], dry_run: bool) -> None:
+def dispatch_command(source_sha: str, action: dict[str, Any]) -> list[str]:
     workers = int(action["workers"])
     experiment = str(action["experiment"])
     # The workflow validates workers only for d16-parallel; serial remains zero in its evidence.
     workflow_workers = workers if experiment == "d16-parallel" else 1
-    command = ["gh", "workflow", "run", WORKFLOW, "--repo", REPOSITORY, "--ref", source_sha,
+    return ["gh", "workflow", "run", WORKFLOW, "--repo", REPOSITORY, "--ref", WORKFLOW_REF,
                "-f", f"source_sha={source_sha}", "-f", f"experiment={experiment}",
                "-f", f"file_workers={workflow_workers}", "-f", f"cache_state={action['cache_state']}", "-f", f"pair_id={action['pair_id']}"]
+
+
+def dispatch(source_sha: str, action: dict[str, Any], dry_run: bool) -> None:
+    command = dispatch_command(source_sha, action)
     if not dry_run:
         subprocess.run(command, check=True)
 
