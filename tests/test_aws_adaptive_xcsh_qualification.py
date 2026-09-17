@@ -81,6 +81,13 @@ class AdaptiveQualificationTests(unittest.TestCase):
         state["qualification"][1]["critical_path_seconds"] = 300
         self.assertFalse(MODULE.evaluate_qualification(state)["promotable"])
 
+    def test_dispatch_uses_main_for_workflow_and_frozen_sha_for_checkout(self) -> None:
+        source_sha = "a" * 40
+        command = MODULE.dispatch_command(source_sha, {"experiment": "d16-parallel", "workers": 15, "cache_state": "warm", "pair_id": 2})
+        self.assertEqual("main", command[command.index("--ref") + 1])
+        self.assertIn(f"source_sha={source_sha}", command)
+        self.assertIn("file_workers=15", command)
+
 
 if __name__ == "__main__":
     unittest.main()
