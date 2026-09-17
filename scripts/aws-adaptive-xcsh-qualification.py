@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -64,7 +65,7 @@ def next_probe(state: dict[str, Any]) -> int | None:
 
 def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
     """Admit only source/image-bound, resource-safe screening evidence."""
-    required = {"run_id", "workers", "source_sha", "image_digest", "output_equivalent", "failures", "ooms", "evictions", "restarts", "memory_ratio", "node_pressure", "cpu_throttled", "disk_saturated", "improvement"}
+    required = {"run_id", "workers", "source_sha", "image_digest", "output_equivalent", "manifest_equivalent", "inventory_complete", "failures", "ooms", "evictions", "restarts", "memory_ratio", "node_pressure", "cpu_throttled", "disk_saturated", "improvement", "typescript_seconds", "critical_path_seconds"}
     missing = required - evidence.keys()
     if missing:
         raise ValueError(f"evidence missing required fields: {sorted(missing)}")
@@ -72,11 +73,13 @@ def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
         raise ValueError("evidence identity does not match frozen campaign")
     safe = (
         bool(evidence["output_equivalent"])
+        and bool(evidence["manifest_equivalent"])
+        and bool(evidence["inventory_complete"])
         and all(int(evidence[key]) == 0 for key in ("failures", "ooms", "evictions", "restarts"))
         and float(evidence["memory_ratio"]) < .8
         and not any(bool(evidence[key]) for key in ("node_pressure", "cpu_throttled", "disk_saturated"))
     )
-    recorded = {"workers": int(evidence["workers"]), "run_id": str(evidence["run_id"]), "safe": safe, "improvement": float(evidence["improvement"]), "memory_ratio": float(evidence["memory_ratio"]), "role": evidence.get("role", "screening-candidate"), "cache_state": evidence.get("cache_state", "warm"), "pair_id": evidence.get("pair_id")}
+    recorded = {"workers": int(evidence["workers"]), "run_id": str(evidence["run_id"]), "safe": safe, "improvement": float(evidence["improvement"]), "memory_ratio": float(evidence["memory_ratio"]), "typescript_seconds": float(evidence["typescript_seconds"]), "critical_path_seconds": float(evidence["critical_path_seconds"]), "role": evidence.get("role", "screening-candidate"), "cache_state": evidence.get("cache_state", "warm"), "pair_id": evidence.get("pair_id")}
     if recorded["role"] == "screening-control":
         state.setdefault("controls", []).append(recorded)
         return
@@ -109,6 +112,45 @@ def select_worker(state: dict[str, Any]) -> int | None:
     return min(int(probe["workers"]) for probe in candidates if float(probe["improvement"]) >= best - .02)
 
 
+def percentile95(values: list[float]) -> float:
+    if not values:
+        raise ValueError("cannot calculate p95 for no samples")
+    ordered = sorted(values)
+    return ordered[math.ceil(.95 * len(ordered)) - 1]
+
+
+def evaluate_qualification(state: dict[str, Any]) -> dict[str, Any]:
+    """Evaluate the complete matched matrix; only this result may be promotable."""
+    evidence = state.get("qualification", [])
+    report: dict[str, Any] = {"selected_workers": state.get("selected_workers"), "rollback_workers": 0, "caches": {}, "promotable": False}
+    for cache_state in ("cold", "warm"):
+        pairs: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for pair_id in range(1, 6):
+            pair = [item for item in evidence if item.get("cache_state") == cache_state and item.get("pair_id") == pair_id]
+            serial = [item for item in pair if item.get("role") == "qualification-serial"]
+            candidate = [item for item in pair if item.get("role") == "qualification-candidate"]
+            if len(serial) != 1 or len(candidate) != 1:
+                report["caches"][cache_state] = {"reason": "incomplete-pairs", "promotable": False}
+                return report
+            if not serial[0]["safe"] or not candidate[0]["safe"]:
+                report["caches"][cache_state] = {"reason": "unsafe-evidence", "promotable": False}
+                return report
+            pairs.append((serial[0], candidate[0]))
+        metrics: dict[str, Any] = {}
+        for metric in ("typescript_seconds", "critical_path_seconds"):
+            baseline = [float(serial[metric]) for serial, _ in pairs]
+            candidate = [float(parallel[metric]) for _, parallel in pairs]
+            median_baseline = sorted(baseline)[len(baseline) // 2]
+            median_candidate = sorted(candidate)[len(candidate) // 2]
+            metrics[metric] = {"median_serial": median_baseline, "median_candidate": median_candidate, "p95_serial": percentile95(baseline), "p95_candidate": percentile95(candidate)}
+            if median_candidate > median_baseline * .8 or metrics[metric]["p95_candidate"] > metrics[metric]["p95_serial"]:
+                report["caches"][cache_state] = {"reason": f"{metric}-gate", "metrics": metrics, "promotable": False}
+                return report
+        report["caches"][cache_state] = {"metrics": metrics, "promotable": True}
+    report["promotable"] = True
+    return report
+
+
 def next_dispatch(state: dict[str, Any]) -> dict[str, Any] | None:
     """Return exactly one explicit non-polling dispatch action, or None when complete."""
     if state.get("status", "screening").startswith("screening"):
@@ -134,7 +176,8 @@ def next_dispatch(state: dict[str, Any]) -> dict[str, Any] | None:
             for role in roles:
                 if (role, cache_state, pair_id) not in completed:
                     return {"role": role, "experiment": "d16-serial" if role.endswith("serial") else "d16-parallel", "workers": 0 if role.endswith("serial") else selected, "cache_state": cache_state, "pair_id": pair_id}
-    state["status"] = "qualification-complete"
+    state["qualification_report"] = evaluate_qualification(state)
+    state["status"] = "promotion-ready" if state["qualification_report"]["promotable"] else "qualification-rejected"
     return None
 
 

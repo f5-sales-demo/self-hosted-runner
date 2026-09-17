@@ -62,11 +62,24 @@ class AdaptiveQualificationTests(unittest.TestCase):
 
     def test_unsafe_evidence_stops_upward_search(self) -> None:
         state = {"source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64, "probes": []}
-        evidence = {"run_id": 7, "workers": 10, "source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64, "output_equivalent": True, "failures": 0, "ooms": 0, "evictions": 0, "restarts": 0, "memory_ratio": .76, "node_pressure": False, "cpu_throttled": False, "disk_saturated": False, "improvement": .2}
+        evidence = {"run_id": 7, "workers": 10, "source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64, "output_equivalent": True, "manifest_equivalent": True, "inventory_complete": True, "failures": 0, "ooms": 0, "evictions": 0, "restarts": 0, "memory_ratio": .76, "node_pressure": False, "cpu_throttled": False, "disk_saturated": False, "improvement": .2, "typescript_seconds": 8, "critical_path_seconds": 80}
         MODULE.record_evidence(state, evidence)
         self.assertEqual("screening-stopped-resource", state["status"])
         self.assertTrue(state["probes"][0]["safe"])
         self.assertEqual([0, 10], state["bracket"])
+
+    def test_qualification_requires_complete_pairs_and_all_median_p95_gates(self) -> None:
+        state = {"selected_workers": 15, "qualification": []}
+        self.assertFalse(MODULE.evaluate_qualification(state)["promotable"])
+        for cache_state in ("cold", "warm"):
+            for pair_id in range(1, 6):
+                state["qualification"].extend([
+                    {"role": "qualification-serial", "cache_state": cache_state, "pair_id": pair_id, "safe": True, "typescript_seconds": 100 + pair_id, "critical_path_seconds": 200 + pair_id},
+                    {"role": "qualification-candidate", "cache_state": cache_state, "pair_id": pair_id, "safe": True, "typescript_seconds": 70 + pair_id, "critical_path_seconds": 140 + pair_id},
+                ])
+        self.assertTrue(MODULE.evaluate_qualification(state)["promotable"])
+        state["qualification"][1]["critical_path_seconds"] = 300
+        self.assertFalse(MODULE.evaluate_qualification(state)["promotable"])
 
 
 if __name__ == "__main__":
