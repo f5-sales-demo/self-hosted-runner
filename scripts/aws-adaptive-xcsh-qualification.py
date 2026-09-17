@@ -41,6 +41,27 @@ def next_probe(state: dict[str, Any]) -> int | None:
     return None
 
 
+def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
+    """Admit only source/image-bound, resource-safe screening evidence."""
+    required = {"run_id", "workers", "source_sha", "image_digest", "output_equivalent", "failures", "ooms", "evictions", "restarts", "memory_ratio", "node_pressure", "cpu_throttled", "disk_saturated", "improvement"}
+    missing = required - evidence.keys()
+    if missing:
+        raise ValueError(f"evidence missing required fields: {sorted(missing)}")
+    if evidence["source_sha"] != state["source_sha"] or evidence["image_digest"] != state["image_digest"]:
+        raise ValueError("evidence identity does not match frozen campaign")
+    safe = (
+        bool(evidence["output_equivalent"])
+        and all(int(evidence[key]) == 0 for key in ("failures", "ooms", "evictions", "restarts"))
+        and float(evidence["memory_ratio"]) < .8
+        and not any(bool(evidence[key]) for key in ("node_pressure", "cpu_throttled", "disk_saturated"))
+    )
+    state["probes"].append({"workers": int(evidence["workers"]), "run_id": str(evidence["run_id"]), "safe": safe, "improvement": float(evidence["improvement"]), "memory_ratio": float(evidence["memory_ratio"])})
+    if not safe:
+        state["status"] = "screening-stopped-unsafe"
+    elif float(evidence["memory_ratio"]) >= .75:
+        state["status"] = "screening-stopped-resource"
+
+
 def dispatch(source_sha: str, workers: int, cache_state: str, pair_id: int, dry_run: bool) -> None:
     command = ["gh", "workflow", "run", WORKFLOW, "--repo", REPOSITORY, "--ref", source_sha,
                "-f", f"source_sha={source_sha}", "-f", "experiment=d16-parallel",
@@ -55,6 +76,7 @@ def main() -> int:
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--image-digest", required=True)
     parser.add_argument("--dispatch", action="store_true")
+    parser.add_argument("--record", type=Path, help="redacted JSON evidence for one completed run")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     if len(args.source_sha) != 40 or any(c not in "0123456789abcdef" for c in args.source_sha):
@@ -62,6 +84,8 @@ def main() -> int:
     if "@sha256:" not in args.image_digest:
         parser.error("--image-digest must be immutable")
     state = load_state(args.state, args.source_sha, args.image_digest)
+    if args.record:
+        record_evidence(state, json.loads(args.record.read_text()))
     worker = next_probe(state)
     if worker is None:
         state["status"] = "screening-complete"
