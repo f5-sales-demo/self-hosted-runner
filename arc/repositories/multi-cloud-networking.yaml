@@ -1,10 +1,10 @@
 {
-  "repository": "https://github.com/f5-sales-demo/mcn",
+  "repository": "https://github.com/f5-sales-demo/multi-cloud-networking",
   "scale_sets": [
     {
       "profile": "socketless",
-      "namespace": "arc-runners-mcn-socketless",
-      "release": "mcn-socketless",
+      "namespace": "arc-runners-multi-cloud-networking-socketless",
+      "release": "multi-cloud-networking-socketless",
       "runner_scale_set_name": "managed-socketless",
       "values": "arc/socketless-values.yaml",
       "min_runners": 0,
@@ -12,8 +12,8 @@
     },
     {
       "profile": "container-build",
-      "namespace": "arc-runners-mcn-container-build",
-      "release": "mcn-container-build",
+      "namespace": "arc-runners-multi-cloud-networking-container-build",
+      "release": "multi-cloud-networking-container-build",
       "runner_scale_set_name": "managed-container-build",
       "values": "arc/container-build-values.yaml",
       "min_runners": 0,
