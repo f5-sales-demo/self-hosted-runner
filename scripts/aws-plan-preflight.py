@@ -45,6 +45,11 @@ PINNED_ADDONS = {
     "kube-proxy": "v1.35.0-eksbuild.2",
     "eks-pod-identity-agent": "v1.3.8-eksbuild.2",
 }
+CANDIDATE_ADDRESS_PREFIXES = (
+    'aws_launch_template.node["compute_32_vcpu_density_candidate"]',
+    'aws_eks_node_group.runner["compute_32_vcpu_density_candidate"]',
+    'aws_autoscaling_group_tag.runner_discovery["compute_32_vcpu_density_candidate:',
+)
 
 
 class PlanError(ValueError):
@@ -86,7 +91,9 @@ def planned_resource_values(module):
         yield from planned_resource_values(child)
 
 
-def validate_plan(plan: dict, *, allow_destroy: bool = False) -> None:
+def validate_plan(
+    plan: dict, *, allow_destroy: bool = False, candidate_only: bool = False
+) -> None:
     provider_config = plan.get("configuration", {}).get("provider_config", {})
     provider_names = {
         item.get("full_name", "")
@@ -108,6 +115,14 @@ def validate_plan(plan: dict, *, allow_destroy: bool = False) -> None:
             raise PlanError(f"resource outside approved AWS graph: {address}")
         if "delete" in actions and not allow_destroy:
             raise PlanError(f"delete or replacement is not allowed: {address}")
+        if (
+            candidate_only
+            and actions != ["no-op"]
+            and not address.startswith(CANDIDATE_ADDRESS_PREFIXES)
+        ):
+            raise PlanError(
+                f"change is outside the AWS candidate node-group path: {address}"
+            )
 
     root_module = plan.get("planned_values", {}).get("root_module", {})
     for values in planned_resource_values(root_module):
@@ -121,18 +136,13 @@ def validate_plan(plan: dict, *, allow_destroy: bool = False) -> None:
                 raise PlanError("the EKS public API cannot be open to the Internet")
             if item.get("capacity_type") == "SPOT":
                 raise PlanError("Spot node capacity is forbidden")
-            if (
-                "ami_type" in item
-                and item["ami_type"] != "AL2023_x86_64_STANDARD"
-            ):
+            if "ami_type" in item and item["ami_type"] != "AL2023_x86_64_STANDARD":
                 raise PlanError("node groups must use pinned AL2023 images")
             if (
                 "release_version" in item
                 and item["release_version"] != "1.35.7-20260911"
             ):
-                raise PlanError(
-                    "node groups must use AL2023 release 1.35.7-20260911"
-                )
+                raise PlanError("node groups must use AL2023 release 1.35.7-20260911")
             addon_name = item.get("addon_name")
             if (
                 addon_name in PINNED_ADDONS
@@ -149,9 +159,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("plan_json", type=Path)
     parser.add_argument("--allow-destroy", action="store_true")
+    parser.add_argument("--candidate-only", action="store_true")
     args = parser.parse_args(argv)
     try:
-        validate_plan(strict_json(args.plan_json), allow_destroy=args.allow_destroy)
+        validate_plan(
+            strict_json(args.plan_json),
+            allow_destroy=args.allow_destroy,
+            candidate_only=args.candidate_only,
+        )
     except PlanError as exc:
         print(f"AWS plan rejected: {exc}", file=sys.stderr)
         return 1

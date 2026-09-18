@@ -19,18 +19,18 @@ output "ecr_repository_urls" {
 }
 
 output "initial_maximum_vcpus" {
-  value       = local.initial_maximum_vcpus
-  description = "Maximum enabled capacity including system nodes."
+  value       = local.selected_maximum_vcpus
+  description = "Maximum selected AWS capacity including system nodes."
 }
 
 output "required_vcpu_quota" {
-  value       = local.contract.capacity.initial_quota_floor
-  description = "Required standard On-Demand vCPU quota with 20 percent headroom."
+  value       = local.required_vcpu_quota
+  description = "Selected standard On-Demand vCPU quota requirement with 20 percent headroom."
 }
 
 output "density_candidate_required_vcpu_quota" {
-  value       = local.contract.capacity.density_enabled_quota_floor
-  description = "Required quota if the disabled 32-vCPU density pool is enabled."
+  value       = local.contract.capacity.aws_candidate_quota_floor
+  description = "Required quota for the single AWS 32-vCPU candidate node."
 }
 
 output "cluster_autoscaler_role_arn" {

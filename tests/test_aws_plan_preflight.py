@@ -108,6 +108,17 @@ class AwsPlanPreflightTests(unittest.TestCase):
         }
         MODULE.validate_plan(value)
 
+    def test_candidate_only_rejects_unrelated_changes(self) -> None:
+        with self.assertRaisesRegex(MODULE.PlanError, "outside the AWS candidate"):
+            MODULE.validate_plan(plan(), candidate_only=True)
+
+    def test_candidate_only_accepts_candidate_node_group_changes(self) -> None:
+        value = plan(resource_type="aws_eks_node_group")
+        value["resource_changes"][0]["address"] = (
+            'aws_eks_node_group.runner["compute_32_vcpu_density_candidate"]'
+        )
+        MODULE.validate_plan(value, candidate_only=True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -59,6 +59,8 @@
   "capacity": {
     "initial_maximum_vcpus": 492,
     "initial_quota_floor": 615,
+    "aws_candidate_maximum_vcpus": 524,
+    "aws_candidate_quota_floor": 655,
     "density_enabled_maximum_vcpus": 652,
     "density_enabled_quota_floor": 815,
     "minimum_headroom_ratio": 0.2

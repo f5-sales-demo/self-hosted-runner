@@ -6,6 +6,17 @@ set -euo pipefail
 [[ "$AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]] || { echo "AWS_ACCOUNT_ID must contain twelve digits" >&2; exit 2; }
 region=${AWS_REGION:-us-east-1}
 [[ "$region" == us-east-1 ]] || { echo "AWS_REGION must be us-east-1" >&2; exit 2; }
+candidate_enabled=${TF_VAR_enable_compute_32_vcpu_candidate:-false}
+[[ "$candidate_enabled" =~ ^(true|false)$ ]] || {
+  echo "TF_VAR_enable_compute_32_vcpu_candidate must be true or false" >&2
+  exit 2
+}
+required_vcpu_quota=615
+instance_types=(m6a.xlarge m6a.2xlarge m6a.4xlarge)
+if [[ "$candidate_enabled" == true ]]; then
+  required_vcpu_quota=655
+  instance_types+=(c6a.8xlarge)
+fi
 
 for command in aws jq python3 terraform; do command -v "$command" >/dev/null; done
 tmpdir=$(mktemp -d)
@@ -50,7 +61,7 @@ aws_json "$tmpdir/ami.json" ssm get-parameter --name /aws/service/eks/optimized-
 }
 
 for zone in us-east-1a us-east-1b us-east-1c; do
-  for instance_type in m6a.xlarge m6a.2xlarge m6a.4xlarge; do
+  for instance_type in "${instance_types[@]}"; do
     output="$tmpdir/offering-${zone}-${instance_type}.json"
     aws_json "$output" ec2 describe-instance-type-offerings \
       --location-type availability-zone \
@@ -68,7 +79,10 @@ done
 
 aws_json "$tmpdir/vcpu-quota.json" service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A
 vcpu_quota=$(jq -er '.Quota.Value | floor' "$tmpdir/vcpu-quota.json")
-(( vcpu_quota >= 615 )) || { echo "standard On-Demand vCPU quota must be at least 615; observed $vcpu_quota" >&2; exit 1; }
+(( vcpu_quota >= required_vcpu_quota )) || {
+  echo "standard On-Demand vCPU quota must be at least $required_vcpu_quota; observed $vcpu_quota" >&2
+  exit 1
+}
 
 aws_json "$tmpdir/eip-quota.json" service-quotas get-service-quota --service-code ec2 --quota-code L-0263D0A3
 aws_json "$tmpdir/eips.json" ec2 describe-addresses
@@ -94,7 +108,9 @@ if [[ $# -eq 1 ]]; then
     exit 1
   }
   jq -e . "$tmpdir/plan.json" >/dev/null
-  scripts/aws-plan-preflight.py "$tmpdir/plan.json"
+  candidate_args=()
+  [[ "$candidate_enabled" == true ]] && candidate_args+=(--candidate-only)
+  scripts/aws-plan-preflight.py "${candidate_args[@]}" "$tmpdir/plan.json"
 fi
 
 echo "AWS account, region, EKS, quota, address, VPC, and plan gates passed"

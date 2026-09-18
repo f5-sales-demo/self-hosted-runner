@@ -26,7 +26,14 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
-config_json=$(python3 scripts/arc-config.py --enabled-only "$config")
+candidate_enabled=${TF_VAR_enable_compute_32_vcpu_candidate:-false}
+[[ "$candidate_enabled" =~ ^(true|false)$ ]] || {
+  echo "TF_VAR_enable_compute_32_vcpu_candidate must be true or false" >&2
+  exit 2
+}
+config_args=(--enabled-only)
+[[ "$candidate_enabled" != true ]] || config_args+=(--enable-compute-32-vcpu-candidate)
+config_json=$(python3 scripts/arc-config.py "${config_args[@]}" "$config")
 github_config_url=$(jq -er .repository <<<"$config_json")
 chart_version=0.14.2
 controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452

@@ -119,7 +119,7 @@ EXPECTED_CAPS = {
 CANDIDATE_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": {
         "compute-16-vcpu-candidate": 1,
-        "compute-32-vcpu-density-candidate": 4,
+        "compute-32-vcpu-density-candidate": 1,
     },
     "https://github.com/f5-sales-demo/api-specs-enriched": {
         "compute-32-vcpu-density-candidate": 2,
@@ -354,7 +354,12 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     return configs
 
 
-def enabled_config(config: dict, repository_root: Path) -> dict:
+def enabled_config(
+    config: dict,
+    repository_root: Path,
+    *,
+    enable_compute_32_vcpu_candidate: bool = False,
+) -> dict:
     """Return only scale sets backed by enabled runner pools."""
     contract = strict_json(repository_root / "terraform/runner-pools.json")
     pools = contract.get("pools")
@@ -377,6 +382,11 @@ def enabled_config(config: dict, repository_root: Path) -> dict:
         and pool.get("profile") in PROFILES
         and pool.get("enabled") is True
     }
+    if (
+        enable_compute_32_vcpu_candidate
+        and config["repository"] == "https://github.com/f5-sales-demo/xcsh"
+    ):
+        enabled.add("compute-32-vcpu-density-candidate")
     return {
         **config,
         "scale_sets": [
@@ -398,6 +408,11 @@ def main(argv=None):
         action="store_true",
         help="emit only scale sets backed by enabled runner pools",
     )
+    parser.add_argument(
+        "--enable-compute-32-vcpu-candidate",
+        action="store_true",
+        help="include the AWS-only xcsh 32-vCPU candidate with --enabled-only",
+    )
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
     try:
@@ -409,9 +424,20 @@ def main(argv=None):
             parser.error("multiple configurations require --validate-set")
         if args.enabled_only:
             if args.validate_set:
-                result = [enabled_config(config, root) for config in result]
+                result = [
+                    enabled_config(
+                        config,
+                        root,
+                        enable_compute_32_vcpu_candidate=args.enable_compute_32_vcpu_candidate,
+                    )
+                    for config in result
+                ]
             else:
-                result = enabled_config(result, root)
+                result = enabled_config(
+                    result,
+                    root,
+                    enable_compute_32_vcpu_candidate=args.enable_compute_32_vcpu_candidate,
+                )
     except ConfigError as exc:
         print(f"ARC configuration error: {exc}", file=sys.stderr)
         return 1
