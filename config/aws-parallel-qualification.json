@@ -2,19 +2,21 @@
   "schema_version": 1,
   "provider": "aws",
   "region": "us-east-1",
-  "instance_type": "m6a.4xlarge",
-  "production_workers": 0,
+  "instance_type": "c6a.8xlarge",
+  "runner_label": "xcsh-compute-32-vcpu-density-candidate",
+  "candidate_workers": 20,
+  "production_workers": 10,
+  "rollback_workers": 0,
   "max_concurrency": 2,
   "concurrent_flag_allowed": false,
   "active_candidates": 1,
-  "cache_states": ["cold", "warm"],
-  "worker_bounds": {"minimum": 0, "maximum": 32},
-  "screening": {"first_probe": 10, "step_improvement_ratio": 0.03, "stop_memory_ratio": 0.75},
-  "qualification": {"samples_per_cache_state": 5, "rotating_order": true},
+  "cache_states": ["cold"],
+  "qualification": {"matched_pairs": 1, "cache_state": "cold", "source_and_image_frozen": true},
   "required_evidence": [
     "source_commit",
     "runner_image_digest",
     "aws_quota",
+    "pod_resources",
     "cloudwatch_node_pressure",
     "cpu_throttling",
     "memory_peak_ratio",
@@ -23,17 +25,19 @@
     "restarts",
     "evictions",
     "ooms",
-    "output_digest"
+    "manifest_digest",
+    "output_inventory"
   ],
   "promotion_gates": {
-    "matched_comparisons": 10,
+    "matched_comparisons": 1,
     "byte_identical_output": true,
     "maximum_failures": 0,
     "maximum_ooms": 0,
     "maximum_evictions": 0,
     "maximum_restarts": 0,
     "maximum_memory_ratio": 0.8,
-    "p95_regression_allowed": false,
-    "minimum_median_typescript_improvement": 0.2
+    "node_pressure_allowed": false,
+    "typescript_duration_must_decrease": true,
+    "critical_path_duration_must_decrease": true
   }
 }

@@ -48,7 +48,7 @@ class ArcConfigTests(unittest.TestCase):
                     "arc-runners-xcsh-c32-density",
                     "xcsh-compute-32-vcpu-density-candidate",
                     0,
-                    4,
+                    1,
                 ),
             },
         }
@@ -193,9 +193,9 @@ class ArcConfigTests(unittest.TestCase):
             observed[repository] = compute["max_runners"]
         self.assertEqual(9, sum(observed.values()))
 
-    def test_candidate_compute_caps_are_exact_and_aggregate_to_nine(self) -> None:
+    def test_candidate_compute_caps_preserve_azure_and_bound_xcsh_to_one(self) -> None:
         expected = {
-            "xcsh": 4,
+            "xcsh": 1,
             "api-specs-enriched": 2,
             "terraform-provider-xcsh": 3,
         }
@@ -218,7 +218,7 @@ class ArcConfigTests(unittest.TestCase):
                 candidate["runner_scale_set_name"],
             )
             observed[repository] = candidate["max_runners"]
-        self.assertEqual(9, sum(observed.values()))
+        self.assertEqual(6, sum(observed.values()))
 
     def test_d16_candidate_demand_is_exactly_one_on_its_dedicated_pool(self) -> None:
         configs = MODULE.validate_complete_config_set(
@@ -240,17 +240,33 @@ class ArcConfigTests(unittest.TestCase):
         self.assertNotIn("compute-32-vcpu-density-candidate", profiles)
         self.assertEqual(4, len(profiles))
 
-    def test_deployment_helpers_request_only_enabled_profiles(self) -> None:
+    def test_aws_opt_in_enables_only_the_xcsh_density_candidate(self) -> None:
+        config = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
+        enabled = MODULE.enabled_config(
+            config, ROOT, enable_compute_32_vcpu_candidate=True
+        )
+        profiles = {spec["profile"] for spec in enabled["scale_sets"]}
+        self.assertIn("compute-32-vcpu-density-candidate", profiles)
+        self.assertEqual(5, len(profiles))
+        managed = MODULE.load_config(CONFIG_DIR / "api-specs-enriched.yaml", ROOT)
+        managed_enabled = MODULE.enabled_config(
+            managed, ROOT, enable_compute_32_vcpu_candidate=True
+        )
+        self.assertNotIn(
+            "compute-32-vcpu-density-candidate",
+            {spec["profile"] for spec in managed_enabled["scale_sets"]},
+        )
+
+    def test_deployment_helpers_default_to_enabled_profiles_with_candidate_opt_in(self) -> None:
         for relative in (
             "scripts/arc-deploy.sh",
             "scripts/arc-github-app-secret.sh",
             "scripts/arc-ghcr-pull-secret.sh",
         ):
             with self.subTest(relative=relative):
-                self.assertIn(
-                    "scripts/arc-config.py --enabled-only",
-                    (ROOT / relative).read_text(),
-                )
+                source = (ROOT / relative).read_text()
+                self.assertIn("--enabled-only", source)
+                self.assertIn("--enable-compute-32-vcpu-candidate", source)
 
     def test_config_directory_exactly_covers_catalog(self) -> None:
         catalog = json.loads(

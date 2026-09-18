@@ -166,17 +166,19 @@ class AksArcContractTests(unittest.TestCase):
         )
         self.assertIn("scripts/validate-arc.sh arc/repositories/*.yaml", workflow)
 
-    def test_f32_candidate_has_two_pod_density_resources(self) -> None:
+    def test_32_vcpu_candidate_has_one_guaranteed_runner(self) -> None:
         values = (ROOT / "arc/compute-32-vcpu-density-candidate-values.yaml").read_text(
             encoding="utf-8"
         )
         self.assertIn("runner-profile: compute-32-vcpu-density-candidate", values)
-        self.assertIn('cpu: "14"', values)
-        self.assertIn("memory: 28Gi", values)
+        self.assertEqual(2, values.count('cpu: "30"'))
+        self.assertEqual(2, values.count("memory: 56Gi"))
         self.assertIn("ephemeral-storage: 24Gi", values)
-        self.assertIn('cpu: "15"', values)
-        self.assertIn("memory: 30Gi", values)
         self.assertIn("ephemeral-storage: 40Gi", values)
+        xcsh = (ROOT / "arc/repositories/xcsh.yaml").read_text(encoding="utf-8")
+        candidate = xcsh.split('"profile": "compute-32-vcpu-density-candidate"', 1)[1]
+        self.assertIn('"min_runners": 0', candidate)
+        self.assertIn('"max_runners": 1', candidate)
 
     def test_lifecycle_watcher_is_redacted_and_reconnects(self) -> None:
         watcher = ROOT / "scripts/arc-lifecycle-watch.sh"

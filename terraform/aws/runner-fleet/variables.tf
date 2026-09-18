@@ -79,6 +79,12 @@ variable "node_release_version" {
   }
 }
 
+variable "enable_compute_32_vcpu_candidate" {
+  description = "Create the single AWS-only c6a.8xlarge qualification node group."
+  type        = bool
+  default     = false
+}
+
 variable "addon_versions" {
   description = "Pinned EKS managed add-on versions validated by preflight."
   type        = map(string)

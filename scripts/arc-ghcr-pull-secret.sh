@@ -15,7 +15,9 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
-config_json=$(python3 scripts/arc-config.py --enabled-only "$config")
+config_args=(--enabled-only)
+[[ "${TF_VAR_enable_compute_32_vcpu_candidate:-false}" != true ]] || config_args+=(--enable-compute-32-vcpu-candidate)
+config_json=$(python3 scripts/arc-config.py "${config_args[@]}" "$config")
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 chmod 0700 "$tmpdir"

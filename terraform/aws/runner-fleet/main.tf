@@ -13,16 +13,24 @@ locals {
   private_subnets = {
     for index, zone in local.zones : zone => cidrsubnet(var.vpc_cidr, 4, index + 3)
   }
-  enabled_runner_pools = {
+  base_enabled_runner_pools = {
     for key, pool in local.contract.pools : key => pool
     if pool.enabled && key != "system"
   }
-  initial_maximum_vcpus = sum([
-    for pool in values(local.contract.pools) : pool.maximum * pool.vcpus if pool.enabled
+  compute_32_vcpu_candidate = merge(
+    local.contract.pools.compute_32_vcpu_density_candidate,
+    { enabled = true, maximum = 1 },
+  )
+  enabled_runner_pools = merge(
+    local.base_enabled_runner_pools,
+    var.enable_compute_32_vcpu_candidate ? {
+      compute_32_vcpu_density_candidate = local.compute_32_vcpu_candidate
+    } : {},
+  )
+  selected_maximum_vcpus = local.contract.pools.system.maximum * local.contract.pools.system.vcpus + sum([
+    for pool in values(local.enabled_runner_pools) : pool.maximum * pool.vcpus
   ])
-  density_maximum_vcpus = sum([
-    for pool in values(local.contract.pools) : pool.maximum * pool.vcpus
-  ])
+  required_vcpu_quota = var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_quota_floor : local.contract.capacity.initial_quota_floor
   cluster_autoscaler_tags = {
     "k8s.io/cluster-autoscaler/enabled"             = "true"
     "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
@@ -62,12 +70,10 @@ check "availability_zones" {
 check "capacity_contract" {
   assert {
     condition = (
-      local.initial_maximum_vcpus == local.contract.capacity.initial_maximum_vcpus &&
-      local.contract.capacity.initial_quota_floor >= ceil(local.initial_maximum_vcpus / (1 - local.contract.capacity.minimum_headroom_ratio)) &&
-      local.density_maximum_vcpus == local.contract.capacity.density_enabled_maximum_vcpus &&
-      local.contract.capacity.density_enabled_quota_floor >= ceil(local.density_maximum_vcpus / (1 - local.contract.capacity.minimum_headroom_ratio))
+      local.selected_maximum_vcpus == (var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_maximum_vcpus : local.contract.capacity.initial_maximum_vcpus) &&
+      local.required_vcpu_quota >= ceil(local.selected_maximum_vcpus / (1 - local.contract.capacity.minimum_headroom_ratio))
     )
-    error_message = "Runner-pool capacity must retain 20% quota headroom at 492 vCPUs initially and 652 vCPUs with density enabled."
+    error_message = "AWS runner capacity must retain 20% quota headroom at 492 vCPUs normally and 524 vCPUs with the one-node candidate enabled."
   }
 }
 

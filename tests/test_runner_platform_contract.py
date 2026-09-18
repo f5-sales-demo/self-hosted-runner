@@ -20,6 +20,8 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertEqual(492, enabled)
         self.assertEqual(652, all_pools)
         self.assertEqual(615, contract["capacity"]["initial_quota_floor"])
+        self.assertEqual(524, contract["capacity"]["aws_candidate_maximum_vcpus"])
+        self.assertEqual(655, contract["capacity"]["aws_candidate_quota_floor"])
         self.assertEqual(815, contract["capacity"]["density_enabled_quota_floor"])
         self.assertFalse(pools["compute_32_vcpu_density_candidate"]["enabled"])
         self.assertEqual(
@@ -104,6 +106,16 @@ class RunnerPlatformContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("SPOT", source)
         self.assertNotIn("remote_access", source)
+        preflight = (ROOT / "scripts/aws-preflight.sh").read_text()
+        self.assertIn(
+            "amazon-eks-node-al2023-x86_64-standard-1.35-v20260911", preflight
+        )
+        self.assertNotIn("recommended/release_version", preflight)
+        self.assertIn('[[ "$plan_path" == /* ]]', preflight)
+        self.assertIn(
+            'terraform -chdir="$state_root" show -json "$plan_path"', preflight
+        )
+        self.assertNotIn('  terraform show -json "$1"', preflight)
 
     def test_aws_autoscaler_matches_kubernetes_minor_and_rbac(self) -> None:
         source = (ROOT / "scripts/aws-addons.sh").read_text()
@@ -124,28 +136,49 @@ class RunnerPlatformContractTests(unittest.TestCase):
             self.assertIn("ecr", pattern)
             self.assertIn("sha256", pattern)
 
-    def test_parallel_qualification_is_serial_by_default_and_evidence_gated(
+    def test_parallel_qualification_is_one_32_vcpu_pair_and_evidence_gated(
         self,
     ) -> None:
         contract = json.loads(
             (ROOT / "config/aws-parallel-qualification.json").read_text()
         )
         self.assertEqual(
-            ("aws", "us-east-1", "m6a.4xlarge"),
+            ("aws", "us-east-1", "c6a.8xlarge"),
             (contract["provider"], contract["region"], contract["instance_type"]),
         )
-        self.assertEqual(0, contract["production_workers"])
+        self.assertEqual("xcsh-compute-32-vcpu-density-candidate", contract["runner_label"])
+        self.assertEqual(20, contract["candidate_workers"])
+        self.assertEqual(10, contract["production_workers"])
+        self.assertEqual(0, contract["rollback_workers"])
         self.assertEqual(2, contract["max_concurrency"])
         self.assertFalse(contract["concurrent_flag_allowed"])
-        self.assertEqual({"minimum": 0, "maximum": 32}, contract["worker_bounds"])
-        self.assertEqual(10, contract["screening"]["first_probe"])
-        self.assertEqual(5, contract["qualification"]["samples_per_cache_state"])
+        self.assertEqual(1, contract["qualification"]["matched_pairs"])
+        self.assertTrue(contract["qualification"]["source_and_image_frozen"])
+        self.assertEqual(
+            {"pod_resources", "manifest_digest", "output_inventory"},
+            {
+                field
+                for field in contract["required_evidence"]
+                if field in {"pod_resources", "manifest_digest", "output_inventory"}
+            },
+        )
         gates = contract["promotion_gates"]
-        self.assertEqual(10, gates["matched_comparisons"])
-        self.assertEqual(0.2, gates["minimum_median_typescript_improvement"])
+        self.assertEqual(1, gates["matched_comparisons"])
         self.assertEqual(0.8, gates["maximum_memory_ratio"])
-        self.assertFalse(gates["p95_regression_allowed"])
+        self.assertFalse(gates["node_pressure_allowed"])
+        self.assertTrue(gates["typescript_duration_must_decrease"])
+        self.assertTrue(gates["critical_path_duration_must_decrease"])
         self.assertTrue(gates["byte_identical_output"])
+
+    def test_aws_candidate_switch_is_isolated_from_azure(self) -> None:
+        variables = (ROOT / "terraform/aws/runner-fleet/variables.tf").read_text()
+        aws = (ROOT / "terraform/aws/runner-fleet/main.tf").read_text()
+        azure = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text()
+        self.assertIn('variable "enable_compute_32_vcpu_candidate"', variables)
+        self.assertIn("default     = false", variables)
+        self.assertIn("maximum = 1", aws)
+        self.assertIn("aws_candidate_quota_floor", aws)
+        self.assertNotIn("enable_compute_32_vcpu_candidate", azure)
 
     @staticmethod
     def _backend_key(relative: str) -> str:

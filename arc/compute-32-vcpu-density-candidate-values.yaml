@@ -57,10 +57,10 @@ template:
           runAsUser: 1001
         resources:
           requests:
-            cpu: "14"
-            memory: 28Gi
+            cpu: "30"
+            memory: 56Gi
             ephemeral-storage: 24Gi
           limits:
-            cpu: "15"
-            memory: 30Gi
+            cpu: "30"
+            memory: 56Gi
             ephemeral-storage: 40Gi

@@ -44,7 +44,7 @@
       "runner_scale_set_name": "xcsh-compute-32-vcpu-density-candidate",
       "values": "arc/compute-32-vcpu-density-candidate-values.yaml",
       "min_runners": 0,
-      "max_runners": 4
+      "max_runners": 1
     }
   ]
 }
