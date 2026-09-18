@@ -111,6 +111,11 @@ class RunnerPlatformContractTests(unittest.TestCase):
             "amazon-eks-node-al2023-x86_64-standard-1.35-v20260911", preflight
         )
         self.assertNotIn("recommended/release_version", preflight)
+        self.assertIn('[[ "$plan_path" == /* ]]', preflight)
+        self.assertIn(
+            'terraform -chdir="$state_root" show -json "$plan_path"', preflight
+        )
+        self.assertNotIn('  terraform show -json "$1"', preflight)
 
     def test_aws_autoscaler_matches_kubernetes_minor_and_rbac(self) -> None:
         source = (ROOT / "scripts/aws-addons.sh").read_text()

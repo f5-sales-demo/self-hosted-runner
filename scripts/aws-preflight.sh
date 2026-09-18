@@ -105,7 +105,9 @@ scripts/aws-live-preflight.py \
   --state "$tmpdir/state.json"
 
 if [[ $# -eq 1 ]]; then
-  terraform show -json "$1" >"$tmpdir/plan.json" 2>"$tmpdir/plan.err" || {
+  plan_path=$1
+  [[ "$plan_path" == /* ]] || plan_path="$(pwd)/$plan_path"
+  terraform -chdir="$state_root" show -json "$plan_path" >"$tmpdir/plan.json" 2>"$tmpdir/plan.err" || {
     sed -n '1,20p' "$tmpdir/plan.err" >&2
     exit 1
   }
