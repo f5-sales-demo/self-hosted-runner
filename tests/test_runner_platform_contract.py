@@ -106,6 +106,11 @@ class RunnerPlatformContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("SPOT", source)
         self.assertNotIn("remote_access", source)
+        preflight = (ROOT / "scripts/aws-preflight.sh").read_text()
+        self.assertIn(
+            "amazon-eks-node-al2023-x86_64-standard-1.35-v20260911", preflight
+        )
+        self.assertNotIn("recommended/release_version", preflight)
 
     def test_aws_autoscaler_matches_kubernetes_minor_and_rbac(self) -> None:
         source = (ROOT / "scripts/aws-addons.sh").read_text()

@@ -54,8 +54,10 @@ for addon_version in \
   }
 done
 
-aws_json "$tmpdir/ami.json" ssm get-parameter --name /aws/service/eks/optimized-ami/1.35/amazon-linux-2023/x86_64/standard/recommended/release_version
-[[ "$(jq -er .Parameter.Value "$tmpdir/ami.json")" == 1.35.7-20260911 ]] || {
+aws_json "$tmpdir/ami.json" ec2 describe-images \
+  --owners amazon \
+  --filters Name=name,Values=amazon-eks-node-al2023-x86_64-standard-1.35-v20260911 Name=state,Values=available
+[[ "$(jq '.Images | length' "$tmpdir/ami.json")" -eq 1 ]] || {
   echo "pinned AL2023 release 1.35.7-20260911 is unavailable" >&2
   exit 1
 }
