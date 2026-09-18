@@ -58,7 +58,7 @@ def next_probe(state: dict[str, Any]) -> int | None:
     if last["workers"] == 30:
         previous = next(probe for probe in probes if probe["workers"] == 20)
         if float(last["improvement"]) >= float(previous["improvement"]) + .03:
-            return 32
+            return 40
         state["bracket"] = [20, 30]
         return next_probe(state)
     return None
@@ -83,6 +83,8 @@ def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
     recorded = {"workers": int(evidence["workers"]), "run_id": str(evidence["run_id"]), "safe": safe, "improvement": float(evidence["improvement"]), "memory_ratio": float(evidence["memory_ratio"]), "typescript_seconds": float(evidence["typescript_seconds"]), "critical_path_seconds": float(evidence["critical_path_seconds"]), "role": evidence.get("role", "screening-candidate"), "cache_state": evidence.get("cache_state", "warm"), "pair_id": evidence.get("pair_id")}
     if recorded["role"] == "screening-control":
         state.setdefault("controls", []).append(recorded)
+        if not safe or float(evidence["memory_ratio"]) >= .75:
+           state["status"] = "screening-control-rejected"
         return
     if recorded["role"] in {"qualification-serial", "qualification-candidate"}:
         state.setdefault("qualification", []).append(recorded)
@@ -95,13 +97,10 @@ def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
         if lower < workers < upper:
             useful = safe and float(evidence["improvement"]) >= .03
             state["bracket"] = [workers, upper] if useful else [lower, workers]
-    if not safe:
-        state["status"] = "screening-stopped-unsafe"
-    elif float(evidence["memory_ratio"]) >= .75:
+    if safe and float(evidence["memory_ratio"]) >= .75:
         workers = int(evidence["workers"])
         lower = max([0, *[int(probe["workers"]) for probe in state["probes"] if int(probe["workers"]) < workers and probe.get("safe") and float(probe.get("improvement", 0)) >= .03]])
         state["bracket"] = [lower, workers]
-        state["status"] = "screening-stopped-resource"
 
 
 def select_worker(state: dict[str, Any]) -> int | None:
@@ -154,7 +153,7 @@ def evaluate_qualification(state: dict[str, Any]) -> dict[str, Any]:
 
 def next_dispatch(state: dict[str, Any], screening_controls: int = 1) -> dict[str, Any] | None:
     """Return exactly one explicit non-polling dispatch action, or None when complete."""
-    if state.get("status", "screening").startswith("screening"):
+    if state.get("status", "screening") == "screening":
         controls = state.setdefault("controls", [])
         if len(controls) < screening_controls:
             return {"role": "screening-control", "experiment": "d16-serial", "workers": 0, "cache_state": "warm", "pair_id": len(controls) + 1}

@@ -34,6 +34,14 @@ class AdaptiveQualificationTests(unittest.TestCase):
         self.assertEqual(15, MODULE.next_probe(state))
         self.assertEqual([10, 20], state["bracket"])
 
+    def test_uses_40_after_a_useful_30_worker_probe(self) -> None:
+        state = {"probes": [
+            {"workers": 10, "safe": True, "improvement": .10},
+            {"workers": 20, "safe": True, "improvement": .15},
+            {"workers": 30, "safe": True, "improvement": .19},
+        ]}
+        self.assertEqual(40, MODULE.next_probe(state))
+
     def test_schedules_configured_serial_controls_before_screening_and_rotating_qualification_pairs(self) -> None:
         state = {"status": "screening", "controls": [], "probes": [], "qualification": []}
         self.assertEqual(
@@ -65,12 +73,30 @@ class AdaptiveQualificationTests(unittest.TestCase):
                 MODULE.load_state(state, "a" * 40, "image@sha256:" + "b" * 64)
 
     def test_unsafe_evidence_stops_upward_search(self) -> None:
-        state = {"source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64, "probes": []}
+        state = {"source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64,
+                 "controls": [{}], "probes": []}
         evidence = {"run_id": 7, "workers": 10, "source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64, "output_equivalent": True, "manifest_equivalent": True, "inventory_complete": True, "failures": 0, "ooms": 0, "evictions": 0, "restarts": 0, "memory_ratio": .76, "node_pressure": False, "cpu_throttled": False, "disk_saturated": False, "improvement": .2, "typescript_seconds": 8, "critical_path_seconds": 80}
         MODULE.record_evidence(state, evidence)
-        self.assertEqual("screening-stopped-resource", state["status"])
         self.assertTrue(state["probes"][0]["safe"])
         self.assertEqual([0, 10], state["bracket"])
+        self.assertEqual(5, MODULE.next_dispatch(state)["workers"])
+
+    def test_unsafe_serial_control_blocks_candidate_dispatch(self) -> None:
+        state = {"source_sha": "a" * 40, "image_digest": "image@sha256:" + "b" * 64,
+                 "status": "screening", "controls": [], "probes": [], "qualification": []}
+        evidence = {"run_id": 7, "workers": 0, "source_sha": "a" * 40,
+                    "image_digest": "image@sha256:" + "b" * 64,
+                    "output_equivalent": True, "manifest_equivalent": True,
+                    "inventory_complete": True, "failures": 1, "ooms": 0,
+                    "evictions": 0, "restarts": 0, "memory_ratio": .2,
+                    "node_pressure": False, "cpu_throttled": False,
+                    "disk_saturated": False, "improvement": 0,
+                    "typescript_seconds": 8, "critical_path_seconds": 80,
+                    "role": "screening-control"}
+        MODULE.record_evidence(state, evidence)
+        self.assertEqual("screening-control-rejected", state["status"])
+        self.assertFalse(state["controls"][0]["safe"])
+        self.assertIsNone(MODULE.next_dispatch(state))
 
     def test_qualification_requires_complete_pairs_and_all_median_p95_gates(self) -> None:
         state = {"selected_workers": 15, "qualification": []}
