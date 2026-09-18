@@ -152,11 +152,11 @@ def evaluate_qualification(state: dict[str, Any]) -> dict[str, Any]:
     return report
 
 
-def next_dispatch(state: dict[str, Any]) -> dict[str, Any] | None:
+def next_dispatch(state: dict[str, Any], screening_controls: int = 1) -> dict[str, Any] | None:
     """Return exactly one explicit non-polling dispatch action, or None when complete."""
     if state.get("status", "screening").startswith("screening"):
         controls = state.setdefault("controls", [])
-        if len(controls) < 3:
+        if len(controls) < screening_controls:
             return {"role": "screening-control", "experiment": "d16-serial", "workers": 0, "cache_state": "warm", "pair_id": len(controls) + 1}
         worker = next_probe(state)
         if worker is not None:
@@ -203,6 +203,8 @@ def main() -> int:
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--source-sha", required=True)
     parser.add_argument("--image-digest", required=True)
+    parser.add_argument("--screening-controls", type=int, default=1,
+                        help="number of warm serial controls before screening candidates (1-3; default: 1)")
     parser.add_argument("--dispatch", action="store_true")
     parser.add_argument("--record", type=Path, help="redacted JSON evidence for one completed run")
     parser.add_argument("--dry-run", action="store_true")
@@ -211,13 +213,19 @@ def main() -> int:
         parser.error("--source-sha must be a lowercase 40-character SHA")
     if "@sha256:" not in args.image_digest:
         parser.error("--image-digest must be immutable")
+    if not 1 <= args.screening_controls <= 3:
+        parser.error("--screening-controls must be between 1 and 3")
     state = load_state(args.state, args.source_sha, args.image_digest)
     if args.record:
         record_evidence(state, json.loads(args.record.read_text()))
-    action = next_dispatch(state)
+        state.pop("dispatched", None)
+    action = next_dispatch(state, args.screening_controls)
     if action is not None and args.dispatch:
         dispatch(args.source_sha, action, args.dry_run)
-        state["dispatched"] = action
+        if not args.dry_run:
+            state["dispatched"] = action
+    elif not args.dispatch:
+        state.pop("dispatched", None)
     args.state.write_text(json.dumps(state, indent=2) + "\n")
     print(json.dumps(state, indent=2))
     return 0

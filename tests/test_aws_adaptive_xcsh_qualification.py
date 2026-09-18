@@ -34,14 +34,18 @@ class AdaptiveQualificationTests(unittest.TestCase):
         self.assertEqual(15, MODULE.next_probe(state))
         self.assertEqual([10, 20], state["bracket"])
 
-    def test_schedules_serial_controls_before_screening_and_rotating_qualification_pairs(self) -> None:
+    def test_schedules_configured_serial_controls_before_screening_and_rotating_qualification_pairs(self) -> None:
         state = {"status": "screening", "controls": [], "probes": [], "qualification": []}
         self.assertEqual(
             {"role": "screening-control", "experiment": "d16-serial", "workers": 0, "cache_state": "warm", "pair_id": 1},
             MODULE.next_dispatch(state),
         )
-        state["controls"] = [{}, {}, {}]
+        state["controls"] = [{}]
         self.assertEqual("screening-candidate", MODULE.next_dispatch(state)["role"])
+        state["controls"] = []
+        self.assertEqual("screening-control", MODULE.next_dispatch(state, screening_controls=3)["role"])
+        state["controls"] = [{}, {}, {}]
+        self.assertEqual("screening-candidate", MODULE.next_dispatch(state, screening_controls=3)["role"])
 
         qualification = {"status": "qualification", "selected_workers": 15, "qualification": []}
         first = MODULE.next_dispatch(qualification)
