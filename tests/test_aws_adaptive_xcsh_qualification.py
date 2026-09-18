@@ -34,6 +34,14 @@ class AdaptiveQualificationTests(unittest.TestCase):
         self.assertEqual(15, MODULE.next_probe(state))
         self.assertEqual([10, 20], state["bracket"])
 
+    def test_uses_40_after_a_useful_30_worker_probe(self) -> None:
+        state = {"probes": [
+            {"workers": 10, "safe": True, "improvement": .10},
+            {"workers": 20, "safe": True, "improvement": .15},
+            {"workers": 30, "safe": True, "improvement": .19},
+        ]}
+        self.assertEqual(40, MODULE.next_probe(state))
+
     def test_schedules_configured_serial_controls_before_screening_and_rotating_qualification_pairs(self) -> None:
         state = {"status": "screening", "controls": [], "probes": [], "qualification": []}
         self.assertEqual(

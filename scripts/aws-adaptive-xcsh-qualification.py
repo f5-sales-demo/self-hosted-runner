@@ -58,7 +58,7 @@ def next_probe(state: dict[str, Any]) -> int | None:
     if last["workers"] == 30:
         previous = next(probe for probe in probes if probe["workers"] == 20)
         if float(last["improvement"]) >= float(previous["improvement"]) + .03:
-            return 32
+            return 40
         state["bracket"] = [20, 30]
         return next_probe(state)
     return None
