@@ -112,7 +112,7 @@ class ArcConfigTests(unittest.TestCase):
             "console": (4, 1),
             "marketplace": (4, 1),
             "marketplace-claude-code": (4, 1),
-            "mcn": (4, 1),
+            "multi-cloud-networking": (4, 1),
             "origin-server": (4, 1),
             "starlight-mega-menu": (4, 1),
             "vscode-xcsh": (4, 1),
