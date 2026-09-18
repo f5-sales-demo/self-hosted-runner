@@ -106,6 +106,11 @@ class RunnerPlatformContractTests(unittest.TestCase):
             self.assertIn(required, source)
         self.assertNotIn("SPOT", source)
         self.assertNotIn("remote_access", source)
+        self.assertIn(
+            'key                 = "k8s.io/cluster-autoscaler/node-template/resources/ephemeral-storage"',
+            source,
+        )
+        self.assertIn('value               = "100Gi"', source)
         preflight = (ROOT / "scripts/aws-preflight.sh").read_text()
         self.assertIn(
             "amazon-eks-node-al2023-x86_64-standard-1.35-v20260911", preflight

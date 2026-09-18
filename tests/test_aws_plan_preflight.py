@@ -119,6 +119,13 @@ class AwsPlanPreflightTests(unittest.TestCase):
         )
         MODULE.validate_plan(value, candidate_only=True)
 
+    def test_candidate_only_accepts_candidate_template_resource_tag(self) -> None:
+        value = plan(resource_type="aws_autoscaling_group_tag")
+        value["resource_changes"][0]["address"] = (
+            "aws_autoscaling_group_tag.candidate_template_ephemeral_storage[0]"
+        )
+        MODULE.validate_plan(value, candidate_only=True)
+
 
 if __name__ == "__main__":
     unittest.main()

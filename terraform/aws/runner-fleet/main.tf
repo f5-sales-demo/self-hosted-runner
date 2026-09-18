@@ -446,6 +446,17 @@ resource "aws_autoscaling_group_tag" "runner_discovery" {
   }
 }
 
+resource "aws_autoscaling_group_tag" "candidate_template_ephemeral_storage" {
+  count = var.enable_compute_32_vcpu_candidate ? 1 : 0
+
+  autoscaling_group_name = aws_eks_node_group.runner["compute_32_vcpu_density_candidate"].resources[0].autoscaling_groups[0].name
+  tag {
+    key                 = "k8s.io/cluster-autoscaler/node-template/resources/ephemeral-storage"
+    value               = "100Gi"
+    propagate_at_launch = false
+  }
+}
+
 resource "aws_iam_role" "pod_identity" {
   for_each = toset(["vpc-cni", "cluster-autoscaler"])
   name     = "${var.cluster_name}-${each.value}"
