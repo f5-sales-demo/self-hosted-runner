@@ -49,6 +49,7 @@ CANDIDATE_ADDRESS_PREFIXES = (
     'aws_launch_template.node["compute_32_vcpu_density_candidate"]',
     'aws_eks_node_group.runner["compute_32_vcpu_density_candidate"]',
     'aws_autoscaling_group_tag.runner_discovery["compute_32_vcpu_density_candidate:',
+    "aws_autoscaling_group_tag.candidate_template_ephemeral_storage",
 )
 
 
