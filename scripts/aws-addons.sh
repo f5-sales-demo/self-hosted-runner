@@ -51,6 +51,7 @@ autoscaler_args=(
   --set tolerations[0].operator=Exists
   --set tolerations[0].effect=NoSchedule
   --set priorityClassName=system-cluster-critical
+  --set-string extraArgs.expendable-pods-priority-cutoff=-1001
   --set extraArgs.scan-interval=10s
   --set extraArgs.scale-down-unneeded-time=60m
 )
