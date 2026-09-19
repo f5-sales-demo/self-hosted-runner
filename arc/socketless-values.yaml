@@ -32,6 +32,30 @@ template:
         effect: NoSchedule
     securityContext:
       fsGroup: 1001
+    initContainers:
+      - name: init-runner-runtime
+        image: RUNNER_IMAGE_REQUIRED
+        command: [/bin/bash, -ec]
+        args:
+          - >-
+            install -d -m 0700 /runner-runtime/home /runner-runtime/_work
+            /runner-runtime/_diag /runner-runtime/_temp &&
+            exec /usr/local/libexec/prepare-runner-tool-cache
+        env:
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+        volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
     containers:
       - name: runner
         image: RUNNER_IMAGE_REQUIRED
@@ -43,12 +67,33 @@ template:
             value: socketless
           - name: RUNNER_IMAGE_DIGEST
             value: RUNNER_IMAGE_REQUIRED
+          - name: HOME
+            value: /runner-runtime/home
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+          - name: RUNNER_TEMP
+            value: /runner-runtime/_temp
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
             drop: [ALL]
+          readOnlyRootFilesystem: true
           runAsNonRoot: true
           runAsUser: 1001
+        volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
+          - name: runner-runtime
+            mountPath: /home/runner/_work
+            subPath: _work
+          - name: runner-runtime
+            mountPath: /home/runner/_diag
+            subPath: _diag
+          - name: runner-runtime
+            mountPath: /tmp
+            subPath: _temp
         resources:
           requests:
             cpu: "7"
@@ -56,3 +101,7 @@ template:
           limits:
             cpu: "7"
             memory: 28Gi
+    volumes:
+      - name: runner-runtime
+        emptyDir:
+          sizeLimit: 50Gi
