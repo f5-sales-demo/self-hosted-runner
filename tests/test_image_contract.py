@@ -43,6 +43,8 @@ class ImageContractTests(unittest.TestCase):
         self.assertIn("cp --archive --link /opt/actions-runner/. /home/runner/", dockerfile)
         self.assertIn("chown -R runner:runner /home/runner /opt/actions-runner", dockerfile)
         self.assertIn("find /home/runner -mindepth 1 -maxdepth 1", (ROOT / "scripts/runner-entrypoint.sh").read_text(encoding="utf-8"))
+        self.assertIn("/usr/local/libexec/prepare-runner-tool-cache", (ROOT / "scripts/runner-entrypoint.sh").read_text(encoding="utf-8"))
+        self.assertIn("scripts/prepare-runner-tool-cache.sh /usr/local/libexec/prepare-runner-tool-cache", dockerfile)
         verifier = (ROOT / "scripts/verify-tools.py").read_text(encoding="utf-8")
         self.assertIn('(Path("/home/runner"), Path("/opt/actions-runner"))', verifier)
         self.assertIn('Path("/opt/actions-runner").is_symlink()', verifier)

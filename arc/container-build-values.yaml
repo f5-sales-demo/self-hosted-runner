@@ -33,6 +33,29 @@ template:
     securityContext:
       fsGroup: 123
     initContainers:
+      - name: init-runner-runtime
+        image: RUNNER_IMAGE_REQUIRED
+        command: [/bin/bash, -ec]
+        args:
+          - >-
+            install -d -m 0700 /runner-runtime/home /runner-runtime/_work
+            /runner-runtime/_diag /runner-runtime/_temp &&
+            exec /usr/local/libexec/prepare-runner-tool-cache
+        env:
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+        volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
       - name: init-dind-externals
         image: RUNNER_IMAGE_REQUIRED
         command: [cp, -r, /home/runner/externals/., /home/runner/tmpDir/]
@@ -80,6 +103,14 @@ template:
             value: container-build
           - name: RUNNER_IMAGE_DIGEST
             value: RUNNER_IMAGE_REQUIRED
+          - name: HOME
+            value: /runner-runtime/home
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+          - name: RUNNER_TEMP
+            value: /runner-runtime/_temp
           - name: DOCKER_HOST
             value: unix:///var/run/docker.sock
           - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
@@ -88,6 +119,7 @@ template:
           allowPrivilegeEscalation: false
           capabilities:
             drop: [ALL]
+          readOnlyRootFilesystem: true
           runAsNonRoot: true
           runAsUser: 1001
         resources:
@@ -98,11 +130,22 @@ template:
             cpu: "4"
             memory: 12Gi
         volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
           - name: work
             mountPath: /home/runner/_work
           - name: dind-sock
             mountPath: /var/run
+          - name: runner-runtime
+            mountPath: /home/runner/_diag
+            subPath: _diag
+          - name: runner-runtime
+            mountPath: /tmp
+            subPath: _temp
     volumes:
+      - name: runner-runtime
+        emptyDir:
+          sizeLimit: 50Gi
       - name: work
         emptyDir:
           sizeLimit: 50Gi

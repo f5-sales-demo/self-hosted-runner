@@ -19,6 +19,7 @@ if [[ "$RUNNER_RUNTIME_DIR" != /* || ! -d "$RUNNER_RUNTIME_DIR" ]]; then
   exit 1
 fi
 
+/usr/local/libexec/prepare-runner-tool-cache
 find /home/runner -mindepth 1 -maxdepth 1 \
   -exec cp --archive --no-preserve=ownership --target-directory="$RUNNER_RUNTIME_DIR" {} +
 install -d -m 0700 "$RUNNER_RUNTIME_DIR/home"
