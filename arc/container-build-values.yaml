@@ -40,6 +40,9 @@ template:
           - >-
             install -d -m 0700 /runner-runtime/home /runner-runtime/_work
             /runner-runtime/_diag /runner-runtime/_temp &&
+            find /home/runner -mindepth 1 -maxdepth 1
+            -exec cp --archive --no-preserve=ownership
+            --target-directory=/runner-runtime {} + &&
             exec /usr/local/libexec/prepare-runner-tool-cache
         env:
           - name: RUNNER_RUNTIME_DIR
@@ -137,8 +140,7 @@ template:
           - name: dind-sock
             mountPath: /var/run
           - name: runner-runtime
-            mountPath: /home/runner/_diag
-            subPath: _diag
+            mountPath: /home/runner
           - name: runner-runtime
             mountPath: /tmp
             subPath: _temp
