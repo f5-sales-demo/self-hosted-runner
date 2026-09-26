@@ -15,8 +15,10 @@ ARG RUNNER_VERSION=2.336.0
 ARG RUNNER_SHA256=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
 ARG GH_VERSION=2.97.0
 ARG GH_SHA256=a2c9b8497e1f85b1ad0dfcb78b5a622e098801b8e461e459e88e1ee12f018112
-ARG GO_VERSION=1.25.12
-ARG GO_SHA256=234828b7a89e0e303d2556310ee549fbcf253d28de937bac3da13d6294262ac1
+ARG GO_VERSION=1.25.13
+ARG GO_SHA256=39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3
+ARG GO_LEGACY_VERSION=1.25.12
+ARG GO_LEGACY_SHA256=234828b7a89e0e303d2556310ee549fbcf253d28de937bac3da13d6294262ac1
 ARG DOTNET_VERSION=10.0.302
 ARG DOTNET_SHA256=264a838d6f5d1a252489c7bb2e2946a579d6a881391d50ffd175a01e4d948c1c
 ARG POWERSHELL_VERSION=7.6.4
@@ -56,8 +58,10 @@ ARG RUST_TOOLCHAIN=nightly-2026-09-03
 ARG RUST_DIST_MANIFEST_SHA256=df7a2f1a117645520b1019cf2f23d75411be359d431a09e28c31ab97ff710094
 ARG CARGO_NEXTEST_VERSION=0.9.143
 ARG CARGO_NEXTEST_SHA256=66786b9abe23920d022a182d1416b1bbc8130dd4872a9553d76985a1708dcd1e
-ARG TERRAFORM_VERSION=1.15.8
-ARG TERRAFORM_SHA256=d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d
+ARG TERRAFORM_VERSION=1.16.3
+ARG TERRAFORM_SHA256=093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8
+ARG TERRAFORM_LEGACY_VERSION=1.15.8
+ARG TERRAFORM_LEGACY_SHA256=d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d
 ARG NODE20_VERSION=20.19.6
 ARG NODE20_SHA256=c514127107ebf6e3885f793b06674574d71fe22e3df91a78c52c5a6f84b3b5b0
 ARG NODE24_14_VERSION=24.14.1
@@ -84,6 +88,10 @@ ARG TFPLUGINDOCS_VERSION=0.25.0
 ARG TFPLUGINDOCS_SHA256=912bd663e2deafc9ebf54e932bd2adf91bf6b7fcf545d4d9a82dc9597255854c
 ARG GOLANGCI_LINT_VERSION=2.12.2
 ARG GOLANGCI_LINT_SHA256=8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553
+ARG SHELLCHECK_VERSION=0.11.0
+ARG SHELLCHECK_SHA256=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+ARG ZIZMOR_VERSION=1.29.0
+ARG ZIZMOR_SHA256=dd96df044a6e8538d5f423790f453bdd03d49e5b2bcc38214acc41a2f1297839
 ARG GOVULNCHECK_VERSION=1.6.0
 ARG GOVULNCHECK_MODULE_SUM=h1:FeMO9Rm/HwyduOztbvKcOw+zvDEPr4I4aQNSfevFcKY=
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -137,6 +145,8 @@ RUN set -eux; \
     cp --archive --link /opt/actions-runner/. /home/runner/; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"; \
     echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/go.tar.gz --directory /opt; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/go-legacy.tar.gz "https://go.dev/dl/go${GO_LEGACY_VERSION}.linux-amd64.tar.gz"; \
+    echo "${GO_LEGACY_SHA256}  /tmp/go-legacy.tar.gz" | sha256sum --check --strict; mkdir -p "/opt/go-${GO_LEGACY_VERSION}"; tar --extract --gzip --file /tmp/go-legacy.tar.gz --directory "/opt/go-${GO_LEGACY_VERSION}" --strip-components=1; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/dotnet.tar.gz "https://builds.dotnet.microsoft.com/dotnet/Sdk/${DOTNET_VERSION}/dotnet-sdk-${DOTNET_VERSION}-linux-x64.tar.gz"; \
     echo "${DOTNET_SHA256}  /tmp/dotnet.tar.gz" | sha256sum --check --strict; mkdir -p /opt/dotnet && tar --extract --gzip --file /tmp/dotnet.tar.gz --directory /opt/dotnet; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/powershell.tar.gz "https://github.com/PowerShell/PowerShell/releases/download/v${POWERSHELL_VERSION}/powershell-${POWERSHELL_VERSION}-linux-x64.tar.gz"; \
@@ -174,7 +184,9 @@ RUN set -eux; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/cargo-nextest.tar.gz "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-${CARGO_NEXTEST_VERSION}/cargo-nextest-${CARGO_NEXTEST_VERSION}-x86_64-unknown-linux-gnu.tar.gz"; \
     echo "${CARGO_NEXTEST_SHA256}  /tmp/cargo-nextest.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/cargo-nextest.tar.gz --directory /usr/local/bin cargo-nextest; chmod 0555 /usr/local/bin/cargo-nextest; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip"; \
-    echo "${TERRAFORM_SHA256}  /tmp/terraform.zip" | sha256sum --check --strict; unzip -q /tmp/terraform.zip -d /usr/local/bin; \
+    echo "${TERRAFORM_SHA256}  /tmp/terraform.zip" | sha256sum --check --strict; mkdir -p "/opt/terraform/${TERRAFORM_VERSION}"; unzip -q /tmp/terraform.zip -d "/opt/terraform/${TERRAFORM_VERSION}"; ln -s "/opt/terraform/${TERRAFORM_VERSION}/terraform" /usr/local/bin/terraform; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/terraform-legacy.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_LEGACY_VERSION}/terraform_${TERRAFORM_LEGACY_VERSION}_linux_amd64.zip"; \
+    echo "${TERRAFORM_LEGACY_SHA256}  /tmp/terraform-legacy.zip" | sha256sum --check --strict; mkdir -p "/opt/terraform/${TERRAFORM_LEGACY_VERSION}"; unzip -q /tmp/terraform-legacy.zip -d "/opt/terraform/${TERRAFORM_LEGACY_VERSION}"; \
 curl --fail --location --proto =https --tlsv1.2 --output /tmp/node20.tar.xz "https://nodejs.org/dist/v${NODE20_VERSION}/node-v${NODE20_VERSION}-linux-x64.tar.xz"; \
     echo "${NODE20_SHA256}  /tmp/node20.tar.xz" | sha256sum --check --strict; tar --extract --xz --file /tmp/node20.tar.xz --directory /opt; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/node24-14.tar.xz "https://nodejs.org/dist/v${NODE24_14_VERSION}/node-v${NODE24_14_VERSION}-linux-x64.tar.xz"; \
@@ -207,6 +219,10 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${TFPLUGINDOCS_SHA256}  /tmp/tfplugindocs.zip" | sha256sum --check --strict; unzip -q /tmp/tfplugindocs.zip -d /tmp/tfplugindocs && install -m 0555 "$(find /tmp/tfplugindocs -type f -name tfplugindocs -print -quit)" /usr/local/bin/tfplugindocs; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/golangci-lint.tar.gz "https://github.com/golangci/golangci-lint/releases/download/v${GOLANGCI_LINT_VERSION}/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64.tar.gz"; \
     echo "${GOLANGCI_LINT_SHA256}  /tmp/golangci-lint.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/golangci-lint.tar.gz --directory /tmp && install -m 0555 "/tmp/golangci-lint-${GOLANGCI_LINT_VERSION}-linux-amd64/golangci-lint" /usr/local/bin/golangci-lint; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/shellcheck.tar.xz "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"; \
+    echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum --check --strict; tar --extract --xz --file /tmp/shellcheck.tar.xz --directory /tmp; install -m 0555 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck; \
+    curl --fail --location --proto =https --tlsv1.2 --output /tmp/zizmor.tar.gz "https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-x86_64-unknown-linux-gnu.tar.gz"; \
+    echo "${ZIZMOR_SHA256}  /tmp/zizmor.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/zizmor.tar.gz --directory /tmp; install -m 0555 /tmp/zizmor /usr/local/bin/zizmor; \
     test "$(GOTOOLCHAIN=local go mod download -json "golang.org/x/vuln@v${GOVULNCHECK_VERSION}" | jq -r .Sum)" = "${GOVULNCHECK_MODULE_SUM}"; \
     GOTOOLCHAIN=local GOBIN=/usr/local/bin go install "golang.org/x/vuln/cmd/govulncheck@v${GOVULNCHECK_VERSION}"; \
     test -x /usr/local/bin/govulncheck; \
@@ -215,24 +231,25 @@ curl --fail --location --proto =https --tlsv1.2 --output /tmp/codex.tgz "https:/
     echo "${HELM_SHA256}  /tmp/helm.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/helm.tar.gz --directory /tmp && install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm; \
     curl --fail --location --proto =https --tlsv1.2 --output /tmp/android-tools.zip "https://dl.google.com/android/repository/commandlinetools-linux-${ANDROID_TOOLS_REVISION}_latest.zip"; \
     echo "${ANDROID_TOOLS_SHA256}  /tmp/android-tools.zip" | sha256sum --check --strict; mkdir -p /opt/android-sdk/cmdline-tools/latest && unzip -q /tmp/android-tools.zip -d /tmp/android-tools && mv /tmp/android-tools/cmdline-tools/* /opt/android-sdk/cmdline-tools/latest/; \
-    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/zig.tar.xz /tmp/channel-rust-nightly.toml /tmp/cargo-nextest.tar.gz /tmp/terraform.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
-    chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
+    rm -rf /tmp/gh.tar.gz /tmp/gh_* /tmp/actions-runner.tar.gz /tmp/go.tar.gz /tmp/go-legacy.tar.gz /tmp/dotnet.tar.gz /tmp/powershell.tar.gz /tmp/gcloud.tar.gz /tmp/kubectl /tmp/kustomize.tar.gz /tmp/kustomize /tmp/bun.zip /tmp/zig.tar.xz /tmp/channel-rust-nightly.toml /tmp/cargo-nextest.tar.gz /tmp/terraform.zip /tmp/terraform-legacy.zip /tmp/node20.tar.xz /tmp/node24-14.tar.xz /tmp/node24-19.tar.xz /tmp/python311.tar.gz /tmp/python313.tar.gz /tmp/codex.tgz /tmp/claude-code.tgz /tmp/opencode.tar.gz /tmp/agy.tar.gz /tmp/antigravity /tmp/xcsh /tmp/tfplugindocs.zip /tmp/tfplugindocs /tmp/golangci-lint.tar.gz /tmp/golangci-lint-* /tmp/shellcheck.tar.xz /tmp/shellcheck-v* /tmp/zizmor.tar.gz /tmp/zizmor /tmp/uv.tar.gz /tmp/uv-x86_64-unknown-linux-gnu /tmp/biome /tmp/actionlint.tar.gz /tmp/actionlint /tmp/awscliv2.zip /tmp/aws /tmp/chrome.zip /tmp/chromedriver.zip /tmp/geckodriver.tar.gz /tmp/helm.tar.gz /tmp/linux-amd64 /tmp/android-tools.zip /tmp/android-tools; \
+    chown -R runner:runner /home/runner /opt/actions-runner /opt/go /opt/go-* /opt/terraform /opt/dotnet /opt/powershell /opt/android-sdk /opt/chrome-linux64 /opt/chromedriver-linux64 /opt/google-cloud-sdk /opt/node-v* /opt/python-* /opt/codex /opt/claude-code /opt/opencode /opt/zig
 
 COPY --from=node-cli /usr/local/bin/node /usr/local/bin/node
 COPY --from=node-cli /usr/local/lib/libnode.so.* /usr/local/lib/
 COPY --from=node-cli /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \
-    && install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/node/20.19.6" "$AGENT_TOOLSDIRECTORY/node/22.23.2" "$AGENT_TOOLSDIRECTORY/node/24.14.1" "$AGENT_TOOLSDIRECTORY/node/24.19.0" "$AGENT_TOOLSDIRECTORY/go/1.25.12" "$AGENT_TOOLSDIRECTORY/Python/3.11.13" "$AGENT_TOOLSDIRECTORY/Python/3.12.3" "$AGENT_TOOLSDIRECTORY/Python/3.13.7" \
+    && install -d -o runner -g runner "$AGENT_TOOLSDIRECTORY/node/20.19.6" "$AGENT_TOOLSDIRECTORY/node/22.23.2" "$AGENT_TOOLSDIRECTORY/node/24.14.1" "$AGENT_TOOLSDIRECTORY/node/24.19.0" "$AGENT_TOOLSDIRECTORY/go/1.25.12" "$AGENT_TOOLSDIRECTORY/go/1.25.13" "$AGENT_TOOLSDIRECTORY/Python/3.11.13" "$AGENT_TOOLSDIRECTORY/Python/3.12.3" "$AGENT_TOOLSDIRECTORY/Python/3.13.7" \
     && ln -s /opt/node-v20.19.6-linux-x64 "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64" \
     && ln -s /usr/local "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64" \
     && ln -s /opt/node-v24.14.1-linux-x64 "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64" \
     && ln -s /opt/node-v24.19.0-linux-x64 "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64" \
-    && ln -s /opt/go "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64" \
+    && ln -s /opt/go-1.25.12 "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64" \
+    && ln -s /opt/go "$AGENT_TOOLSDIRECTORY/go/1.25.13/x64" \
     && ln -s /opt/python-3.11.13 "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64" \
     && ln -s /usr "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64" \
     && ln -s /opt/python-3.13.7 "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64" \
-    && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
+    && touch "$AGENT_TOOLSDIRECTORY/node/20.19.6/x64.complete" "$AGENT_TOOLSDIRECTORY/node/22.23.2/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.14.1/x64.complete" "$AGENT_TOOLSDIRECTORY/node/24.19.0/x64.complete" "$AGENT_TOOLSDIRECTORY/go/1.25.12/x64.complete" "$AGENT_TOOLSDIRECTORY/go/1.25.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.11.13/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.12.3/x64.complete" "$AGENT_TOOLSDIRECTORY/Python/3.13.7/x64.complete" \
     && chown -R runner:runner "$AGENT_TOOLSDIRECTORY"
 
 RUN printf '%s\n' '#!/bin/sh' 'exec node /opt/pnpm/package/bin/pnpm.cjs "$@"' > /usr/local/bin/pnpm \
@@ -264,6 +281,14 @@ RUN set -eux; \
     tar --extract --gzip --file /tmp/ruff.tar.gz --directory "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64" --strip-components=1; \
     touch "$AGENT_TOOLSDIRECTORY/ruff/${RUFF_VERSION}/x86_64.complete"; \
     rm -f /tmp/ruff.tar.gz
+
+COPY --chown=root:root catalog/provider-python.lock /opt/provider-python.lock
+RUN uv venv --python /usr/bin/python3 --no-python-downloads /opt/provider-tools \
+    && uv pip sync --python /opt/provider-tools/bin/python --require-hashes --no-cache /opt/provider-python.lock \
+    && printf '%s\n' '#!/bin/sh' 'exec /opt/provider-tools/bin/python "$@"' > /usr/local/bin/provider-python \
+    && printf '%s\n' '#!/bin/sh' 'export SEMGREP_ENABLE_VERSION_CHECK=0' 'export SEMGREP_SEND_METRICS=off' 'exec /opt/provider-tools/bin/semgrep "$@"' > /usr/local/bin/semgrep \
+    && chmod 0555 /usr/local/bin/provider-python /usr/local/bin/semgrep \
+    && chmod -R a-w /opt/provider-tools /opt/provider-python.lock
 COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
 COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
 COPY --chown=root:root scripts/runner-profile.py /usr/local/bin/runner-profile

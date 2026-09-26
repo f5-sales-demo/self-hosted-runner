@@ -33,6 +33,8 @@
     "node-24.19": {"strategy": "node"},
     "tfplugindocs": {"strategy": "github-release", "repository": "hashicorp/terraform-plugin-docs"},
     "golangci-lint": {"strategy": "github-release", "repository": "golangci/golangci-lint"},
+    "shellcheck": {"strategy": "github-release", "repository": "koalaman/shellcheck"},
+    "zizmor": {"strategy": "github-release", "repository": "zizmorcore/zizmor"},
     "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"},
     "pnpm": {"strategy": "npm", "package": "pnpm"},
     "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"},
@@ -74,9 +76,13 @@
       "tool": "go",
       "field": "go-version",
       "versions": [
-        "1.25.12"
+        "1.25.12",
+        "1.25.13"
       ],
-      "cache_path": "/opt/hostedtoolcache/go/1.25.12/x64.complete"
+      "cache_paths": {
+        "1.25.12": "/opt/hostedtoolcache/go/1.25.12/x64.complete",
+        "1.25.13": "/opt/hostedtoolcache/go/1.25.13/x64.complete"
+      }
     },
     "astral-sh/setup-uv": {
       "tool": "uv",
@@ -116,7 +122,8 @@
       "tool": "terraform",
       "field": "terraform_version",
       "versions": [
-        "1.15.8"
+        "1.15.8",
+        "1.16.3"
       ]
     },
     "actions/setup-java": {
@@ -288,6 +295,18 @@
     },
     {
       "name": "go",
+      "version": "1.25.13",
+      "source": "https://go.dev/dl/go1.25.13.linux-amd64.tar.gz",
+      "sha256": "39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "go version",
+      "expected": "go1.25.13"
+    },
+    {
+      "name": "go-1.25.12",
       "version": "1.25.12",
       "source": "https://go.dev/dl/go1.25.12.linux-amd64.tar.gz",
       "sha256": "234828b7a89e0e303d2556310ee549fbcf253d28de937bac3da13d6294262ac1",
@@ -295,7 +314,7 @@
         "standard",
         "container-build"
       ],
-      "command": "go version",
+      "command": "/opt/go-1.25.12/bin/go version",
       "expected": "go1.25.12"
     },
     {
@@ -447,13 +466,25 @@
     },
     {
       "name": "shellcheck",
+      "version": "0.11.0",
+      "source": "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz",
+      "sha256": "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "shellcheck --version",
+      "expected": "version: 0.11.0"
+    },
+    {
+      "name": "shellcheck-0.9.0",
       "version": "0.9.0",
       "source": "ubuntu snapshot 20260810T000000Z",
       "profiles": [
         "standard",
         "container-build"
       ],
-      "command": "shellcheck --version",
+      "command": "/usr/bin/shellcheck --version",
       "expected": "version: 0.9"
     },
     {
@@ -814,6 +845,18 @@
     },
     {
       "name": "terraform",
+      "version": "1.16.3",
+      "source": "https://releases.hashicorp.com/terraform/1.16.3/terraform_1.16.3_linux_amd64.zip",
+      "sha256": "093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "terraform version",
+      "expected": "Terraform v1.16.3"
+    },
+    {
+      "name": "terraform-1.15.8",
       "version": "1.15.8",
       "source": "https://releases.hashicorp.com/terraform/1.15.8/terraform_1.15.8_linux_amd64.zip",
       "sha256": "d25ce7b6902013ad905db3d2eab0be4cd905887fe88b81a6171b8d5503c31f3d",
@@ -821,7 +864,7 @@
         "standard",
         "container-build"
       ],
-      "command": "terraform version",
+      "command": "/opt/terraform/1.15.8/terraform version",
       "expected": "Terraform v1.15.8"
     },
     {
@@ -978,6 +1021,44 @@
       ],
       "command": "golangci-lint --version",
       "expected": "2.12.2"
+    },
+    {
+      "name": "zizmor",
+      "version": "1.29.0",
+      "source": "https://github.com/zizmorcore/zizmor/releases/download/v1.29.0/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+      "sha256": "dd96df044a6e8538d5f423790f453bdd03d49e5b2bcc38214acc41a2f1297839",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "zizmor --version",
+      "expected": "1.29.0"
+    },
+    {
+      "name": "semgrep",
+      "version": "1.178.0",
+      "source": "https://pypi.org/project/semgrep/1.178.0/",
+      "sha256": "b7c4a4ba5cad1a6b0e76f7143c164b3f2853b9d0f902f2db2f64006257c941f2",
+      "lockfile": "catalog/provider-python.lock",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "semgrep --version",
+      "expected": "1.178.0"
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.2",
+      "source": "https://pypi.org/project/PyYAML/6.0.2/",
+      "sha256": "80bab7bfc629882493af4aa31a4cfa43a4c57c83813253626916b8c7ada83476",
+      "lockfile": "catalog/provider-python.lock",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "provider-python -c 'import yaml; print(yaml.__version__)'",
+      "expected": "6.0.2"
     },
     {
       "name": "govulncheck",
