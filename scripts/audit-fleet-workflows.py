@@ -240,7 +240,7 @@ def github_workflows(repository: str, ref: str, github: GitHubClient) -> dict[st
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Audit all 40 governed self-hosted workflows")
+    parser = argparse.ArgumentParser(description="Audit all 41 governed self-hosted workflows")
     parser.add_argument("--catalog", type=Path, default=CATALOG_PATH)
     parser.add_argument("--fleet", type=Path, default=FLEET_PATH)
     parser.add_argument("--checkouts-root", type=Path)
@@ -256,8 +256,8 @@ def main() -> int:
         parser.error("select exactly one of --checkouts-root or --github")
     catalog = load_json(args.catalog)
     repositories = args.repository or load_json(args.fleet)["repositories"]
-    if len(repositories) != 40 and not args.repository:
-        raise SystemExit("fleet manifest must contain exactly 40 repositories")
+    if len(repositories) != 41 and not args.repository:
+        raise SystemExit("fleet manifest must contain exactly 41 repositories")
     if args.github_timeout <= 0 or args.github_attempts < 1 or args.github_minimum_interval < 0:
         parser.error("GitHub timeout and attempts must be positive; minimum interval cannot be negative")
     findings: list[Finding] = []
