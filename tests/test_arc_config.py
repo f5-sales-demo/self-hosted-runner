@@ -241,7 +241,7 @@ class ArcConfigTests(unittest.TestCase):
         self.assertNotIn("compute-32-vcpu-density-candidate", profiles)
         self.assertEqual(4, len(profiles))
 
-    def test_aws_opt_in_enables_only_the_xcsh_density_candidate(self) -> None:
+    def test_aws_opt_in_enables_the_approved_density_candidates(self) -> None:
         config = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
         enabled = MODULE.enabled_config(
             config, ROOT, enable_compute_32_vcpu_candidate=True
@@ -249,6 +249,16 @@ class ArcConfigTests(unittest.TestCase):
         profiles = {spec["profile"] for spec in enabled["scale_sets"]}
         self.assertIn("compute-32-vcpu-density-candidate", profiles)
         self.assertEqual(5, len(profiles))
+        provider = MODULE.load_config(
+            CONFIG_DIR / "terraform-provider-xcsh.yaml", ROOT
+        )
+        provider_enabled = MODULE.enabled_config(
+            provider, ROOT, enable_compute_32_vcpu_candidate=True
+        )
+        self.assertIn(
+            "compute-32-vcpu-density-candidate",
+            {spec["profile"] for spec in provider_enabled["scale_sets"]},
+        )
         managed = MODULE.load_config(CONFIG_DIR / "api-specs-enriched.yaml", ROOT)
         managed_enabled = MODULE.enabled_config(
             managed, ROOT, enable_compute_32_vcpu_candidate=True

@@ -385,7 +385,11 @@ def enabled_config(
     }
     if (
         enable_compute_32_vcpu_candidate
-        and config["repository"] == "https://github.com/f5-sales-demo/xcsh"
+        and config["repository"]
+        in {
+            "https://github.com/f5-sales-demo/terraform-provider-xcsh",
+            "https://github.com/f5-sales-demo/xcsh",
+        }
     ):
         enabled.add("compute-32-vcpu-density-candidate")
     return {
