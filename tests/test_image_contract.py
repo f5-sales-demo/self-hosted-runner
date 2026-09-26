@@ -130,13 +130,54 @@ class ImageContractTests(unittest.TestCase):
     def test_setup_go_uses_the_action_compatible_lowercase_cache_path(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         setup_go = catalog["setup_actions"]["actions/setup-go"]
+        self.assertEqual(["1.25.12", "1.25.13"], setup_go["versions"])
         self.assertEqual(
-            "/opt/hostedtoolcache/go/1.25.12/x64.complete",
-            setup_go["cache_path"],
+            "/opt/hostedtoolcache/go/1.25.13/x64.complete",
+            setup_go["cache_paths"]["1.25.13"],
         )
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         self.assertIn('"$AGENT_TOOLSDIRECTORY/go/1.25.12/x64.complete"', dockerfile)
-        self.assertNotIn('"$AGENT_TOOLSDIRECTORY/Go/1.25.12/x64.complete"', dockerfile)
+        self.assertIn('"$AGENT_TOOLSDIRECTORY/go/1.25.13/x64.complete"', dockerfile)
+        self.assertNotIn('"$AGENT_TOOLSDIRECTORY/Go/', dockerfile)
+
+    def test_provider_toolchain_is_baked_pinned_and_side_by_side(self) -> None:
+        catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
+        tools = {tool["name"]: tool for tool in catalog["tools"]}
+        expected = {
+            "go": "1.25.13",
+            "go-1.25.12": "1.25.12",
+            "terraform": "1.16.3",
+            "terraform-1.15.8": "1.15.8",
+            "shellcheck": "0.11.0",
+            "shellcheck-0.9.0": "0.9.0",
+            "golangci-lint": "2.12.2",
+            "tfplugindocs": "0.25.0",
+            "zizmor": "1.29.0",
+            "semgrep": "1.178.0",
+            "pyyaml": "6.0.2",
+        }
+        for name, version in expected.items():
+            self.assertEqual(version, tools[name]["version"])
+        for name in ("go", "go-1.25.12", "terraform", "terraform-1.15.8", "shellcheck", "zizmor", "semgrep", "pyyaml"):
+            self.assertRegex(tools[name]["sha256"], r"^[0-9a-f]{64}$")
+        dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        for required in (
+            "ARG GO_VERSION=1.25.13",
+            "ARG TERRAFORM_VERSION=1.16.3",
+            "ARG SHELLCHECK_VERSION=0.11.0",
+            "ARG ZIZMOR_VERSION=1.29.0",
+            "catalog/provider-python.lock /opt/provider-python.lock",
+            "--require-hashes --no-cache /opt/provider-python.lock",
+            "/usr/local/bin/provider-python",
+            "/usr/local/bin/semgrep",
+            "SEMGREP_ENABLE_VERSION_CHECK=0",
+            "SEMGREP_SEND_METRICS=off",
+        ):
+            self.assertIn(required, dockerfile)
+        lockfile = (ROOT / "catalog/provider-python.lock").read_text(encoding="utf-8")
+        self.assertIn("semgrep==1.178.0", lockfile)
+        self.assertIn("pyyaml==6.0.2", lockfile)
+        self.assertNotIn("-e ", lockfile)
 
     def test_setup_python_cache_has_python_and_pip_entrypoints(self) -> None:
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
