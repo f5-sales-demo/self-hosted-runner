@@ -42,7 +42,7 @@ image_id=$(docker image inspect --format '{{.Id}}' "$repository@$manifest_digest
 }
 docker image tag "$repository@$manifest_digest" "$tag"
 docker image save --output "$output/super-linter.tar" "$tag"
-zstd --threads=0 --ultra -19 --rm "$output/super-linter.tar" --output "$output/super-linter.tar.zst"
+zstd --threads=0 --ultra -19 --rm "$output/super-linter.tar" -o "$output/super-linter.tar.zst"
 archive_sha256=$(sha256sum "$output/super-linter.tar.zst" | cut -d' ' -f1)
 
 printf '%s\n' \

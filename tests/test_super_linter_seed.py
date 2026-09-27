@@ -44,6 +44,14 @@ class SuperLinterSeedTests(unittest.TestCase):
             "sha256sum",
         ):
             self.assertIn(command, builder)
+        self.assertIn(
+            'zstd --threads=0 --ultra -19 --rm "$output/super-linter.tar" -o ',
+            builder,
+        )
+        self.assertNotIn(
+            'zstd --threads=0 --ultra -19 --rm "$output/super-linter.tar" --output',
+            builder,
+        )
 
     def test_deployment_requires_and_verifies_immutable_seed(self) -> None:
         deploy = (ROOT / "scripts/arc-deploy.sh").read_text(encoding="utf-8")
