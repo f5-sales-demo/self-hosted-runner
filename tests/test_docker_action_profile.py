@@ -140,7 +140,7 @@ else:
             result.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "result": "hit",
                         "qualified": True,
                         "reason": "verified_archive_loaded",
@@ -148,7 +148,10 @@ else:
                         "index_digest": DIGEST,
                         "manifest_digest": manifest_digest,
                         "seed_image_digest": seed_digest,
-                        "image_id": IMAGE_ID,
+                        "source_image_id": IMAGE_ID,
+                        "loaded_image_id": "sha256:" + "a" * 64,
+                        "image_config_sha256": "b" * 64,
+                        "rootfs_sha256": "c" * 64,
                         "archive_sha256": "1" * 64,
                         "load_duration_seconds": 4,
                     }
@@ -174,6 +177,24 @@ else:
             self.assertFalse(mismatch["qualified"])
             self.assertEqual("mismatch", mismatch["result"])
             self.assertEqual("profile_identity_mismatch", mismatch["reason"])
+
+            rejected_payload = json.loads(result.read_text(encoding="utf-8"))
+            rejected_payload.update(
+                result="rejected",
+                qualified=False,
+                reason="archive_load_failed",
+                loaded_image_id="",
+            )
+            result.write_text(json.dumps(rejected_payload), encoding="utf-8")
+            rejected = MODULE.seed_evidence(
+                result,
+                action_commit,
+                DIGEST,
+                manifest_digest,
+                "example@" + seed_digest,
+            )
+            self.assertEqual("rejected", rejected["result"])
+            self.assertIsNone(rejected["loaded_image_id"])
 
     def test_throttling_and_disk_evidence_are_bounded(self) -> None:
         evidence = MODULE.throttling_delta(
