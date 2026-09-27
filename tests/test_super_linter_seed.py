@@ -116,6 +116,20 @@ class SuperLinterSeedTests(unittest.TestCase):
         self.assertNotIn("persistentVolumeClaim", str(volumes))
         self.assertNotIn("hostPath", str(volumes))
 
+        validator = (ROOT / "scripts/validate-arc.sh").read_text(encoding="utf-8")
+        self.assertIn("grep -n -m1 -- 'name: dind$'", validator)
+        self.assertIn(
+            "grep -n -m1 -- 'name: load-super-linter-seed$'", validator
+        )
+        self.assertNotIn("grep -n -- '- name: dind$'", validator)
+        self.assertIn(
+            "did not render the dind and seed-loader init containers", validator
+        )
+        self.assertIn(
+            "rendered the seed loader before the restartable dind init container",
+            validator,
+        )
+
     def _fake_docker(self, root: Path, image_id: str) -> Path:
         path = root / "docker"
         path.write_text(
