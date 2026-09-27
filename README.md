@@ -112,7 +112,7 @@ upstream images, digest disagreement, and unlocked runtime references are reject
 
 The active CronJob runs at `20 5 * * *` in `America/Toronto` and uses a PEM-reading init container
 to validate exact App metadata,
-permissions, bot identity, and 39-repository selected scope. It hands a short-lived token through a
+permissions, bot identity, and 38-repository selected scope. It hands a short-lived token through a
 memory-backed volume to the main container, which immediately unlinks it; the main container never
 mounts the PEM. The workload has no RBAC or service-account token, and its Cilium policy denies
 ingress and every egress destination except inspected DNS and the five declared HTTPS hosts.
