@@ -1,11 +1,12 @@
 # Immutable self-hosted runner images
 
-This repository is the sole image authority for the F5 Sales Demo ephemeral GitHub Actions runner fleet. It publishes two Linux/amd64 targets from a digest-pinned Ubuntu 24.04 base:
+This repository is the sole image authority for the F5 Sales Demo ephemeral GitHub Actions runner fleet. It publishes three Linux/amd64 targets from digest-pinned sources:
 
 | Target | Purpose | Docker capability |
 | --- | --- | --- |
 | `standard` | General repository-scoped self-hosted jobs | No Docker client or socket |
 | `container-build` | The existing trust-gated container-build profile | Docker CLI, Buildx, and Compose; no daemon |
+| `super-linter-seed` | A compressed, identity-verified Docker archive for the workflow-pinned Super-Linter image | Docker CLI used only by the non-root per-job loader |
 
 Every production reference is an immutable GHCR, ACR, or ECR digest. GHCR is
 the publication authority; provider registries are byte-identical deployment
@@ -22,6 +23,13 @@ mirrors. Tags are discovery aids only and must never be placed in runner policy.
 `/opt/hostedtoolcache` is an immutable image seed and remains read-only at runtime. `docs-control` copies that seed into each ephemeral runner's mounted workspace and exposes the private copy as `RUNNER_TOOL_CACHE`; setup actions can therefore use catalogued cache hits and install a missing version without mutating the image or sharing a host cache. `actions/setup-go` requires the lowercase `go` directory, so the Go seed is `/opt/hostedtoolcache/go/<version>/x64.complete`.
 
 The runtime cache is removed with the ephemeral runner workspace after every job. It is deliberately not a persistent host cache or a third image-authority path.
+
+The container-build profile also loads an immutable Super-Linter archive into
+its private DinD daemon before runner startup. The seed image is pre-pulled on
+container-build nodes, but `/var/lib/docker` remains a per-job 100 GiB
+`emptyDir`. A digest, archive, or loaded-image mismatch removes the rejected
+image and records a cold-pull fallback; it never turns shared writable Docker
+state into a cache.
 
 The locked reference is [`actions/runner-images@8926c75ceb03577c5cc94415743a88f548b781ab`](https://github.com/actions/runner-images/tree/8926c75ceb03577c5cc94415743a88f548b781ab), Ubuntu 24.04 image version `20260810.271.1`. GitHub-hosted runner images are VM images, not a supported Docker base, so this project deliberately builds a container-compatible tool catalogue instead of inheriting an unsupported hosted-runner Dockerfile.
 
@@ -57,8 +65,12 @@ python3 scripts/check-tool-updates.py --format json
 ## Promotion sequence
 
 1. Merge a reviewed builder PR. Only the GitHub-hosted publish workflow builds and pushes a candidate.
-2. Record the two published digests and use `scripts/verify-promotion.sh` to verify GitHub provenance.
-3. On the Ubuntu workstation, run `scripts/preload-image.sh` for each digest. It pulls the digest, proves local image identity, and runs the resident verifier without maintaining a second production build path.
+2. Record the three published digests and verify their GitHub provenance. The
+   standard and container-build images additionally use
+   `scripts/verify-promotion.sh` for their resident tool contracts.
+3. On the Ubuntu workstation, run `scripts/preload-image.sh` for the standard
+   and container-build digests. The seed digest is pulled by the container-build
+   pre-pull DaemonSet and its archive/image identities are verified per job.
 4. Update `docs-control` profile policy with those digests, then run one socketless and one trust-gated container-build pilot. Do not edit existing open issues #1533 or #1580 for this rollout.
 
 See [docs/rollout.md](docs/rollout.md) for the required downstream handoff.
@@ -69,6 +81,11 @@ Independent Terraform roots manage Azure AKS and AWS EKS without shared state.
 Interactive Helm owns ARC, the repository-scoped scale sets, and image
 pre-pullers. The standard image remains socketless. The
 container-build image connects only to a privileged, pod-local DinD daemon.
+`scripts/arc-deploy.sh` requires `SUPER_LINTER_SEED_IMAGE` alongside the two
+runner images. ACR/ECR deployments also require
+`SUPER_LINTER_SEED_SOURCE_IMAGE` and byte-verify it against the mirrored digest
+before rendering any runner. The seed must use the same registry as the
+container-build image so the pod has one explicit registry trust path.
 All repository scale sets use zero idle runners. Two shared image-cache
 DaemonSets run in `arc-runner-cache`, one per node profile; repository
 namespaces do not carry duplicate cache releases.

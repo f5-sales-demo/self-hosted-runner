@@ -17,3 +17,4 @@ kubeconfig*
 *.key
 .arc/
 .plans/
+/.super-linter-seed/

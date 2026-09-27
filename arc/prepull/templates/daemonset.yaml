@@ -43,7 +43,7 @@ spec:
           effect: NoSchedule
         {{- end }}
       {{- if and .Values.renovateImage (ne .Values.profile "socketless") }}{{ fail "Renovate may only be pre-pulled onto socketless nodes" }}{{ end }}
-      {{- if or .Values.additionalImages .Values.renovateImage }}
+      {{- if or .Values.additionalImages .Values.renovateImage .Values.seedImage }}
       initContainers:
         {{- range $index, $image := .Values.additionalImages }}
         - name: pull-additional-{{ $index }}
@@ -54,6 +54,22 @@ spec:
             allowPrivilegeEscalation: false
             capabilities:
               drop: [ALL]
+        {{- end }}
+        {{- if .Values.seedImage }}
+        - name: pull-super-linter-seed
+          image: {{ .Values.seedImage | quote }}
+          imagePullPolicy: IfNotPresent
+          command: [/bin/sh, -c, "true"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 123
+          resources:
+            requests: {cpu: 5m, memory: 16Mi}
+            limits: {cpu: 50m, memory: 64Mi}
         {{- end }}
         {{- if .Values.renovateImage }}
         - name: pull-renovate

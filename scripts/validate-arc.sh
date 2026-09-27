@@ -15,6 +15,7 @@ chart_version=0.14.2
 controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452
 scale_set_chart_digest=sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
 runner_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
+seed_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:2222222222222222222222222222222222222222222222222222222222222222
 dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
 renovate_image=f5salesdemoarcca.azurecr.io/renovate@sha256:1111111111111111111111111111111111111111111111111111111111111111
 
@@ -55,6 +56,7 @@ for profile in socketless compute-candidate container-build; do
     --namespace arc-runner-cache
     --set-string "profile=$profile"
     --set-string "image=$runner_image"
+    --set-string "seedImage="
     --set-string 'imagePullSecrets[0]=ghcr-pull'
     --set-string "nodeProfiles[0]=$profile"
   )
@@ -66,6 +68,7 @@ for profile in socketless compute-candidate container-build; do
     prepull_args+=(--set-string "nodeProfiles[1]=compute-32-vcpu-density-candidate")
   elif [[ "$profile" == container-build ]]; then
     prepull_args+=(--set-string "additionalImages[0]=$dind_image")
+    prepull_args+=(--set-string "seedImage=$seed_image")
   fi
   helm lint arc/prepull "${prepull_args[@]}" >/dev/null
   helm template "runner-image-cache-$profile" arc/prepull "${prepull_args[@]}" >"$tmpdir/prepull-$profile.yaml"
@@ -75,6 +78,9 @@ for profile in socketless compute-candidate container-build; do
   if [[ "$profile" == socketless ]]; then
     grep -Fq "$renovate_image" "$tmpdir/prepull-$profile.yaml"
     grep -Fq 'name: pull-renovate' "$tmpdir/prepull-$profile.yaml"
+  elif [[ "$profile" == container-build ]]; then
+    grep -Fq "$seed_image" "$tmpdir/prepull-$profile.yaml"
+    grep -Fq 'name: pull-super-linter-seed' "$tmpdir/prepull-$profile.yaml"
   fi
 done
 
@@ -92,7 +98,7 @@ for config in "$@"; do
     max_runners=$(jq -er .max_runners <<<"$spec")
     rendered_values="$tmpdir/$repository_name-$profile-values.yaml"
     rendered_manifest="$tmpdir/$repository_name-$profile.yaml"
-    sed "s|RUNNER_IMAGE_REQUIRED|$runner_image|g" "$values" >"$rendered_values"
+    sed -e "s|RUNNER_IMAGE_REQUIRED|$runner_image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$seed_image|g" "$values" >"$rendered_values"
     helm lint "$scale_set_chart" \
       -f "$rendered_values" \
       --set-string githubConfigUrl="$github_url" \
@@ -106,8 +112,8 @@ for config in "$@"; do
       --set-string runnerScaleSetName="$scale_set_name" \
       --set minRunners="$min_runners" \
       --set maxRunners="$max_runners" >"$rendered_manifest"
-    if grep -Fq RUNNER_IMAGE_REQUIRED "$rendered_manifest"; then
-      echo "$config $profile retained the runner image placeholder" >&2
+    if grep -Eq '(RUNNER_IMAGE_REQUIRED|SUPER_LINTER_SEED_IMAGE_REQUIRED)' "$rendered_manifest"; then
+      echo "$config $profile retained an immutable image placeholder" >&2
       exit 1
     fi
     grep -Fq "$github_url" "$rendered_manifest"
@@ -127,8 +133,13 @@ for config in "$@"; do
       fi
     else
       grep -Fq "$dind_image" "$rendered_manifest"
+      grep -Fq "$seed_image" "$rendered_manifest"
       grep -Fq 'privileged: true' "$rendered_manifest"
       grep -Fq 'DOCKER_HOST' "$rendered_manifest"
+      dind_line=$(grep -n -- '- name: dind$' "$rendered_manifest" | head -n 1 | cut -d: -f1)
+      seed_line=$(grep -n -- '- name: load-super-linter-seed$' "$rendered_manifest" | head -n 1 | cut -d: -f1)
+      [[ -n "$dind_line" && -n "$seed_line" && "$dind_line" -lt "$seed_line" ]]
+      grep -Fq 'sizeLimit: 100Gi' "$rendered_manifest"
     fi
 
   done < <(jq -c '.scale_sets[]' <<<"$config_json")

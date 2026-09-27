@@ -27,6 +27,8 @@ jobs:
             target: standard
           - profile: container-build
             target: container-build
+          - profile: super-linter-seed
+            target: super-linter-seed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -41,6 +43,9 @@ jobs:
         run: |
           set -euo pipefail
           printf "%s" "$TOKEN" | docker login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+      - name: Prepare immutable Super-Linter archive
+        if: matrix.profile == 'super-linter-seed'
+        run: scripts/build-super-linter-seed.sh
       - name: Build, publish, and verify digest
         id: image
         env:

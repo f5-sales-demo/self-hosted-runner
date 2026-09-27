@@ -130,6 +130,105 @@ else:
             ),
         )
 
+    def test_seed_hit_requires_all_immutable_identities(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            result = root / "seed.json"
+            seed_digest = "sha256:" + "d" * 64
+            manifest_digest = "sha256:" + "e" * 64
+            action_commit = "f" * 40
+            result.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "result": "hit",
+                        "qualified": True,
+                        "reason": "verified_archive_loaded",
+                        "action_commit": action_commit,
+                        "index_digest": DIGEST,
+                        "manifest_digest": manifest_digest,
+                        "seed_image_digest": seed_digest,
+                        "image_id": IMAGE_ID,
+                        "archive_sha256": "1" * 64,
+                        "load_duration_seconds": 4,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            evidence = MODULE.seed_evidence(
+                result,
+                action_commit,
+                DIGEST,
+                manifest_digest,
+                "example@" + seed_digest,
+            )
+            self.assertTrue(evidence["qualified"])
+            self.assertEqual("hit", evidence["result"])
+            mismatch = MODULE.seed_evidence(
+                result,
+                action_commit,
+                DIGEST,
+                "sha256:" + "2" * 64,
+                "example@" + seed_digest,
+            )
+            self.assertFalse(mismatch["qualified"])
+            self.assertEqual("mismatch", mismatch["result"])
+            self.assertEqual("profile_identity_mismatch", mismatch["reason"])
+
+    def test_throttling_and_disk_evidence_are_bounded(self) -> None:
+        evidence = MODULE.throttling_delta(
+            {"periods": 10, "throttled_periods": 2, "throttled_nanoseconds": 100},
+            {"periods": 30, "throttled_periods": 5, "throttled_nanoseconds": 400},
+        )
+        self.assertTrue(evidence["available"])
+        self.assertEqual(20, evidence["periods"])
+        self.assertEqual(3, evidence["throttled_periods"])
+        self.assertEqual(0.15, evidence["ratio"])
+        with tempfile.TemporaryDirectory() as directory:
+            disk = MODULE.disk_evidence(Path(directory))
+        self.assertTrue(disk["available"])
+        self.assertLessEqual(disk["used_ratio"], 1)
+        start = {
+            "schema_version": 1,
+            "cpu": {"nr_periods": 10, "nr_throttled": 2, "throttled_usec": 100},
+            "memory": {
+                "current_bytes": 100,
+                "peak_bytes": 200,
+                "limit_bytes": 1000,
+                "oom_kill": 0,
+            },
+            "io": {"read_bytes": 1000, "write_bytes": 2000},
+            "disk": {
+                "capacity_bytes": 10000,
+                "used_bytes": 3000,
+                "available_bytes": 7000,
+                "used_ratio": 0.3,
+            },
+        }
+        end = {
+            "schema_version": 1,
+            "cpu": {"nr_periods": 30, "nr_throttled": 5, "throttled_usec": 400},
+            "memory": {
+                "current_bytes": 300,
+                "peak_bytes": 500,
+                "limit_bytes": 1000,
+                "oom_kill": 0,
+            },
+            "io": {"read_bytes": 1500, "write_bytes": 2900},
+            "disk": {
+                "capacity_bytes": 10000,
+                "used_bytes": 4000,
+                "available_bytes": 6000,
+                "used_ratio": 0.4,
+            },
+        }
+        dind = MODULE.dind_delta(start, end, Path("/missing"))
+        self.assertEqual(0.15, dind["cpu_throttling"]["ratio"])
+        self.assertEqual(0.5, dind["memory"]["peak_limit_ratio"])
+        self.assertEqual(500, dind["io"]["read_bytes"])
+        self.assertEqual(900, dind["io"]["write_bytes"])
+        self.assertEqual(0.4, dind["disk"]["used_ratio"])
+
     def test_completed_action_preserves_exit_and_redacts_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -141,7 +240,13 @@ else:
             raw = output.read_text(encoding="utf-8")
             self.assertNotIn("must-not-appear", raw)
             profile = json.loads(raw)
+            self.assertEqual(2, profile["schema_version"])
             self.assertEqual("docker_action", profile["profile_kind"])
+            self.assertEqual("unavailable", profile["seed"]["result"])
+            self.assertFalse(profile["seed"]["qualified"])
+            self.assertGreaterEqual(profile["timing"]["action_pull_seconds"], 0)
+            self.assertIn("cpu_throttling", profile["dind"])
+            self.assertIn("disk", profile["dind"])
             self.assertEqual("completed", profile["observer"]["result"])
             self.assertEqual(23, profile["exit"]["code"])
             self.assertTrue(profile["memory"]["oom"])

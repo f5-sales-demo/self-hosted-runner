@@ -66,12 +66,15 @@ DOCKER_PROFILE_REQUIRED = {
     "completed_at",
     "duration_seconds",
     "sample_count",
+    "seed",
+    "timing",
     "image",
     "cpu",
     "memory",
     "block_io",
     "network_io",
     "pids",
+    "dind",
     "exit",
     "observer",
 }
@@ -114,10 +117,10 @@ def _nonnegative_number(value: object, name: str) -> float | int:
 
 
 def validate_docker_action_profile(profile: object) -> dict:
-    if not isinstance(profile, dict) or profile.get("schema_version") != 1:
+    if not isinstance(profile, dict) or profile.get("schema_version") != 2:
         raise ValueError("unsupported Docker action profile")
     if set(profile) != DOCKER_PROFILE_REQUIRED:
-        raise ValueError("Docker action profile fields do not match schema version 1")
+        raise ValueError("Docker action profile fields do not match schema version 2")
     if profile.get("profile_kind") != "docker_action":
         raise ValueError("invalid Docker action profile kind")
     nullable_strings = (
@@ -153,6 +156,72 @@ def validate_docker_action_profile(profile: object) -> dict:
         or sample_count < 0
     ):
         raise TypeError("invalid Docker sample count")
+    seed = profile["seed"]
+    seed_keys = {
+        "result",
+        "qualified",
+        "reason",
+        "action_commit",
+        "index_digest",
+        "manifest_digest",
+        "seed_image_digest",
+        "image_id",
+        "archive_sha256",
+        "load_duration_seconds",
+    }
+    if not isinstance(seed, dict) or set(seed) != seed_keys:
+        raise TypeError("invalid Docker seed evidence")
+    if seed["result"] not in {"hit", "fallback", "rejected", "mismatch", "unavailable"}:
+        raise ValueError("unknown Docker seed result")
+    if not isinstance(seed["qualified"], bool) or (
+        seed["qualified"] and seed["result"] != "hit"
+    ):
+        raise ValueError("invalid Docker seed qualification")
+    if not isinstance(seed["reason"], str) or not seed["reason"]:
+        raise TypeError("invalid Docker seed reason")
+    if seed["action_commit"] is not None and not re.fullmatch(
+        r"[0-9a-f]{40}", seed["action_commit"]
+    ):
+        raise TypeError("invalid Docker seed action commit")
+    for key in ("index_digest", "manifest_digest", "seed_image_digest", "image_id"):
+        value = seed[key]
+        if value is not None and (
+            not isinstance(value, str) or not SHA256_PATTERN.fullmatch(value)
+        ):
+            raise TypeError(f"invalid Docker seed {key}")
+    archive_digest = seed["archive_sha256"]
+    if archive_digest is not None and (
+        not isinstance(archive_digest, str)
+        or not re.fullmatch(r"[0-9a-f]{64}", archive_digest)
+    ):
+        raise TypeError("invalid Docker seed archive digest")
+    load_duration = seed["load_duration_seconds"]
+    if load_duration is not None:
+        _nonnegative_number(load_duration, "Docker seed load duration")
+    if seed["qualified"] and any(
+        seed[key] is None
+        for key in (
+            "action_commit",
+            "index_digest",
+            "manifest_digest",
+            "seed_image_digest",
+            "image_id",
+            "archive_sha256",
+            "load_duration_seconds",
+        )
+    ):
+        raise ValueError("qualified Docker seed lacks immutable evidence")
+    timing = profile["timing"]
+    if not isinstance(timing, dict) or set(timing) != {
+        "seed_load_seconds",
+        "action_pull_seconds",
+        "container_seconds",
+    }:
+        raise TypeError("invalid Docker action timing")
+    _nonnegative_number(timing["action_pull_seconds"], "Docker action pull duration")
+    for key in ("seed_load_seconds", "container_seconds"):
+        if timing[key] is not None:
+            _nonnegative_number(timing[key], f"Docker {key}")
     image = profile["image"]
     if not isinstance(image, dict) or set(image) != {"id", "digest", "size_bytes"}:
         raise TypeError("invalid Docker image identity")
@@ -203,6 +272,93 @@ def validate_docker_action_profile(profile: object) -> dict:
         if not isinstance(counters, dict) or set(counters) != required_keys:
             raise TypeError(f"invalid Docker {name} counters")
         _integer_map(counters, f"Docker {name}")
+    dind = profile["dind"]
+    if not isinstance(dind, dict) or set(dind) != {
+        "cpu_throttling",
+        "memory",
+        "io",
+        "disk",
+    }:
+        raise TypeError("invalid DinD evidence")
+    throttling = dind["cpu_throttling"]
+    if not isinstance(throttling, dict) or set(throttling) != {
+        "available",
+        "periods",
+        "throttled_periods",
+        "throttled_seconds",
+        "ratio",
+    }:
+        raise TypeError("invalid DinD throttling evidence")
+    if not isinstance(throttling["available"], bool):
+        raise TypeError("invalid DinD throttling availability")
+    if throttling["available"]:
+        for key in ("periods", "throttled_periods"):
+            value = throttling[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise TypeError(f"invalid DinD throttling {key}")
+        for key in ("throttled_seconds", "ratio"):
+            _nonnegative_number(throttling[key], f"DinD throttling {key}")
+    elif any(throttling[key] is not None for key in throttling if key != "available"):
+        raise ValueError("unavailable DinD throttling contains counters")
+    dind_memory = dind["memory"]
+    if not isinstance(dind_memory, dict) or set(dind_memory) != {
+        "available",
+        "current_bytes",
+        "peak_bytes",
+        "limit_bytes",
+        "peak_limit_ratio",
+        "oom_kill",
+    }:
+        raise TypeError("invalid DinD memory evidence")
+    dind_io = dind["io"]
+    if not isinstance(dind_io, dict) or set(dind_io) != {
+        "available",
+        "read_bytes",
+        "write_bytes",
+    }:
+        raise TypeError("invalid DinD I/O evidence")
+    for name, evidence, keys in (
+        (
+            "memory",
+            dind_memory,
+            ("current_bytes", "peak_bytes", "limit_bytes", "oom_kill"),
+        ),
+        ("I/O", dind_io, ("read_bytes", "write_bytes")),
+    ):
+        if not isinstance(evidence["available"], bool):
+            raise TypeError(f"invalid DinD {name} availability")
+        if evidence["available"]:
+            for key in keys:
+                value = evidence[key]
+                if value is not None and (
+                    isinstance(value, bool) or not isinstance(value, int) or value < 0
+                ):
+                    raise TypeError(f"invalid DinD {name} {key}")
+        elif any(evidence[key] is not None for key in keys):
+            raise ValueError(f"unavailable DinD {name} contains counters")
+    if dind_memory["peak_limit_ratio"] is not None:
+        _nonnegative_number(dind_memory["peak_limit_ratio"], "DinD memory ratio")
+    disk = dind["disk"]
+    if not isinstance(disk, dict) or set(disk) != {
+        "available",
+        "capacity_bytes",
+        "used_bytes",
+        "available_bytes",
+        "used_ratio",
+    }:
+        raise TypeError("invalid DinD disk evidence")
+    if not isinstance(disk["available"], bool):
+        raise TypeError("invalid DinD disk availability")
+    if disk["available"]:
+        for key in ("capacity_bytes", "used_bytes", "available_bytes"):
+            value = disk[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise TypeError(f"invalid DinD disk {key}")
+        ratio = _nonnegative_number(disk["used_ratio"], "DinD disk ratio")
+        if ratio > 1:
+            raise ValueError("DinD disk ratio exceeds one")
+    elif any(disk[key] is not None for key in disk if key != "available"):
+        raise ValueError("unavailable DinD disk contains counters")
     exit_status = profile["exit"]
     if not isinstance(exit_status, dict) or set(exit_status) != {"code", "signal"}:
         raise TypeError("invalid Docker action exit")
@@ -1683,6 +1839,16 @@ def aggregate_node_filesystems(reports: list[dict]) -> list[dict]:
 
 
 def cpu_throttling_ratio(profile: dict) -> float | None:
+    if profile.get("profile_kind") == "docker_action":
+        throttling = profile.get("dind", {}).get("cpu_throttling", {})
+        ratio = throttling.get("ratio")
+        return (
+            float(ratio)
+            if throttling.get("available")
+            and isinstance(ratio, (int, float))
+            and not isinstance(ratio, bool)
+            else None
+        )
     cpu = profile.get("cpu")
     if not isinstance(cpu, dict):
         return None
@@ -1746,6 +1912,26 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
             for value in workload_values
             if isinstance(value.get("io", {}).get("wbytes"), int)
             and not isinstance(value["io"]["wbytes"], bool)
+        ]
+        seed_load_seconds = [
+            float(value["timing"]["seed_load_seconds"])
+            for value in docker_values
+            if value["timing"]["seed_load_seconds"] is not None
+        ]
+        action_pull_seconds = [
+            float(value["timing"]["action_pull_seconds"]) for value in docker_values
+        ]
+        dind_disk_ratios = [
+            float(value["dind"]["disk"]["used_ratio"])
+            for value in docker_values
+            if value["dind"]["disk"]["available"]
+            and value["dind"]["disk"]["used_ratio"] is not None
+        ]
+        dind_memory_ratios = [
+            float(value["dind"]["memory"]["peak_limit_ratio"])
+            for value in docker_values
+            if value["dind"]["memory"]["available"]
+            and value["dind"]["memory"]["peak_limit_ratio"] is not None
         ]
         reports.append(
             {
@@ -1819,6 +2005,34 @@ def aggregate_workload_profiles(profiles: list[dict]) -> list[dict]:
                 )
                 if docker_values
                 else None,
+                "verified_seed_hits": sum(
+                    int(value["seed"]["qualified"] and value["seed"]["result"] == "hit")
+                    for value in docker_values
+                ),
+                "median_seed_load_seconds": median(seed_load_seconds)
+                if seed_load_seconds
+                else None,
+                "median_action_pull_seconds": median(action_pull_seconds)
+                if action_pull_seconds
+                else None,
+                "max_dind_disk_ratio": max(dind_disk_ratios)
+                if dind_disk_ratios
+                else None,
+                "max_dind_memory_ratio": max(dind_memory_ratios)
+                if dind_memory_ratios
+                else None,
+                "dind_oom_events": sum(
+                    int(value["dind"]["memory"]["oom_kill"] or 0)
+                    for value in docker_values
+                ),
+                "dind_read_bytes": sum(
+                    int(value["dind"]["io"]["read_bytes"] or 0)
+                    for value in docker_values
+                ),
+                "dind_write_bytes": sum(
+                    int(value["dind"]["io"]["write_bytes"] or 0)
+                    for value in docker_values
+                ),
                 "max_pids": max(
                     (value["pids"]["peak"] for value in docker_values), default=None
                 ),
@@ -1866,9 +2080,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
         )
         for variant in variants:
             burst_phase = str(key[1]).endswith("-burst")
-            minimum_improvement = (
-                0.2 if burst_phase else None
-            )
+            minimum_improvement = 0.2 if burst_phase else None
             required_pairs = 4 if burst_phase else 5
             candidate = {
                 item.get("pair_id"): item
@@ -1909,9 +2121,7 @@ def performance_comparisons(profiles: list[dict]) -> list[dict]:
                     for image in (*baseline_images, *candidate_images)
                 )
             )
-            hardware_image_equivalent = (
-                baseline_images == candidate_images
-            )
+            hardware_image_equivalent = baseline_images == candidate_images
             base_median = median(base_values) if base_values else None
             candidate_median = median(candidate_values) if candidate_values else None
             improvement = (

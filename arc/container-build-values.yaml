@@ -67,7 +67,51 @@ template:
             mountPath: /home/runner/tmpDir
       - name: dind
         image: docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
-        args: [dockerd, "--host=unix:///var/run/docker.sock", "--group=123"]
+        command: [/bin/sh, -c]
+        args:
+          - |
+            set -u
+            evidence=/runner-runtime/_temp/dind-sidecar.json
+            write_evidence() {
+              cpu_stat=/sys/fs/cgroup/cpu.stat
+              periods=$(awk '$1 == "nr_periods" {print $2}' "$cpu_stat")
+              throttled=$(awk '$1 == "nr_throttled" {print $2}' "$cpu_stat")
+              throttled_usec=$(awk '$1 == "throttled_usec" {print $2}' "$cpu_stat")
+              memory_current=$(cat /sys/fs/cgroup/memory.current)
+              memory_peak=$(cat /sys/fs/cgroup/memory.peak)
+              memory_limit=$(cat /sys/fs/cgroup/memory.max)
+              [ "$memory_limit" != max ] || memory_limit=0
+              oom_kill=$(awk '$1 == "oom_kill" {print $2}' /sys/fs/cgroup/memory.events)
+              read_bytes=$(awk '{for (i=2; i<=NF; i++) {split($i,a,"="); if (a[1]=="rbytes") n+=a[2]}} END {print n+0}' /sys/fs/cgroup/io.stat)
+              write_bytes=$(awk '{for (i=2; i<=NF; i++) {split($i,a,"="); if (a[1]=="wbytes") n+=a[2]}} END {print n+0}' /sys/fs/cgroup/io.stat)
+              set -- $(df -Pk /var/lib/docker | awk 'NR == 2 {print $2*1024, $3*1024, $4*1024, $3/$2}')
+              temporary="$evidence.$$"
+              printf '{"schema_version":1,"cpu":{"nr_periods":%s,"nr_throttled":%s,"throttled_usec":%s},"memory":{"current_bytes":%s,"peak_bytes":%s,"limit_bytes":%s,"oom_kill":%s},"io":{"read_bytes":%s,"write_bytes":%s},"disk":{"capacity_bytes":%.0f,"used_bytes":%.0f,"available_bytes":%.0f,"used_ratio":%s}}\n' \
+                "${periods:-0}" "${throttled:-0}" "${throttled_usec:-0}" \
+                "$memory_current" "$memory_peak" "$memory_limit" "${oom_kill:-0}" \
+                "$read_bytes" "$write_bytes" "$1" "$2" "$3" "$4" \
+                >"$temporary" && chmod 0644 "$temporary" && mv -f "$temporary" "$evidence"
+            }
+            dockerd --host=unix:///var/run/docker.sock --group=123 &
+            daemon=$!
+            sampler=
+            stop() {
+              [ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
+              kill -TERM "$daemon" 2>/dev/null || true
+            }
+            trap stop TERM INT HUP
+            (
+              while kill -0 "$daemon" 2>/dev/null; do
+                write_evidence || true
+                sleep 0.25
+              done
+            ) &
+            sampler=$!
+            wait "$daemon"
+            status=$?
+            kill "$sampler" 2>/dev/null || true
+            wait "$sampler" 2>/dev/null || true
+            exit "$status"
         env:
           - name: DOCKER_TLS_CERTDIR
             value: ""
@@ -95,6 +139,45 @@ template:
             mountPath: /home/runner/externals
           - name: dind-storage
             mountPath: /var/lib/docker
+          - name: runner-runtime
+            mountPath: /runner-runtime
+      - name: load-super-linter-seed
+        image: SUPER_LINTER_SEED_IMAGE_REQUIRED
+        imagePullPolicy: IfNotPresent
+        command: [/usr/local/bin/load-super-linter-seed]
+        env:
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+          - name: SUPER_LINTER_SEED_RESULT
+            value: /runner-runtime/_temp/super-linter-seed.json
+          - name: SUPER_LINTER_SEED_IMAGE
+            value: SUPER_LINTER_SEED_IMAGE_REQUIRED
+          - name: SUPER_LINTER_EXPECTED_ACTION_COMMIT
+            value: 4ce20838b8ab83717e78138c5b3a1407148e0918
+          - name: SUPER_LINTER_EXPECTED_INDEX_DIGEST
+            value: sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996
+          - name: SUPER_LINTER_EXPECTED_MANIFEST_DIGEST
+            value: sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 123
+        resources:
+          requests:
+            cpu: 50m
+            memory: 32Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+        volumeMounts:
+          - name: dind-sock
+            mountPath: /var/run
+          - name: runner-runtime
+            mountPath: /runner-runtime
     containers:
       - name: runner
         image: RUNNER_IMAGE_REQUIRED
@@ -118,6 +201,10 @@ template:
             value: unix:///var/run/docker.sock
           - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
             value: "120"
+          - name: SUPER_LINTER_SEED_RESULT
+            value: /runner-runtime/_temp/super-linter-seed.json
+          - name: SUPER_LINTER_SEED_IMAGE
+            value: SUPER_LINTER_SEED_IMAGE_REQUIRED
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -144,6 +231,9 @@ template:
           - name: runner-runtime
             mountPath: /tmp
             subPath: _temp
+          - name: dind-storage
+            mountPath: /var/lib/docker
+            readOnly: true
     volumes:
       - name: runner-runtime
         emptyDir:
