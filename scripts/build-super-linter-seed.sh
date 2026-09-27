@@ -40,6 +40,12 @@ image_id=$(docker image inspect --format '{{.Id}}' "$repository@$manifest_digest
   echo "pulled Super-Linter image has no immutable image ID" >&2
   exit 1
 }
+image_config_sha256=$(docker image inspect --format '{{json .Config}}' "$repository@$manifest_digest" | sha256sum | cut -d' ' -f1)
+rootfs_sha256=$(docker image inspect --format '{{json .RootFS}}' "$repository@$manifest_digest" | sha256sum | cut -d' ' -f1)
+[[ "$image_config_sha256" =~ ^[0-9a-f]{64}$ && "$rootfs_sha256" =~ ^[0-9a-f]{64}$ ]] || {
+  echo "pulled Super-Linter image has invalid content identity metadata" >&2
+  exit 1
+}
 docker image tag "$repository@$manifest_digest" "$tag"
 docker image save --output "$output/super-linter.tar" "$tag"
 zstd --threads=0 --ultra -19 --rm "$output/super-linter.tar" -o "$output/super-linter.tar.zst"
@@ -50,6 +56,8 @@ printf '%s\n' \
   "INDEX_DIGEST=$index_digest" \
   "MANIFEST_DIGEST=$manifest_digest" \
   "IMAGE_ID=$image_id" \
+  "IMAGE_CONFIG_SHA256=$image_config_sha256" \
+  "ROOTFS_SHA256=$rootfs_sha256" \
   "ARCHIVE_SHA256=$archive_sha256" \
   "IMAGE_REFERENCE=$tag" \
   >"$output/metadata.env"

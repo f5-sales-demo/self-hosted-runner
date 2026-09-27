@@ -132,7 +132,10 @@ def seed_evidence(
         "index_digest": None,
         "manifest_digest": None,
         "seed_image_digest": None,
-        "image_id": None,
+        "source_image_id": None,
+        "loaded_image_id": None,
+        "image_config_sha256": None,
+        "rootfs_sha256": None,
         "archive_sha256": None,
         "load_duration_seconds": None,
     }
@@ -151,14 +154,17 @@ def seed_evidence(
         "index_digest",
         "manifest_digest",
         "seed_image_digest",
-        "image_id",
+        "source_image_id",
+        "loaded_image_id",
+        "image_config_sha256",
+        "rootfs_sha256",
         "archive_sha256",
         "load_duration_seconds",
     }
     if (
         not isinstance(value, dict)
         or set(value) != required
-        or value.get("schema_version") != 1
+        or value.get("schema_version") != 2
     ):
         return {**unavailable, "result": "rejected", "reason": "invalid_seed_result"}
     seed_digest = (
@@ -173,6 +179,12 @@ def seed_evidence(
         and seed_digest is not None
         and SHA256.fullmatch(seed_digest) is not None
         and value.get("seed_image_digest") == seed_digest
+        and SHA256.fullmatch(str(value.get("source_image_id"))) is not None
+        and SHA256.fullmatch(str(value.get("loaded_image_id"))) is not None
+        and re.fullmatch(r"[0-9a-f]{64}", str(value.get("image_config_sha256")))
+        is not None
+        and re.fullmatch(r"[0-9a-f]{64}", str(value.get("rootfs_sha256")))
+        is not None
     )
     source_hit = value.get("result") == "hit" and value.get("qualified") is True
     result = value.get("result")
@@ -200,6 +212,12 @@ def seed_evidence(
         for key in unavailable
         if key not in {"result", "qualified", "reason"}
     }
+    for field in ("source_image_id", "loaded_image_id"):
+        if SHA256.fullmatch(str(evidence[field])) is None:
+            evidence[field] = None
+    for field in ("image_config_sha256", "rootfs_sha256", "archive_sha256"):
+        if re.fullmatch(r"[0-9a-f]{64}", str(evidence[field])) is None:
+            evidence[field] = None
     return {
         "result": result,
         "qualified": qualified,

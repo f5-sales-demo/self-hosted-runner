@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import shlex
 import subprocess
 import tempfile
 import textwrap
@@ -18,6 +20,11 @@ MANIFEST_DIGEST = (
 )
 SEED_DIGEST = "sha256:" + "d" * 64
 IMAGE_ID = "sha256:" + "b" * 64
+LOADED_IMAGE_ID = "sha256:" + "e" * 64
+CONFIG_JSON = '{"Env":["PATH=/usr/bin"],"Entrypoint":["/action/lib/linter.sh"]}'
+ROOTFS_JSON = '{"Type":"layers","Layers":["sha256:' + "1" * 64 + '"]}'
+CONFIG_SHA256 = hashlib.sha256((CONFIG_JSON + "\n").encode()).hexdigest()
+ROOTFS_SHA256 = hashlib.sha256((ROOTFS_JSON + "\n").encode()).hexdigest()
 
 
 class SuperLinterSeedTests(unittest.TestCase):
@@ -39,6 +46,8 @@ class SuperLinterSeedTests(unittest.TestCase):
         for command in (
             "docker buildx imagetools inspect",
             "docker image pull --platform linux/amd64",
+            "docker image inspect --format '{{json .Config}}'",
+            "docker image inspect --format '{{json .RootFS}}'",
             "docker image save",
             "zstd --threads=0",
             "sha256sum",
@@ -138,20 +147,36 @@ class SuperLinterSeedTests(unittest.TestCase):
             validator,
         )
 
-    def _fake_docker(self, root: Path, image_id: str) -> Path:
+    def _fake_docker(
+        self,
+        root: Path,
+        image_id: str,
+        *,
+        config_json: str = CONFIG_JSON,
+        rootfs_json: str = ROOTFS_JSON,
+    ) -> Path:
         path = root / "docker"
         path.write_text(
             textwrap.dedent(
                 f"""\
                 #!/bin/sh
                 printf '%s\\n' "$*" >>"$DOCKER_CALLS"
-                case "$1 $2" in
-                  "info ") exit 0 ;;
-                  "load --input") printf '%s\\n' 'Loaded image: ghcr.io/super-linter/super-linter:v8.7.0' ;;
-                  "image inspect") printf '%s\\n' {image_id!r} ;;
-                  "image rm") exit 0 ;;
-                  *) exit 2 ;;
-                esac
+                if [ "$1" = info ]; then exit 0; fi
+                if [ "$1 $2" = "load --input" ]; then
+                  printf '%s\\n' 'Loaded image: ghcr.io/super-linter/super-linter:v8.7.0'
+                  exit 0
+                fi
+                if [ "$1 $2 $3" = "image inspect --format" ]; then
+                  case "$4" in
+                    '{{{{.Id}}}}') printf '%s\\n' {shlex.quote(image_id)} ;;
+                    '{{{{json .Config}}}}') printf '%s\\n' {shlex.quote(config_json)} ;;
+                    '{{{{json .RootFS}}}}') printf '%s\\n' {shlex.quote(rootfs_json)} ;;
+                    *) exit 2 ;;
+                  esac
+                  exit 0
+                fi
+                if [ "$1 $2" = "image rm" ]; then exit 0; fi
+                exit 2
                 """
             ),
             encoding="utf-8",
@@ -173,6 +198,8 @@ class SuperLinterSeedTests(unittest.TestCase):
                     f"INDEX_DIGEST={INDEX_DIGEST}",
                     f"MANIFEST_DIGEST={MANIFEST_DIGEST}",
                     f"IMAGE_ID={image_id}",
+                    f"IMAGE_CONFIG_SHA256={CONFIG_SHA256}",
+                    f"ROOTFS_SHA256={ROOTFS_SHA256}",
                     f"ARCHIVE_SHA256={checksum}",
                     "IMAGE_REFERENCE=ghcr.io/super-linter/super-linter:v8.7.0",
                 )
@@ -210,10 +237,48 @@ class SuperLinterSeedTests(unittest.TestCase):
             )
             self.assertEqual(0, result.returncode, result.stderr)
             evidence = json.loads(output.read_text())
-            self.assertEqual("hit", evidence["result"])
+            self.assertEqual(2, evidence["schema_version"])
+            self.assertEqual("hit", evidence["result"], evidence)
             self.assertTrue(evidence["qualified"])
+            self.assertEqual(IMAGE_ID, evidence["source_image_id"])
+            self.assertEqual(IMAGE_ID, evidence["loaded_image_id"])
             self.assertEqual(INDEX_DIGEST, evidence["index_digest"])
             self.assertGreaterEqual(evidence["load_duration_seconds"], 0)
+
+    def test_loader_accepts_containerd_store_id_when_content_identity_matches(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive, metadata = self._seed_fixture(root)
+            output = root / "result.json"
+            calls = root / "calls"
+            env = os.environ | {
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "DOCKER_CALLS": str(calls),
+                "SUPER_LINTER_SEED_ARCHIVE": str(archive),
+                "SUPER_LINTER_SEED_METADATA": str(metadata),
+                "SUPER_LINTER_SEED_RESULT": str(output),
+                "SUPER_LINTER_SEED_IMAGE": "ghcr.io/f5-sales-demo/self-hosted-runner@"
+                + SEED_DIGEST,
+                "SUPER_LINTER_EXPECTED_ACTION_COMMIT": ACTION_COMMIT,
+                "SUPER_LINTER_EXPECTED_INDEX_DIGEST": INDEX_DIGEST,
+                "SUPER_LINTER_EXPECTED_MANIFEST_DIGEST": MANIFEST_DIGEST,
+            }
+            self._fake_docker(root, LOADED_IMAGE_ID)
+            result = subprocess.run(
+                ["sh", str(ROOT / "scripts/load-super-linter-seed.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            evidence = json.loads(output.read_text())
+            self.assertEqual("hit", evidence["result"], evidence)
+            self.assertTrue(evidence["qualified"])
+            self.assertEqual(IMAGE_ID, evidence["source_image_id"])
+            self.assertEqual(LOADED_IMAGE_ID, evidence["loaded_image_id"])
 
     def test_loader_removes_rejected_image_and_allows_cold_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -233,7 +298,7 @@ class SuperLinterSeedTests(unittest.TestCase):
                 "SUPER_LINTER_EXPECTED_INDEX_DIGEST": INDEX_DIGEST,
                 "SUPER_LINTER_EXPECTED_MANIFEST_DIGEST": MANIFEST_DIGEST,
             }
-            self._fake_docker(root, "sha256:" + "e" * 64)
+            self._fake_docker(root, LOADED_IMAGE_ID, config_json='{"Env":["changed"]}')
             result = subprocess.run(
                 ["sh", str(ROOT / "scripts/load-super-linter-seed.sh")],
                 env=env,

@@ -26,7 +26,7 @@
     "sample_count": {"type": "integer", "minimum": 0},
     "seed": {
       "type": "object", "additionalProperties": false,
-      "required": ["result", "qualified", "reason", "action_commit", "index_digest", "manifest_digest", "seed_image_digest", "image_id", "archive_sha256", "load_duration_seconds"],
+      "required": ["result", "qualified", "reason", "action_commit", "index_digest", "manifest_digest", "seed_image_digest", "source_image_id", "loaded_image_id", "image_config_sha256", "rootfs_sha256", "archive_sha256", "load_duration_seconds"],
       "properties": {
         "result": {"enum": ["hit", "fallback", "rejected", "mismatch", "unavailable"]},
         "qualified": {"type": "boolean"},
@@ -35,7 +35,10 @@
         "index_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
         "manifest_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
         "seed_image_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
-        "image_id": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "source_image_id": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "loaded_image_id": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "image_config_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "rootfs_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "archive_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "load_duration_seconds": {"type": ["number", "null"], "minimum": 0}
       }
