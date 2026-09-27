@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-EXPECTED_COUNT = 41
-REPOSITORY = re.compile(r"^f5-sales-demo/[a-z0-9][a-z0-9-]*$")
+EXPECTED_COUNT = 42
+REPOSITORY = re.compile(r"^f5-sales-demo/[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
 OUTPUT = ROOT / "renovate-system/generated/renovate.json"
 DOCS_CONTROL = "f5-sales-demo/docs-control"
 MANAGED_DOWNSTREAM_WORKFLOWS = [
