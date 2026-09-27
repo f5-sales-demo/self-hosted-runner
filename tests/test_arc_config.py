@@ -74,14 +74,15 @@ class ArcConfigTests(unittest.TestCase):
 
     def test_docs_repository_configs_are_exact(self) -> None:
         expected = {
-            "docs": (3, 1),
-            "docs-builder": (4, 2),
-            "docs-theme": (3, 1),
-            "i18n-core": (3, 1),
-            "starlight-llms-txt": (3, 1),
-            "docs-icons": (3, 1),
+            "docs": ("docs", 3, 1),
+            "docs-builder": ("docs-builder", 4, 2),
+            "docs-theme": ("docs-theme", 3, 1),
+            "f5-sales-demo.github.io": ("f5-sales-demo-github-io", 3, 1),
+            "i18n-core": ("i18n-core", 3, 1),
+            "starlight-llms-txt": ("starlight-llms-txt", 3, 1),
+            "docs-icons": ("docs-icons", 3, 1),
         }
-        for repository, (socketless_max, container_max) in expected.items():
+        for repository, (release_prefix, socketless_max, container_max) in expected.items():
             with self.subTest(repository=repository):
                 config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
                 self.assertEqual(
@@ -95,9 +96,9 @@ class ArcConfigTests(unittest.TestCase):
                 ):
                     item = profiles[profile]
                     self.assertEqual(
-                        f"arc-runners-{repository}-{profile}", item["namespace"]
+                        f"arc-runners-{release_prefix}-{profile}", item["namespace"]
                     )
-                    self.assertEqual(f"{repository}-{profile}", item["release"])
+                    self.assertEqual(f"{release_prefix}-{profile}", item["release"])
                     self.assertEqual(f"docs-{profile}", item["runner_scale_set_name"])
                     self.assertEqual(0, item["min_runners"])
                     self.assertEqual(maximum, item["max_runners"])
@@ -287,7 +288,7 @@ class ArcConfigTests(unittest.TestCase):
             repository.split("/", 1)[1] for repository in catalog["repositories"]
         }
         self.assertEqual(expected, {path.stem for path in CONFIG_DIR.glob("*.yaml")})
-        self.assertEqual(41, len(expected))
+        self.assertEqual(42, len(expected))
 
     def test_all_configs_have_globally_safe_identities(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -296,14 +297,14 @@ class ArcConfigTests(unittest.TestCase):
         docs = [
             config for config in configs if config["repository"] in MODULE.DOCS_COHORT
         ]
-        self.assertEqual(6, len(docs))
+        self.assertEqual(7, len(docs))
         managed = [
             config
             for config in configs
             if config["repository"] in MODULE.MANAGED_COHORT
         ]
         self.assertEqual(34, len(managed))
-        self.assertEqual(41, len(configs))
+        self.assertEqual(42, len(configs))
 
     def test_complete_config_set_rejects_missing_repository(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
