@@ -4,9 +4,9 @@
   "title": "Docker action workload profile",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "profile_kind", "repository", "commit", "run_id", "run_attempt", "job_id", "runner_name", "runner_profile", "runner_image_digest", "phase", "variant", "pair_id", "cache_state", "started_at", "completed_at", "duration_seconds", "sample_count", "image", "cpu", "memory", "block_io", "network_io", "pids", "exit", "observer"],
+  "required": ["schema_version", "profile_kind", "repository", "commit", "run_id", "run_attempt", "job_id", "runner_name", "runner_profile", "runner_image_digest", "phase", "variant", "pair_id", "cache_state", "started_at", "completed_at", "duration_seconds", "sample_count", "seed", "timing", "image", "cpu", "memory", "block_io", "network_io", "pids", "dind", "exit", "observer"],
   "properties": {
-    "schema_version": {"const": 1},
+    "schema_version": {"const": 2},
     "profile_kind": {"const": "docker_action"},
     "repository": {"type": ["string", "null"]},
     "commit": {"type": ["string", "null"]},
@@ -24,6 +24,31 @@
     "completed_at": {"type": "string", "format": "date-time"},
     "duration_seconds": {"type": "number", "minimum": 0},
     "sample_count": {"type": "integer", "minimum": 0},
+    "seed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result", "qualified", "reason", "action_commit", "index_digest", "manifest_digest", "seed_image_digest", "image_id", "archive_sha256", "load_duration_seconds"],
+      "properties": {
+        "result": {"enum": ["hit", "fallback", "rejected", "mismatch", "unavailable"]},
+        "qualified": {"type": "boolean"},
+        "reason": {"type": "string", "minLength": 1},
+        "action_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+        "index_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "manifest_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "seed_image_digest": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "image_id": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "archive_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "load_duration_seconds": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
+    "timing": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seed_load_seconds", "action_pull_seconds", "container_seconds"],
+      "properties": {
+        "seed_load_seconds": {"type": ["number", "null"], "minimum": 0},
+        "action_pull_seconds": {"type": "number", "minimum": 0},
+        "container_seconds": {"type": ["number", "null"], "minimum": 0}
+      }
+    },
     "image": {
       "type": "object", "additionalProperties": false,
       "required": ["id", "digest", "size_bytes"],
@@ -52,32 +77,36 @@
         "oom": {"type": "boolean"}
       }
     },
-    "block_io": {
-      "type": "object", "additionalProperties": false,
-      "required": ["read_bytes", "write_bytes"],
-      "properties": {"read_bytes": {"type": "integer", "minimum": 0}, "write_bytes": {"type": "integer", "minimum": 0}}
-    },
+    "block_io": {"$ref": "#/$defs/readWrite"},
     "network_io": {
       "type": "object", "additionalProperties": false,
       "required": ["receive_bytes", "transmit_bytes"],
       "properties": {"receive_bytes": {"type": "integer", "minimum": 0}, "transmit_bytes": {"type": "integer", "minimum": 0}}
     },
-    "pids": {
-      "type": "object", "additionalProperties": false,
-      "required": ["peak"], "properties": {"peak": {"type": "integer", "minimum": 0}}
+    "pids": {"type": "object", "additionalProperties": false, "required": ["peak"], "properties": {"peak": {"type": "integer", "minimum": 0}}},
+    "dind": {
+      "type": "object", "additionalProperties": false, "required": ["cpu_throttling", "memory", "io", "disk"],
+      "properties": {
+        "cpu_throttling": {"$ref": "#/$defs/throttling"},
+        "memory": {"$ref": "#/$defs/dindMemory"},
+        "io": {"$ref": "#/$defs/dindIo"},
+        "disk": {"$ref": "#/$defs/disk"}
+      }
     },
-    "exit": {
-      "type": "object", "additionalProperties": false,
-      "required": ["code", "signal"],
-      "properties": {"code": {"type": ["integer", "null"], "minimum": 0, "maximum": 255}, "signal": {"type": ["integer", "null"], "minimum": 1}}
-    },
+    "exit": {"type": "object", "additionalProperties": false, "required": ["code", "signal"], "properties": {"code": {"type": ["integer", "null"], "minimum": 0, "maximum": 255}, "signal": {"type": ["integer", "null"], "minimum": 1}}},
     "observer": {
-      "type": "object", "additionalProperties": false,
-      "required": ["result", "detail"],
+      "type": "object", "additionalProperties": false, "required": ["result", "detail"],
       "properties": {
         "result": {"enum": ["completed", "cancelled", "timed_out", "ambiguous", "profiler_error"]},
         "detail": {"enum": ["container_exit_observed", "observer_signal", "container_exit_not_observed", "multiple_matching_containers", "initialization_failed", "docker_observation_failed"]}
       }
     }
+  },
+  "$defs": {
+    "readWrite": {"type": "object", "additionalProperties": false, "required": ["read_bytes", "write_bytes"], "properties": {"read_bytes": {"type": "integer", "minimum": 0}, "write_bytes": {"type": "integer", "minimum": 0}}},
+    "throttling": {"type": "object", "additionalProperties": false, "required": ["available", "periods", "throttled_periods", "throttled_seconds", "ratio"], "properties": {"available": {"type": "boolean"}, "periods": {"type": ["integer", "null"], "minimum": 0}, "throttled_periods": {"type": ["integer", "null"], "minimum": 0}, "throttled_seconds": {"type": ["number", "null"], "minimum": 0}, "ratio": {"type": ["number", "null"], "minimum": 0}}, "allOf": [{"if": {"properties": {"available": {"const": false}}}, "then": {"properties": {"periods": {"type": "null"}, "throttled_periods": {"type": "null"}, "throttled_seconds": {"type": "null"}, "ratio": {"type": "null"}}}}]},
+    "dindMemory": {"type": "object", "additionalProperties": false, "required": ["available", "current_bytes", "peak_bytes", "limit_bytes", "peak_limit_ratio", "oom_kill"], "properties": {"available": {"type": "boolean"}, "current_bytes": {"type": ["integer", "null"], "minimum": 0}, "peak_bytes": {"type": ["integer", "null"], "minimum": 0}, "limit_bytes": {"type": ["integer", "null"], "minimum": 1}, "peak_limit_ratio": {"type": ["number", "null"], "minimum": 0}, "oom_kill": {"type": ["integer", "null"], "minimum": 0}}},
+    "dindIo": {"type": "object", "additionalProperties": false, "required": ["available", "read_bytes", "write_bytes"], "properties": {"available": {"type": "boolean"}, "read_bytes": {"type": ["integer", "null"], "minimum": 0}, "write_bytes": {"type": ["integer", "null"], "minimum": 0}}},
+    "disk": {"type": "object", "additionalProperties": false, "required": ["available", "capacity_bytes", "used_bytes", "available_bytes", "used_ratio"], "properties": {"available": {"type": "boolean"}, "capacity_bytes": {"type": ["integer", "null"], "minimum": 0}, "used_bytes": {"type": ["integer", "null"], "minimum": 0}, "available_bytes": {"type": ["integer", "null"], "minimum": 0}, "used_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1}}, "allOf": [{"if": {"properties": {"available": {"const": false}}}, "then": {"properties": {"capacity_bytes": {"type": "null"}, "used_bytes": {"type": "null"}, "available_bytes": {"type": "null"}, "used_ratio": {"type": "null"}}}}]}
   }
 }

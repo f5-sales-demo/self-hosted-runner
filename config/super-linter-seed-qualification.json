@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "action_commit": "4ce20838b8ab83717e78138c5b3a1407148e0918",
+  "oci_index_digest": "sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996",
+  "amd64_manifest_digest": "sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849",
+  "repositories": [
+    "xcsh",
+    "api-specs-enriched",
+    "terraform-provider-xcsh",
+    "multi-cloud-networking",
+    "vscode-xcsh"
+  ],
+  "qualification": {
+    "matched_pairs_per_state": 5,
+    "cache_states": ["cold", "warm"],
+    "freeze": [
+      "pull_request_head",
+      "workflow_commit",
+      "action_commit",
+      "image_digests",
+      "runner_resources",
+      "validator_configuration"
+    ]
+  },
+  "correctness_evidence": [
+    "validator_inventory",
+    "scanned_files",
+    "normalized_findings",
+    "annotations",
+    "exit_results",
+    "required_contexts"
+  ],
+  "resource_evidence": [
+    "ooms",
+    "evictions",
+    "restarts",
+    "memory_peak_ratio",
+    "node_disk_ratio",
+    "dind_disk_ratio",
+    "cpu_throttling",
+    "verified_seed_result"
+  ],
+  "promotion_gates": {
+    "minimum_median_pr_wall_improvement_ratio": 0.2,
+    "p95_non_regression": true,
+    "maximum_ooms": 0,
+    "maximum_evictions": 0,
+    "maximum_restarts": 0,
+    "maximum_memory_ratio": 0.8,
+    "maximum_node_disk_ratio": 0.7,
+    "maximum_dind_disk_ratio": 0.7,
+    "material_cpu_throttling_increase_allowed": false,
+    "verified_seed_hits_required": true,
+    "byte_identical_results": true
+  },
+  "rollback": {
+    "remove_seed_init_container": true,
+    "restore_registry_pull": true,
+    "persistent_docker_state": false
+  }
+}

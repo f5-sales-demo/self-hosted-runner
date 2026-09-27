@@ -315,7 +315,7 @@ class WorkloadReportTests(unittest.TestCase):
         digest = "sha256:" + "a" * 64
         image_id = "sha256:" + "b" * 64
         valid = {
-            "schema_version": 1,
+            "schema_version": 2,
             "profile_kind": "docker_action",
             "repository": "example/repo",
             "commit": "c" * 40,
@@ -333,6 +333,23 @@ class WorkloadReportTests(unittest.TestCase):
             "completed_at": "2026-08-28T00:00:10Z",
             "duration_seconds": 10,
             "sample_count": 2,
+            "seed": {
+                "result": "hit",
+                "qualified": True,
+                "reason": "verified_archive_loaded",
+                "action_commit": "4ce20838b8ab83717e78138c5b3a1407148e0918",
+                "index_digest": digest,
+                "manifest_digest": "sha256:" + "c" * 64,
+                "seed_image_digest": "sha256:" + "d" * 64,
+                "image_id": image_id,
+                "archive_sha256": "e" * 64,
+                "load_duration_seconds": 4.0,
+            },
+            "timing": {
+                "seed_load_seconds": 4.0,
+                "action_pull_seconds": 1.5,
+                "container_seconds": 8.0,
+            },
             "image": {"id": image_id, "digest": digest, "size_bytes": 1000},
             "cpu": {
                 "usage_seconds": 5.0,
@@ -348,6 +365,35 @@ class WorkloadReportTests(unittest.TestCase):
             "block_io": {"read_bytes": 10, "write_bytes": 20},
             "network_io": {"receive_bytes": 30, "transmit_bytes": 40},
             "pids": {"peak": 8},
+            "dind": {
+                "cpu_throttling": {
+                    "available": True,
+                    "periods": 100,
+                    "throttled_periods": 5,
+                    "throttled_seconds": 0.25,
+                    "ratio": 0.05,
+                },
+                "memory": {
+                    "available": True,
+                    "current_bytes": 300,
+                    "peak_bytes": 500,
+                    "limit_bytes": 1000,
+                    "peak_limit_ratio": 0.5,
+                    "oom_kill": 0,
+                },
+                "io": {
+                    "available": True,
+                    "read_bytes": 500,
+                    "write_bytes": 900,
+                },
+                "disk": {
+                    "available": True,
+                    "capacity_bytes": 1000,
+                    "used_bytes": 400,
+                    "available_bytes": 600,
+                    "used_ratio": 0.4,
+                },
+            },
             "exit": {"code": 0, "signal": None},
             "observer": {
                 "result": "completed",
@@ -360,6 +406,15 @@ class WorkloadReportTests(unittest.TestCase):
         self.assertEqual(5.0, report["median_cpu_seconds"])
         self.assertEqual(8, report["max_pids"])
         self.assertEqual(30, report["network_receive_bytes"])
+        self.assertEqual(1, report["verified_seed_hits"])
+        self.assertEqual(4.0, report["median_seed_load_seconds"])
+        self.assertEqual(1.5, report["median_action_pull_seconds"])
+        self.assertEqual(0.05, report["median_cpu_throttle_ratio"])
+        self.assertEqual(0.5, report["max_dind_memory_ratio"])
+        self.assertEqual(0, report["dind_oom_events"])
+        self.assertEqual(500, report["dind_read_bytes"])
+        self.assertEqual(900, report["dind_write_bytes"])
+        self.assertEqual(0.4, report["max_dind_disk_ratio"])
         self.assertEqual([], MODULE.performance_comparisons([valid]))
         failed = {**valid, "exit": {"code": 23, "signal": None}}
         self.assertEqual(1, MODULE.aggregate_workload_profiles([failed])[0]["failures"])

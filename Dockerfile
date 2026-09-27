@@ -7,6 +7,21 @@ ARG DOCKER_CLI_IMAGE=docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 FROM ${NODE_IMAGE} AS node-cli
 
+FROM ${DOCKER_CLI_IMAGE} AS super-linter-seed
+COPY --chown=1001:123 .super-linter-seed/super-linter.tar.zst /seed/super-linter.tar.zst
+COPY --chown=1001:123 .super-linter-seed/metadata.env /seed/metadata.env
+COPY --chown=0:0 scripts/load-super-linter-seed.sh /usr/local/bin/load-super-linter-seed
+RUN chmod 0555 /usr/local/bin/load-super-linter-seed \
+    && chmod 0444 /seed/super-linter.tar.zst /seed/metadata.env
+USER 1001:123
+ENTRYPOINT ["/usr/local/bin/load-super-linter-seed"]
+LABEL org.opencontainers.image.source="https://github.com/f5-sales-demo/self-hosted-runner" \
+      org.opencontainers.image.description="Immutable Docker archive seed for Super-Linter v8.7.0" \
+      f5.sales-demo.runner.profile="super-linter-seed" \
+      f5.sales-demo.super-linter.action="4ce20838b8ab83717e78138c5b3a1407148e0918" \
+      f5.sales-demo.super-linter.index="sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996" \
+      f5.sales-demo.super-linter.manifest="sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849"
+
 FROM ${UBUNTU_IMAGE} AS runner-base
 # Bootstrap the CA bundle from the pinned Docker CLI stage before contacting the signed Ubuntu snapshot.
 COPY --from=docker-cli /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt

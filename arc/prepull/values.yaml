@@ -1,6 +1,7 @@
 profile: ""
 nodeProfiles: []
 image: ""
+seedImage: ""
 additionalImages: []
 renovateImage: ""
 imagePullSecrets: []

@@ -15,7 +15,14 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+SUPER_LINTER_ACTION_COMMIT = "4ce20838b8ab83717e78138c5b3a1407148e0918"
+SUPER_LINTER_INDEX_DIGEST = (
+    "sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996"
+)
+SUPER_LINTER_AMD64_MANIFEST = (
+    "sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849"
+)
 SAFE_ENV = {
     "repository": "GITHUB_REPOSITORY",
     "commit": "GITHUB_SHA",
@@ -108,6 +115,248 @@ def image_identity(docker: str, reference: str, expected: str | None) -> dict:
     if not isinstance(size, int) or size < 0:
         raise ValueError("selected image has invalid size metadata")
     return {"id": image_id, "digest": expected or repo_digests[0], "size_bytes": size}
+
+
+def seed_evidence(
+    path: Path | None,
+    expected_action: str,
+    expected_index: str,
+    expected_manifest: str,
+    expected_seed_image: str | None,
+) -> dict:
+    unavailable = {
+        "result": "unavailable",
+        "qualified": False,
+        "reason": "seed_result_unavailable",
+        "action_commit": None,
+        "index_digest": None,
+        "manifest_digest": None,
+        "seed_image_digest": None,
+        "image_id": None,
+        "archive_sha256": None,
+        "load_duration_seconds": None,
+    }
+    if path is None or not path.is_file():
+        return unavailable
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {**unavailable, "result": "rejected", "reason": "invalid_seed_result"}
+    required = {
+        "schema_version",
+        "result",
+        "qualified",
+        "reason",
+        "action_commit",
+        "index_digest",
+        "manifest_digest",
+        "seed_image_digest",
+        "image_id",
+        "archive_sha256",
+        "load_duration_seconds",
+    }
+    if (
+        not isinstance(value, dict)
+        or set(value) != required
+        or value.get("schema_version") != 1
+    ):
+        return {**unavailable, "result": "rejected", "reason": "invalid_seed_result"}
+    seed_digest = (
+        expected_seed_image.rsplit("@", 1)[1]
+        if expected_seed_image and "@" in expected_seed_image
+        else None
+    )
+    identity_matches = (
+        value.get("action_commit") == expected_action
+        and value.get("index_digest") == expected_index
+        and value.get("manifest_digest") == expected_manifest
+        and seed_digest is not None
+        and SHA256.fullmatch(seed_digest) is not None
+        and value.get("seed_image_digest") == seed_digest
+    )
+    source_hit = value.get("result") == "hit" and value.get("qualified") is True
+    result = value.get("result")
+    if result not in {"hit", "fallback", "rejected"}:
+        result = "rejected"
+    qualified = source_hit and identity_matches
+    if source_hit and not identity_matches:
+        result = "mismatch"
+    reason = value.get("reason")
+    if not isinstance(reason, str) or not reason:
+        reason = "invalid_seed_result"
+        result = "rejected"
+        qualified = False
+    duration = value.get("load_duration_seconds")
+    if (
+        isinstance(duration, bool)
+        or not isinstance(duration, (int, float))
+        or duration < 0
+    ):
+        duration = None
+        qualified = False
+        result = "rejected"
+    evidence = {
+        key: value.get(key)
+        for key in unavailable
+        if key not in {"result", "qualified", "reason"}
+    }
+    return {
+        "result": result,
+        "qualified": qualified,
+        "reason": reason
+        if qualified or result != "mismatch"
+        else "profile_identity_mismatch",
+        **evidence,
+        "load_duration_seconds": duration,
+    }
+
+
+def throttling_delta(start: dict | None, end: dict | None) -> dict:
+    unavailable = {
+        "available": False,
+        "periods": None,
+        "throttled_periods": None,
+        "throttled_seconds": None,
+        "ratio": None,
+    }
+    if start is None or end is None:
+        return unavailable
+    periods = end["periods"] - start["periods"]
+    throttled = end["throttled_periods"] - start["throttled_periods"]
+    nanoseconds = end["throttled_nanoseconds"] - start["throttled_nanoseconds"]
+    if min(periods, throttled, nanoseconds) < 0:
+        return unavailable
+    return {
+        "available": True,
+        "periods": periods,
+        "throttled_periods": throttled,
+        "throttled_seconds": nanoseconds / 1_000_000_000,
+        "ratio": throttled / periods if periods else 0.0,
+    }
+
+
+def read_dind_evidence(path: Path) -> dict | None:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(value, dict) or value.get("schema_version") != 1:
+        return None
+    return value
+
+
+def dind_delta(start: dict | None, end: dict | None, storage: Path) -> dict:
+    unavailable_memory = {
+        "available": False,
+        "current_bytes": None,
+        "peak_bytes": None,
+        "limit_bytes": None,
+        "peak_limit_ratio": None,
+        "oom_kill": None,
+    }
+    unavailable_io = {"available": False, "read_bytes": None, "write_bytes": None}
+    if not isinstance(start, dict) or not isinstance(end, dict):
+        return {
+            "cpu_throttling": throttling_delta(None, None),
+            "memory": unavailable_memory,
+            "io": unavailable_io,
+            "disk": disk_evidence(storage),
+        }
+    start_cpu = start.get("cpu")
+    end_cpu = end.get("cpu")
+    cpu = None
+    if isinstance(start_cpu, dict) and isinstance(end_cpu, dict):
+        try:
+            cpu = {
+                "periods": int(start_cpu["nr_periods"]),
+                "throttled_periods": int(start_cpu["nr_throttled"]),
+                "throttled_nanoseconds": int(start_cpu["throttled_usec"]) * 1000,
+            }
+            cpu_end = {
+                "periods": int(end_cpu["nr_periods"]),
+                "throttled_periods": int(end_cpu["nr_throttled"]),
+                "throttled_nanoseconds": int(end_cpu["throttled_usec"]) * 1000,
+            }
+        except (KeyError, TypeError, ValueError):
+            cpu = cpu_end = None
+    else:
+        cpu_end = None
+    memory = unavailable_memory
+    end_memory = end.get("memory")
+    start_memory = start.get("memory")
+    if isinstance(end_memory, dict) and isinstance(start_memory, dict):
+        try:
+            current = int(end_memory["current_bytes"])
+            peak = int(end_memory["peak_bytes"])
+            limit_value = int(end_memory["limit_bytes"])
+            limit = limit_value if limit_value > 0 else None
+            oom_kill = max(
+                0, int(end_memory["oom_kill"]) - int(start_memory["oom_kill"])
+            )
+            if min(current, peak) < 0:
+                raise ValueError
+            memory = {
+                "available": True,
+                "current_bytes": current,
+                "peak_bytes": peak,
+                "limit_bytes": limit,
+                "peak_limit_ratio": peak / limit if limit else None,
+                "oom_kill": oom_kill,
+            }
+        except (KeyError, TypeError, ValueError):
+            memory = unavailable_memory
+    io = unavailable_io
+    start_io = start.get("io")
+    end_io = end.get("io")
+    if isinstance(start_io, dict) and isinstance(end_io, dict):
+        try:
+            read_bytes = int(end_io["read_bytes"]) - int(start_io["read_bytes"])
+            write_bytes = int(end_io["write_bytes"]) - int(start_io["write_bytes"])
+            if min(read_bytes, write_bytes) < 0:
+                raise ValueError
+            io = {
+                "available": True,
+                "read_bytes": read_bytes,
+                "write_bytes": write_bytes,
+            }
+        except (KeyError, TypeError, ValueError):
+            io = unavailable_io
+    disk = end.get("disk")
+    required_disk = {"capacity_bytes", "used_bytes", "available_bytes", "used_ratio"}
+    if not isinstance(disk, dict) or set(disk) != required_disk:
+        disk = disk_evidence(storage)
+    else:
+        disk = {"available": True, **disk}
+    return {
+        "cpu_throttling": throttling_delta(cpu, cpu_end),
+        "memory": memory,
+        "io": io,
+        "disk": disk,
+    }
+
+
+def disk_evidence(path: Path) -> dict:
+    unavailable = {
+        "available": False,
+        "capacity_bytes": None,
+        "used_bytes": None,
+        "available_bytes": None,
+        "used_ratio": None,
+    }
+    try:
+        status = os.statvfs(path)
+    except OSError:
+        return unavailable
+    capacity = status.f_blocks * status.f_frsize
+    available = status.f_bavail * status.f_frsize
+    used = max(0, capacity - status.f_bfree * status.f_frsize)
+    return {
+        "available": True,
+        "capacity_bytes": capacity,
+        "used_bytes": used,
+        "available_bytes": available,
+        "used_ratio": used / capacity if capacity else 0.0,
+    }
 
 
 def existing_containers(docker: str, image_id: str) -> set[str]:
@@ -220,11 +469,13 @@ def write_summary(profile: dict) -> None:
         with Path(target).open("a", encoding="utf-8") as handle:
             handle.write(f"### Docker action profile: {profile['phase']}\n\n")
             handle.write(
-                "| Duration | Mean CPU | Peak memory | Image | Exit | Observer |\n"
+                "| Duration | Pull | Seed | Mean CPU | Peak memory | Image | Exit | Observer |\n"
             )
-            handle.write("|---:|---:|---:|---:|---:|---|\n")
+            handle.write("|---:|---:|---|---:|---:|---:|---:|---|\n")
             handle.write(
                 f"| {profile['duration_seconds']:.3f}s | "
+                f"{profile['timing']['action_pull_seconds']:.3f}s | "
+                f"{profile['seed']['result']} | "
                 f"{profile['cpu']['mean_utilization_ratio']:.3f} | {peak_text} | "
                 f"{image_text} | {profile['exit']['code']} | "
                 f"{profile['observer']['result']} |\n"
@@ -240,6 +491,29 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--name", dest="phase", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--expected-digest")
+    parser.add_argument("--expected-action-commit", default=SUPER_LINTER_ACTION_COMMIT)
+    parser.add_argument(
+        "--expected-manifest-digest", default=SUPER_LINTER_AMD64_MANIFEST
+    )
+    parser.add_argument(
+        "--expected-seed-image", default=os.environ.get("SUPER_LINTER_SEED_IMAGE")
+    )
+    parser.add_argument(
+        "--seed-result-file",
+        type=Path,
+        default=Path(
+            os.environ.get(
+                "SUPER_LINTER_SEED_RESULT",
+                "/runner-runtime/_temp/super-linter-seed.json",
+            )
+        ),
+    )
+    parser.add_argument("--dind-storage", type=Path, default=Path("/var/lib/docker"))
+    parser.add_argument(
+        "--dind-evidence-file",
+        type=Path,
+        default=Path("/runner-runtime/_temp/dind-sidecar.json"),
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--ready-file", type=Path)
     parser.add_argument("--pid-file", type=Path)
@@ -266,9 +540,25 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("interval and timeout must be positive")
     if args.expected_digest and not SHA256.fullmatch(args.expected_digest):
         parser.error("expected digest must be sha256:<64 lowercase hex characters>")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.expected_action_commit):
+        parser.error(
+            "expected action commit must be 40 lowercase hexadecimal characters"
+        )
+    if not SHA256.fullmatch(args.expected_manifest_digest):
+        parser.error(
+            "expected manifest digest must be sha256:<64 lowercase hex characters>"
+        )
 
     started_at = datetime.now(UTC)
     started = time.monotonic()
+    seed = seed_evidence(
+        args.seed_result_file,
+        args.expected_action_commit,
+        args.expected_digest or SUPER_LINTER_INDEX_DIGEST,
+        args.expected_manifest_digest,
+        args.expected_seed_image,
+    )
+    dind_start = read_dind_evidence(args.dind_evidence_file)
     stop_requested = False
 
     def stop(_signum, _frame) -> None:
@@ -294,18 +584,26 @@ def main(argv: list[str] | None = None) -> int:
     memory_limit: int | None = None
     block_read = block_write = network_receive = network_transmit = 0
     pids_peak = 0
-    cache_state = "warm" if args.cache_state == "auto" else args.cache_state
+    cache_state = (
+        ("warm" if seed["qualified"] else "cold")
+        if args.cache_state == "auto"
+        else args.cache_state
+    )
     image = {"id": None, "digest": None, "size_bytes": None}
     baseline: set[str] = set()
     wait_process: subprocess.Popen[str] | None = None
     wait_observed_at: float | None = None
     die_observed = False
     last_sample = time.monotonic()
+    image_available_at: float | None = None
+    selected_at: float | None = None
+    dind_end: dict | None = None
     return_code = 2
 
     try:
         try:
             image = image_identity(args.docker, args.image, args.expected_digest)
+            image_available_at = time.monotonic()
         except (
             subprocess.SubprocessError,
             TypeError,
@@ -320,6 +618,7 @@ def main(argv: list[str] | None = None) -> int:
                     image = image_identity(
                         args.docker, args.image, args.expected_digest
                     )
+                    image_available_at = time.monotonic()
                     break
                 except (
                     subprocess.SubprocessError,
@@ -375,6 +674,7 @@ def main(argv: list[str] | None = None) -> int:
                                 "matching event failed immutable image verification"
                             )
                         selected_id = container_id
+                        selected_at = time.monotonic()
                         # CPU integration begins with the selected container,
                         # excluding any time spent waiting for late creation.
                         last_sample = time.monotonic()
@@ -417,6 +717,9 @@ def main(argv: list[str] | None = None) -> int:
                         # starts or exits. Skip only that sample, not the event stream.
                         stats = {}
                 if stats:
+                    observed_dind = read_dind_evidence(args.dind_evidence_file)
+                    if observed_dind is not None:
+                        dind_end = observed_dind
                     now = time.monotonic()
                     elapsed = max(0.0, now - last_sample)
                     samples += 1
@@ -482,6 +785,9 @@ def main(argv: list[str] | None = None) -> int:
             signal.signal(signum, handler)
 
     duration = max(0.0, time.monotonic() - started)
+    completed_monotonic = time.monotonic()
+    if selected_id and dind_end is None:
+        dind_end = read_dind_evidence(args.dind_evidence_file)
     if exit_code is not None and exit_code > 128:
         exit_signal = exit_code - 128
     peak_ratio = (
@@ -501,6 +807,16 @@ def main(argv: list[str] | None = None) -> int:
         "completed_at": datetime.now(UTC).isoformat(),
         "duration_seconds": duration,
         "sample_count": samples,
+        "seed": seed,
+        "timing": {
+            "seed_load_seconds": seed["load_duration_seconds"],
+            "action_pull_seconds": max(
+                0.0, (image_available_at or completed_monotonic) - started
+            ),
+            "container_seconds": max(0.0, completed_monotonic - selected_at)
+            if selected_at is not None
+            else None,
+        },
         "image": image,
         "cpu": {
             "usage_seconds": cpu_seconds,
@@ -519,6 +835,7 @@ def main(argv: list[str] | None = None) -> int:
             "transmit_bytes": network_transmit,
         },
         "pids": {"peak": pids_peak},
+        "dind": dind_delta(dind_start, dind_end, args.dind_storage),
         "exit": {"code": exit_code, "signal": exit_signal},
         "observer": {"result": observer_result, "detail": observer_detail},
     }

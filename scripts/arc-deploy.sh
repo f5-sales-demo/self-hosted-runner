@@ -73,9 +73,15 @@ fi
 if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable approved registry reference}"
   : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable approved registry reference}"
+  : "${SUPER_LINTER_SEED_IMAGE:?SUPER_LINTER_SEED_IMAGE must be an immutable approved registry reference}"
   image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io|[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
+  [[ "$SUPER_LINTER_SEED_IMAGE" =~ $image_pattern ]]
+  [[ "${SUPER_LINTER_SEED_IMAGE%%/*}" == "${CONTAINER_BUILD_IMAGE%%/*}" ]] || {
+    echo "SUPER_LINTER_SEED_IMAGE and CONTAINER_BUILD_IMAGE must use the same registry" >&2
+    exit 2
+  }
   candidate_required=$(jq -r 'any(.scale_sets[]; (.profile | endswith("-candidate")))' <<<"$config_json")
   if [[ "$candidate_required" == true ]]; then
     : "${COMPUTE_CANDIDATE_IMAGE:?COMPUTE_CANDIDATE_IMAGE must be an immutable candidate reference}"
@@ -88,6 +94,10 @@ if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   if [[ "$CONTAINER_BUILD_IMAGE" != ghcr.io/* ]]; then
     : "${CONTAINER_BUILD_SOURCE_IMAGE:?CONTAINER_BUILD_SOURCE_IMAGE must identify the equal GHCR digest}"
     scripts/mirror-runner-image.sh verify "$CONTAINER_BUILD_SOURCE_IMAGE" "$CONTAINER_BUILD_IMAGE" >/dev/null
+  fi
+  if [[ "$SUPER_LINTER_SEED_IMAGE" != ghcr.io/* ]]; then
+    : "${SUPER_LINTER_SEED_SOURCE_IMAGE:?SUPER_LINTER_SEED_SOURCE_IMAGE must identify the equal GHCR digest}"
+    scripts/mirror-runner-image.sh verify "$SUPER_LINTER_SEED_SOURCE_IMAGE" "$SUPER_LINTER_SEED_IMAGE" >/dev/null
   fi
   if [[ -n "${COMPUTE_CANDIDATE_IMAGE:-}" && "$COMPUTE_CANDIDATE_IMAGE" != ghcr.io/* ]]; then
     : "${COMPUTE_CANDIDATE_SOURCE_IMAGE:?COMPUTE_CANDIDATE_SOURCE_IMAGE must identify the equal GHCR digest}"
@@ -109,6 +119,7 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
       --create-namespace
       --set-string "profile=$profile"
       --set-string "image=$image"
+      --set-string "seedImage="
       --set-string "nodeProfiles[0]=$profile"
       --wait --timeout 10m
     )
@@ -119,6 +130,7 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
       cache_args+=(--set-string "nodeProfiles[1]=compute-32-vcpu-density-candidate")
     elif [[ "$profile" == container-build ]]; then
       cache_args+=(--set-string "additionalImages[0]=$dind_image")
+      cache_args+=(--set-string "seedImage=$SUPER_LINTER_SEED_IMAGE")
     fi
     if [[ "$image" == ghcr.io/* ]]; then
       kubectl get secret ghcr-pull -n "$cache_namespace" >/dev/null
@@ -151,9 +163,9 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
     [[ "$image" != ghcr.io/* ]] || kubectl get secret ghcr-pull -n "$namespace" >/dev/null
     rendered_values="$tmpdir/$profile-values.yaml"
     if [[ "$image" == ghcr.io/* ]]; then
-      sed "s|RUNNER_IMAGE_REQUIRED|$image|g" "$values" >"$rendered_values"
+      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$SUPER_LINTER_SEED_IMAGE|g" "$values" >"$rendered_values"
     else
-      sed "s|RUNNER_IMAGE_REQUIRED|$image|g" "$values" | sed '/imagePullSecrets:/,+1d' >"$rendered_values"
+      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$SUPER_LINTER_SEED_IMAGE|g" "$values" | sed '/imagePullSecrets:/,+1d' >"$rendered_values"
     fi
     helm upgrade --install "$release" "$scale_set_chart" \
       --namespace "$namespace" \
