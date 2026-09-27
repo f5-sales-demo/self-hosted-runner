@@ -77,7 +77,6 @@ class ArcConfigTests(unittest.TestCase):
             "docs": ("docs", 3, 1),
             "docs-builder": ("docs-builder", 4, 2),
             "docs-theme": ("docs-theme", 3, 1),
-            "f5-sales-demo.github.io": ("f5-sales-demo-github-io", 3, 1),
             "i18n-core": ("i18n-core", 3, 1),
             "starlight-llms-txt": ("starlight-llms-txt", 3, 1),
             "docs-icons": ("docs-icons", 3, 1),
@@ -288,7 +287,7 @@ class ArcConfigTests(unittest.TestCase):
             repository.split("/", 1)[1] for repository in catalog["repositories"]
         }
         self.assertEqual(expected, {path.stem for path in CONFIG_DIR.glob("*.yaml")})
-        self.assertEqual(42, len(expected))
+        self.assertEqual(41, len(expected))
 
     def test_all_configs_have_globally_safe_identities(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -297,14 +296,14 @@ class ArcConfigTests(unittest.TestCase):
         docs = [
             config for config in configs if config["repository"] in MODULE.DOCS_COHORT
         ]
-        self.assertEqual(7, len(docs))
+        self.assertEqual(6, len(docs))
         managed = [
             config
             for config in configs
             if config["repository"] in MODULE.MANAGED_COHORT
         ]
         self.assertEqual(34, len(managed))
-        self.assertEqual(42, len(configs))
+        self.assertEqual(41, len(configs))
 
     def test_complete_config_set_rejects_missing_repository(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
