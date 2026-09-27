@@ -29,7 +29,7 @@ valid_digest() {
 remove_rejected() {
   docker image rm --force "$image_reference" ${1:+"$1"} >/dev/null 2>&1 || true
 }
-# shellcheck disable=SC2329 # invoked by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # invoked by the EXIT trap
 write_result() {
   completed=$(date +%s)
   duration=$((completed - started))
