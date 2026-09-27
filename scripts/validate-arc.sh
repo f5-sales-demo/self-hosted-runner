@@ -136,9 +136,16 @@ for config in "$@"; do
       grep -Fq "$seed_image" "$rendered_manifest"
       grep -Fq 'privileged: true' "$rendered_manifest"
       grep -Fq 'DOCKER_HOST' "$rendered_manifest"
-      dind_line=$(grep -n -- '- name: dind$' "$rendered_manifest" | head -n 1 | cut -d: -f1)
-      seed_line=$(grep -n -- '- name: load-super-linter-seed$' "$rendered_manifest" | head -n 1 | cut -d: -f1)
-      [[ -n "$dind_line" && -n "$seed_line" && "$dind_line" -lt "$seed_line" ]]
+      dind_line=$(grep -n -m1 -- 'name: dind$' "$rendered_manifest" | cut -d: -f1 || true)
+      seed_line=$(grep -n -m1 -- 'name: load-super-linter-seed$' "$rendered_manifest" | cut -d: -f1 || true)
+      if [[ -z "$dind_line" || -z "$seed_line" ]]; then
+        echo "$config $profile did not render the dind and seed-loader init containers" >&2
+        exit 1
+      fi
+      if ((dind_line >= seed_line)); then
+        echo "$config $profile rendered the seed loader before the restartable dind init container" >&2
+        exit 1
+      fi
       grep -Fq 'sizeLimit: 100Gi' "$rendered_manifest"
     fi
 
