@@ -33,7 +33,7 @@ DNS_NAME_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
 DOCS_COHORT = {
     f"https://github.com/f5-sales-demo/{name}"
     for name in (
-        "docs",
+        "f5-sales-demo.github.io",
         "docs-builder",
         "docs-icons",
         "docs-theme",
@@ -90,7 +90,7 @@ MANAGED_SHARED_LABELS = {
 }
 EXPECTED_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": (10, 3, 4),
-    "https://github.com/f5-sales-demo/docs": (3, 1),
+    "https://github.com/f5-sales-demo/f5-sales-demo.github.io": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
     "https://github.com/f5-sales-demo/docs-icons": (3, 1),
     "https://github.com/f5-sales-demo/docs-theme": (3, 1),
