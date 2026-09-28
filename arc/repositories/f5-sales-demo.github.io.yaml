@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/f5-sales-demo/docs",
+  "repository": "https://github.com/f5-sales-demo/f5-sales-demo.github.io",
   "scale_sets": [
     {
       "profile": "socketless",

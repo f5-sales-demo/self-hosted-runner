@@ -74,7 +74,7 @@ class ArcConfigTests(unittest.TestCase):
 
     def test_docs_repository_configs_are_exact(self) -> None:
         expected = {
-            "docs": ("docs", 3, 1),
+            "f5-sales-demo.github.io": ("docs", 3, 1),
             "docs-builder": ("docs-builder", 4, 2),
             "docs-theme": ("docs-theme", 3, 1),
             "i18n-core": ("i18n-core", 3, 1),
@@ -335,7 +335,7 @@ class ArcConfigTests(unittest.TestCase):
         escaped_docs["scale_sets"][0]["runner_scale_set_name"] = "docs-socketless"
         escaped_managed = MODULE.load_config(CONFIG_DIR / "xcsh.yaml", ROOT)
         escaped_managed["scale_sets"][0]["runner_scale_set_name"] = "managed-socketless"
-        swapped_docs = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
+        swapped_docs = MODULE.load_config(CONFIG_DIR / "f5-sales-demo.github.io.yaml", ROOT)
         swapped_docs["scale_sets"][0]["runner_scale_set_name"] = "docs-container-build"
         swapped_docs["scale_sets"][1]["runner_scale_set_name"] = "docs-socketless"
         swapped_managed = MODULE.load_config(CONFIG_DIR / "administration.yaml", ROOT)
@@ -421,7 +421,7 @@ class ArcConfigTests(unittest.TestCase):
         self.assertIn("name: RUNNER_IMAGE_DIGEST", values)
         self.assertEqual(4, compute["max_runners"])
 
-        unapproved = MODULE.load_config(CONFIG_DIR / "docs.yaml", ROOT)
+        unapproved = MODULE.load_config(CONFIG_DIR / "f5-sales-demo.github.io.yaml", ROOT)
         unapproved["scale_sets"].append(copy.deepcopy(compute))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "bad.json"
