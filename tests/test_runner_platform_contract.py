@@ -132,6 +132,17 @@ class RunnerPlatformContractTests(unittest.TestCase):
         for resource in ("resourceclaims", "resourceslices", "deviceclasses"):
             self.assertIn(resource, source)
 
+    def test_aws_runner_nodes_resist_az_rebalance_during_jobs(self) -> None:
+        guard = (ROOT / "scripts/aws-runner-az-rebalance.sh").read_text()
+        helper = (ROOT / "scripts/runner-platform.sh").read_text()
+        self.assertIn('usage: $0 <verify|suspend>', guard)
+        self.assertIn("autoscaling suspend-processes", guard)
+        self.assertIn("--scaling-processes AZRebalance", guard)
+        self.assertIn("AZRebalance must remain suspended", guard)
+        self.assertIn(
+            '"$repo_root/scripts/aws-runner-az-rebalance.sh" suspend', helper
+        )
+
     def test_registry_contract_accepts_only_immutable_approved_references(self) -> None:
         prepull = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
         renovate = json.loads((ROOT / "renovate-system/values.schema.json").read_text())

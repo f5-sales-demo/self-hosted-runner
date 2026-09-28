@@ -75,6 +75,13 @@ export EKS_CLUSTER_NAME="$(terraform -chdir=terraform/aws/runner-fleet output -r
 scripts/aws-addons.sh install
 ```
 
+The AWS apply helper suspends the `AZRebalance` process on every EKS managed
+node-group Auto Scaling Group and verifies that state. This prevents an
+availability-zone rebalancing event from terminating an in-flight ARC runner;
+Cluster Autoscaler retains its explicit scale operations. The guard runs after
+every saved-plan apply so replacement node-group Auto Scaling Groups receive
+the same protection.
+
 Keep `TF_VAR_enable_compute_32_vcpu_candidate=true` set while creating the xcsh
 GitHub App/GHCR secrets and running
 `scripts/arc-deploy.sh arc/repositories/xcsh.yaml`; the ARC helpers then include
