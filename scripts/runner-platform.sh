@@ -92,6 +92,10 @@ case "$action" in
       "$repo_root/scripts/aws-plan-preflight.py" "$plan.json"
     fi
     terraform -chdir="$root" apply "$plan"
+    if [[ "$cloud" == aws && "$stack" == runner-fleet ]]; then
+      cluster=$(terraform -chdir="$root" output -raw cluster_name)
+      EKS_CLUSTER_NAME="$cluster" "$repo_root/scripts/aws-runner-az-rebalance.sh" suspend
+    fi
     if [[ "$stack" == bootstrap && -f "$root/terraform.tfstate" ]]; then
       chmod 0600 "$root/terraform.tfstate"
       terraform -chdir="$root" output -json >"$plan_dir/$cloud-$stack.outputs.json"
