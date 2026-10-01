@@ -103,7 +103,7 @@ EXPECTED_CAPS = {
             "docs-control": (8, 2),
             "api-specs": (6, 2),
             "api-specs-enriched": (6, 2, 2),
-            "terraform-provider-xcsh": (6, 2, 5),
+            "terraform-provider-xcsh": (6, 2, 6),
             "devcontainer": (4, 2),
             "console": (4, 1),
             "marketplace": (4, 1),
@@ -268,8 +268,17 @@ def load_config(path: Path, repository_root: Path):
                 raise ConfigError(
                     f"{repository} {spec['profile']} release must equal {expected_release}"
                 )
-            if minimum != 0:
-                raise ConfigError(f"{repository} min_runners must equal zero")
+            expected_minimum = (
+                1
+                if repository
+                == "https://github.com/f5-sales-demo/terraform-provider-xcsh"
+                and spec["profile"] == "compute"
+                else 0
+            )
+            if minimum != expected_minimum:
+                raise ConfigError(
+                    f"{repository} {spec['profile']} min_runners must equal {expected_minimum}"
+                )
         if spec["profile"] in CANDIDATE_CAPS.get(repository, {}):
             expected_maximum = CANDIDATE_CAPS[repository][spec["profile"]]
             if maximum != expected_maximum:
