@@ -59,10 +59,15 @@
   "capacity": {
     "initial_maximum_vcpus": 492,
     "initial_quota_floor": 615,
-    "aws_candidate_maximum_vcpus": 524,
-    "aws_candidate_quota_floor": 655,
+    "aws_compute_maximum": 11,
+    "aws_initial_maximum_vcpus": 524,
+    "aws_initial_quota_floor": 655,
+    "aws_candidate_maximum_vcpus": 556,
+    "aws_candidate_quota_floor": 695,
     "density_enabled_maximum_vcpus": 652,
     "density_enabled_quota_floor": 815,
+    "aws_density_enabled_maximum_vcpus": 684,
+    "aws_density_enabled_quota_floor": 855,
     "minimum_headroom_ratio": 0.2
   }
 }

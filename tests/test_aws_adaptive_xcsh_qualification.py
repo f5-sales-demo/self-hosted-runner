@@ -35,7 +35,7 @@ def evidence(role: str, workers: int, *, typescript: float, critical: float) -> 
         "critical_path_seconds": critical,
         "pod_cpu": "30" if workers else "14",
         "pod_memory": "56Gi" if workers else "48Gi",
-        "aws_quota": 660,
+        "aws_quota": 695,
     }
 
 
@@ -79,7 +79,7 @@ class QualificationTests(unittest.TestCase):
             MODULE.record_evidence(state, invalid)
         invalid = evidence("qualification-candidate", 20, typescript=70, critical=140)
         invalid["aws_quota"] = 655
-        with self.assertRaisesRegex(ValueError, "660-vCPU"):
+        with self.assertRaisesRegex(ValueError, "695-vCPU"):
             MODULE.record_evidence(state, invalid)
 
     def test_pair_requires_safety_and_both_durations_to_decrease(self) -> None:

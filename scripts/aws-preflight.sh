@@ -11,10 +11,10 @@ candidate_enabled=${TF_VAR_enable_compute_32_vcpu_candidate:-false}
   echo "TF_VAR_enable_compute_32_vcpu_candidate must be true or false" >&2
   exit 2
 }
-required_vcpu_quota=615
+required_vcpu_quota=655
 instance_types=(m6a.xlarge m6a.2xlarge m6a.4xlarge)
 if [[ "$candidate_enabled" == true ]]; then
-  required_vcpu_quota=655
+  required_vcpu_quota=695
   instance_types+=(c6a.8xlarge)
 fi
 

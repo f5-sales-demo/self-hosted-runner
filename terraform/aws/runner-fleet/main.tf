@@ -14,7 +14,11 @@ locals {
     for index, zone in local.zones : zone => cidrsubnet(var.vpc_cidr, 4, index + 3)
   }
   base_enabled_runner_pools = {
-    for key, pool in local.contract.pools : key => pool
+    for key, pool in local.contract.pools : key => (
+      key == "compute"
+      ? merge(pool, { maximum = local.contract.capacity.aws_compute_maximum })
+      : pool
+    )
     if pool.enabled && key != "system"
   }
   compute_32_vcpu_candidate = merge(
@@ -30,7 +34,7 @@ locals {
   selected_maximum_vcpus = local.contract.pools.system.maximum * local.contract.pools.system.vcpus + sum([
     for pool in values(local.enabled_runner_pools) : pool.maximum * pool.vcpus
   ])
-  required_vcpu_quota = var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_quota_floor : local.contract.capacity.initial_quota_floor
+  required_vcpu_quota = var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_quota_floor : local.contract.capacity.aws_initial_quota_floor
   cluster_autoscaler_tags = {
     "k8s.io/cluster-autoscaler/enabled"             = "true"
     "k8s.io/cluster-autoscaler/${var.cluster_name}" = "owned"
@@ -70,10 +74,10 @@ check "availability_zones" {
 check "capacity_contract" {
   assert {
     condition = (
-      local.selected_maximum_vcpus == (var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_maximum_vcpus : local.contract.capacity.initial_maximum_vcpus) &&
+      local.selected_maximum_vcpus == (var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_maximum_vcpus : local.contract.capacity.aws_initial_maximum_vcpus) &&
       local.required_vcpu_quota >= ceil(local.selected_maximum_vcpus / (1 - local.contract.capacity.minimum_headroom_ratio))
     )
-    error_message = "AWS runner capacity must retain 20% quota headroom at 492 vCPUs normally and 524 vCPUs with the one-node candidate enabled."
+    error_message = "AWS runner capacity must retain 20% quota headroom at 524 vCPUs normally and 556 vCPUs with the one-node candidate enabled."
   }
 }
 

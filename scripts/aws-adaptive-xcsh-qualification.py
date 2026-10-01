@@ -92,9 +92,9 @@ def record_evidence(state: dict[str, Any], evidence: dict[str, Any]) -> None:
     if role == "qualification-candidate":
         if (str(evidence["pod_cpu"]), str(evidence["pod_memory"])) != ("30", "56Gi"):
             raise ValueError("candidate evidence must prove 30 CPU and 56Gi")
-        if int(evidence["aws_quota"]) < 660:
+        if int(evidence["aws_quota"]) < 695:
             raise ValueError(
-                "candidate evidence must prove the approved 660-vCPU quota"
+                "candidate evidence must prove the approved 695-vCPU quota"
             )
     record = dict(evidence)
     record["run_id"] = str(record["run_id"])
