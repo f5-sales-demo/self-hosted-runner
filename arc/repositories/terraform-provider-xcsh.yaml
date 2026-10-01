@@ -25,8 +25,8 @@
       "release": "terraform-provider-xcsh-compute",
       "runner_scale_set_name": "terraform-provider-xcsh-compute",
       "values": "arc/compute-values.yaml",
-      "min_runners": 0,
-      "max_runners": 5
+      "min_runners": 1,
+      "max_runners": 6
     },
     {
       "profile": "compute-32-vcpu-density-candidate",

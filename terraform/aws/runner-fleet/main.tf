@@ -16,7 +16,10 @@ locals {
   base_enabled_runner_pools = {
     for key, pool in local.contract.pools : key => (
       key == "compute"
-      ? merge(pool, { maximum = local.contract.capacity.aws_compute_maximum })
+      ? merge(pool, {
+        minimum = local.contract.capacity.aws_compute_minimum
+        maximum = local.contract.capacity.aws_compute_maximum
+      })
       : pool
     )
     if pool.enabled && key != "system"
@@ -77,7 +80,7 @@ check "capacity_contract" {
       local.selected_maximum_vcpus == (var.enable_compute_32_vcpu_candidate ? local.contract.capacity.aws_candidate_maximum_vcpus : local.contract.capacity.aws_initial_maximum_vcpus) &&
       local.required_vcpu_quota >= ceil(local.selected_maximum_vcpus / (1 - local.contract.capacity.minimum_headroom_ratio))
     )
-    error_message = "AWS runner capacity must retain 20% quota headroom at 524 vCPUs normally and 556 vCPUs with the one-node candidate enabled."
+    error_message = "AWS runner capacity must retain 20% quota headroom at 540 vCPUs normally and 572 vCPUs with the one-node candidate enabled."
   }
 }
 

@@ -12,12 +12,15 @@ GitHub OIDC apply workflow, or new operator role is created.
 - EKS 1.35 uses restricted public plus private API access, AL2023 release
   `1.35.7-20260911`, encrypted 128-GiB gp3 roots, IMDSv2, On-Demand capacity,
   API-only access entries, KMS secret encryption, and 30-day control-plane logs.
-- The AWS compute pool supports up to 11 nodes while the independent Azure
-  compute maximum remains 9. Normal enabled AWS capacity is 524 vCPUs including
-  system nodes and requires a 655-vCPU standard On-Demand quota. Setting
+- The AWS compute pool keeps one warm node and supports up to 12 nodes while the
+  independent Azure compute pool remains scale-to-zero with maximum 9. Normal
+  enabled AWS capacity is 540 vCPUs including system nodes and requires a
+  675-vCPU standard On-Demand quota. The warm `m6a.4xlarge` costs about
+  $0.6912/node-hour ($497.66 per 720 hours), before EKS and other service costs.
+  Setting
   `enable_compute_32_vcpu_candidate=true` adds exactly one scale-to-zero
-  `c6a.8xlarge` node group, raising maximum capacity to 556 vCPUs and the
-  required quota floor to 695 vCPUs. The candidate remains opt-in.
+  `c6a.8xlarge` node group, raising maximum capacity to 572 vCPUs and the
+  required quota floor to 715 vCPUs. The candidate remains opt-in.
 - ECR repositories use immutable tags, scan on push, KMS encryption, and the
   node role's read-only ECR permissions.
 
@@ -53,7 +56,7 @@ its key is exactly `aws/runner-fleet.tfstate`.
 ## Reviewed saved-plan deployment
 
 Request and wait for Elastic IP quota 8 before fleet planning. The preflight
-also requires 655 standard On-Demand vCPUs when the candidate is off, or 695
+also requires 675 standard On-Demand vCPUs when the candidate is off, or 715
 when it is on, three unused EIP slots, all required instance offerings
 (including `c6a.8xlarge` in all three AZs when enabled), service-linked roles,
 EKS/add-on/AMI availability, the expected account, and a non-overlapping VPC
