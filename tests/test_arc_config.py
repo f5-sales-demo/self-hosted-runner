@@ -164,7 +164,7 @@ class ArcConfigTests(unittest.TestCase):
                     self.assertEqual(maximum, item["max_runners"])
 
     def test_managed_compute_profiles_are_exact(self) -> None:
-        expected = {"api-specs-enriched": 2, "terraform-provider-xcsh": 3}
+        expected = {"api-specs-enriched": 2, "terraform-provider-xcsh": 5}
         for repository, maximum in expected.items():
             config = MODULE.load_config(CONFIG_DIR / f"{repository}.yaml", ROOT)
             compute = next(
@@ -177,11 +177,11 @@ class ArcConfigTests(unittest.TestCase):
                 (0, maximum), (compute["min_runners"], compute["max_runners"])
             )
 
-    def test_production_compute_caps_aggregate_to_nine(self) -> None:
+    def test_production_compute_caps_aggregate_to_eleven(self) -> None:
         expected = {
             "xcsh": 4,
             "api-specs-enriched": 2,
-            "terraform-provider-xcsh": 3,
+            "terraform-provider-xcsh": 5,
         }
         observed = {}
         for repository, maximum in expected.items():
@@ -192,7 +192,7 @@ class ArcConfigTests(unittest.TestCase):
             self.assertEqual(0, compute["min_runners"])
             self.assertEqual(maximum, compute["max_runners"])
             observed[repository] = compute["max_runners"]
-        self.assertEqual(9, sum(observed.values()))
+        self.assertEqual(11, sum(observed.values()))
 
     def test_candidate_compute_caps_preserve_azure_and_bound_xcsh_to_one(self) -> None:
         expected = {

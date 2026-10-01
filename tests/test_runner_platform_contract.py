@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import unittest
 from pathlib import Path
 
@@ -20,9 +21,30 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertEqual(492, enabled)
         self.assertEqual(652, all_pools)
         self.assertEqual(615, contract["capacity"]["initial_quota_floor"])
-        self.assertEqual(524, contract["capacity"]["aws_candidate_maximum_vcpus"])
-        self.assertEqual(655, contract["capacity"]["aws_candidate_quota_floor"])
+        self.assertEqual(11, contract["capacity"]["aws_compute_maximum"])
+        self.assertEqual(524, contract["capacity"]["aws_initial_maximum_vcpus"])
+        self.assertEqual(655, contract["capacity"]["aws_initial_quota_floor"])
+        self.assertEqual(556, contract["capacity"]["aws_candidate_maximum_vcpus"])
+        self.assertEqual(695, contract["capacity"]["aws_candidate_quota_floor"])
         self.assertEqual(815, contract["capacity"]["density_enabled_quota_floor"])
+        self.assertEqual(684, contract["capacity"]["aws_density_enabled_maximum_vcpus"])
+        self.assertEqual(855, contract["capacity"]["aws_density_enabled_quota_floor"])
+        aws_initial = sum(
+            (contract["capacity"]["aws_compute_maximum"] if name == "compute" else pool["maximum"])
+            * pool["vcpus"]
+            for name, pool in pools.items()
+            if pool["enabled"]
+        )
+        self.assertEqual(524, aws_initial)
+        self.assertEqual(556, aws_initial + pools["compute_32_vcpu_density_candidate"]["vcpus"])
+        self.assertEqual(
+            684,
+            aws_initial
+            + 5 * pools["compute_32_vcpu_density_candidate"]["vcpus"],
+        )
+        self.assertEqual(655, math.ceil(aws_initial / 0.8))
+        self.assertEqual(695, math.ceil((aws_initial + 32) / 0.8))
+        self.assertEqual(9, pools["compute"]["maximum"], "Azure's shared pool contract stays unchanged")
         self.assertFalse(pools["compute_32_vcpu_density_candidate"]["enabled"])
         self.assertEqual(
             "compute-16-vcpu-candidate", pools["compute_16_vcpu_candidate"]["profile"]
