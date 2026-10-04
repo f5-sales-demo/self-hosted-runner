@@ -1,5 +1,5 @@
 {
-  "repository": "https://github.com/f5-sales-demo/canada-topology",
+  "repository": "https://github.com/f5-sales-demo/canada",
   "scale_sets": [
     {
       "profile": "socketless",
