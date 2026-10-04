@@ -20,6 +20,8 @@ locals {
         minimum = local.contract.capacity.aws_compute_minimum
         maximum = local.contract.capacity.aws_compute_maximum
       })
+      : key == "container_build"
+      ? merge(pool, { maximum = local.contract.capacity.aws_container_build_maximum })
       : pool
     )
     if pool.enabled && key != "system"

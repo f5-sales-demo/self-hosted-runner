@@ -22,7 +22,13 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertEqual(652, all_pools)
         self.assertEqual(615, contract["capacity"]["initial_quota_floor"])
         self.assertEqual(1, contract["capacity"]["aws_compute_minimum"])
-        self.assertEqual(12, contract["capacity"]["aws_compute_maximum"])
+        self.assertEqual(7, contract["capacity"]["aws_compute_maximum"])
+        self.assertEqual(10, contract["capacity"]["aws_container_build_maximum"])
+        self.assertEqual(
+            5,
+            pools["container_build"]["maximum"],
+            "Azure build capacity stays unchanged",
+        )
         self.assertEqual(540, contract["capacity"]["aws_initial_maximum_vcpus"])
         self.assertEqual(675, contract["capacity"]["aws_initial_quota_floor"])
         self.assertEqual(572, contract["capacity"]["aws_candidate_maximum_vcpus"])
@@ -31,21 +37,32 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertEqual(700, contract["capacity"]["aws_density_enabled_maximum_vcpus"])
         self.assertEqual(875, contract["capacity"]["aws_density_enabled_quota_floor"])
         aws_initial = sum(
-            (contract["capacity"]["aws_compute_maximum"] if name == "compute" else pool["maximum"])
+            (
+                contract["capacity"]["aws_compute_maximum"]
+                if name == "compute"
+                else contract["capacity"]["aws_container_build_maximum"]
+                if name == "container_build"
+                else pool["maximum"]
+            )
             * pool["vcpus"]
             for name, pool in pools.items()
             if pool["enabled"]
         )
         self.assertEqual(540, aws_initial)
-        self.assertEqual(572, aws_initial + pools["compute_32_vcpu_density_candidate"]["vcpus"])
+        self.assertEqual(
+            572, aws_initial + pools["compute_32_vcpu_density_candidate"]["vcpus"]
+        )
         self.assertEqual(
             700,
-            aws_initial
-            + 5 * pools["compute_32_vcpu_density_candidate"]["vcpus"],
+            aws_initial + 5 * pools["compute_32_vcpu_density_candidate"]["vcpus"],
         )
         self.assertEqual(675, math.ceil(aws_initial / 0.8))
         self.assertEqual(715, math.ceil((aws_initial + 32) / 0.8))
-        self.assertEqual(9, pools["compute"]["maximum"], "Azure's shared pool contract stays unchanged")
+        self.assertEqual(
+            9,
+            pools["compute"]["maximum"],
+            "Azure's shared pool contract stays unchanged",
+        )
         self.assertEqual(0, pools["compute"]["minimum"], "Azure stays scale-to-zero")
         self.assertFalse(pools["compute_32_vcpu_density_candidate"]["enabled"])
         self.assertEqual(
@@ -77,9 +94,7 @@ class RunnerPlatformContractTests(unittest.TestCase):
 
     def test_bootstrap_stays_local_until_backend_identifiers_exist(self) -> None:
         helper = (ROOT / "scripts/runner-platform.sh").read_text()
-        self.assertIn(
-            'if [[ "$stack" == bootstrap && ! -f "$backend" ]]', helper
-        )
+        self.assertIn('if [[ "$stack" == bootstrap && ! -f "$backend" ]]', helper)
         self.assertIn(
             'mv -- "$backend_declaration" "$disabled_backend_declaration"', helper
         )
@@ -88,15 +103,9 @@ class RunnerPlatformContractTests(unittest.TestCase):
         self.assertIn(
             'terraform -chdir="$root" init -migrate-state -force-copy', helper
         )
-        self.assertIn(
-            'output -json >"$plan_dir/$cloud-$stack.outputs.json"', helper
-        )
-        self.assertIn(
-            'chmod 0600 "$plan_dir/$cloud-$stack.outputs.json"', helper
-        )
-        self.assertEqual(
-            3, helper.count('terraform -chdir="$root" show -json "$plan"')
-        )
+        self.assertIn('output -json >"$plan_dir/$cloud-$stack.outputs.json"', helper)
+        self.assertIn('chmod 0600 "$plan_dir/$cloud-$stack.outputs.json"', helper)
+        self.assertEqual(3, helper.count('terraform -chdir="$root" show -json "$plan"'))
         self.assertNotIn('      terraform show -json "$plan"', helper)
         readme = (ROOT / "terraform/aws/README.md").read_text()
         self.assertLess(
@@ -159,13 +168,11 @@ class RunnerPlatformContractTests(unittest.TestCase):
     def test_aws_runner_nodes_resist_az_rebalance_during_jobs(self) -> None:
         guard = (ROOT / "scripts/aws-runner-az-rebalance.sh").read_text()
         helper = (ROOT / "scripts/runner-platform.sh").read_text()
-        self.assertIn('usage: $0 <verify|suspend>', guard)
+        self.assertIn("usage: $0 <verify|suspend>", guard)
         self.assertIn("autoscaling suspend-processes", guard)
         self.assertIn("--scaling-processes AZRebalance", guard)
         self.assertIn("AZRebalance must remain suspended", guard)
-        self.assertIn(
-            '"$repo_root/scripts/aws-runner-az-rebalance.sh" suspend', helper
-        )
+        self.assertIn('"$repo_root/scripts/aws-runner-az-rebalance.sh" suspend', helper)
 
     def test_registry_contract_accepts_only_immutable_approved_references(self) -> None:
         prepull = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
@@ -189,7 +196,9 @@ class RunnerPlatformContractTests(unittest.TestCase):
             ("aws", "us-east-1", "c6a.8xlarge"),
             (contract["provider"], contract["region"], contract["instance_type"]),
         )
-        self.assertEqual("xcsh-compute-32-vcpu-density-candidate", contract["runner_label"])
+        self.assertEqual(
+            "xcsh-compute-32-vcpu-density-candidate", contract["runner_label"]
+        )
         self.assertEqual(20, contract["candidate_workers"])
         self.assertEqual(10, contract["production_workers"])
         self.assertEqual(0, contract["rollback_workers"])
