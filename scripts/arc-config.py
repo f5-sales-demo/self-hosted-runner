@@ -55,7 +55,7 @@ MANAGED_COHORT = {
         "apt-repo",
         "bot-advanced",
         "bot-standard",
-        "canada-topology",
+        "canada",
         "cdn",
         "cdn-simulator",
         "console",
@@ -250,6 +250,9 @@ def load_config(path: Path, repository_root: Path):
                 )
         if repository in MANAGED_COHORT:
             name = repository.rsplit("/", 1)[1]
+            # Preserve deployed Helm and Kubernetes identities across this rename.
+            if name == "canada":
+                name = "canada-topology"
             namespace_profile = (
                 "32vcpu-candidate"
                 if spec["profile"] == "compute-32-vcpu-density-candidate"

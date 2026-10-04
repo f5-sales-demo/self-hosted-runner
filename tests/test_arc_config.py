@@ -132,7 +132,7 @@ class ArcConfigTests(unittest.TestCase):
             "dns": (3, 1),
             "herdr": (3, 1),
             "html-to-markdown": (3, 1),
-            "canada-topology": (3, 1),
+            "canada": (3, 1),
             "nginx": (3, 1),
             "observability": (3, 1),
             "traffic-generator": (3, 1),
@@ -155,9 +155,9 @@ class ArcConfigTests(unittest.TestCase):
                 ):
                     item = profiles[profile]
                     self.assertEqual(
-                        f"arc-runners-{repository}-{profile}", item["namespace"]
+                        f"arc-runners-{'canada-topology' if repository == 'canada' else repository}-{profile}", item["namespace"]
                     )
-                    self.assertEqual(f"{repository}-{profile}", item["release"])
+                    self.assertEqual(f"{'canada-topology' if repository == 'canada' else repository}-{profile}", item["release"])
                     self.assertEqual(
                         f"managed-{profile}", item["runner_scale_set_name"]
                     )
