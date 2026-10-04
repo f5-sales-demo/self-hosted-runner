@@ -60,7 +60,7 @@
     "initial_maximum_vcpus": 492,
     "initial_quota_floor": 615,
     "aws_compute_minimum": 1,
-    "aws_compute_maximum": 12,
+    "aws_compute_maximum": 7,
     "aws_initial_maximum_vcpus": 540,
     "aws_initial_quota_floor": 675,
     "aws_candidate_maximum_vcpus": 572,
@@ -69,6 +69,7 @@
     "density_enabled_quota_floor": 815,
     "aws_density_enabled_maximum_vcpus": 700,
     "aws_density_enabled_quota_floor": 875,
-    "minimum_headroom_ratio": 0.2
+    "minimum_headroom_ratio": 0.2,
+    "aws_container_build_maximum": 10
   }
 }

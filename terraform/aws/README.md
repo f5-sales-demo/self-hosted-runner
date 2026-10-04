@@ -12,8 +12,8 @@ GitHub OIDC apply workflow, or new operator role is created.
 - EKS 1.35 uses restricted public plus private API access, AL2023 release
   `1.35.7-20260911`, encrypted 128-GiB gp3 roots, IMDSv2, On-Demand capacity,
   API-only access entries, KMS secret encryption, and 30-day control-plane logs.
-- The AWS compute pool keeps one warm node and supports up to 12 nodes while the
-  independent Azure compute pool remains scale-to-zero with maximum 9. Normal
+- The AWS compute pool keeps one warm node and supports up to 7 nodes while the
+  AWS container-build maximum is 10 nodes; the independent Azure compute pool remains scale-to-zero with maximum 9. Normal
   enabled AWS capacity is 540 vCPUs including system nodes and requires a
   675-vCPU standard On-Demand quota. The warm `m6a.4xlarge` costs about
   $0.6912/node-hour ($497.66 per 720 hours), before EKS and other service costs.
