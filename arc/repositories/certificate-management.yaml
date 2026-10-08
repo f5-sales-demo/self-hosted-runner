@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/f5-sales-demo/certificate-management",
+  "scale_sets": [
+    {
+      "profile": "socketless",
+      "namespace": "arc-runners-certificate-management-socketless",
+      "release": "certificate-management-socketless",
+      "runner_scale_set_name": "managed-socketless",
+      "values": "arc/socketless-values.yaml",
+      "min_runners": 0,
+      "max_runners": 3
+    },
+    {
+      "profile": "container-build",
+      "namespace": "arc-runners-certificate-management-container-build",
+      "release": "certificate-management-container-build",
+      "runner_scale_set_name": "managed-container-build",
+      "values": "arc/container-build-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
+    }
+  ]
+}
