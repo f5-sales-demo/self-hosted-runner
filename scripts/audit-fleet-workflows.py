@@ -256,8 +256,8 @@ def main() -> int:
         parser.error("select exactly one of --checkouts-root or --github")
     catalog = load_json(args.catalog)
     repositories = args.repository or load_json(args.fleet)["repositories"]
-    if len(repositories) != 42 and not args.repository:
-        raise SystemExit("fleet manifest must contain exactly 42 repositories")
+    if len(repositories) != 43 and not args.repository:
+        raise SystemExit("fleet manifest must contain exactly 43 repositories")
     if args.github_timeout <= 0 or args.github_attempts < 1 or args.github_minimum_interval < 0:
         parser.error("GitHub timeout and attempts must be positive; minimum interval cannot be negative")
     findings: list[Finding] = []
