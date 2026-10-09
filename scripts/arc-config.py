@@ -77,6 +77,7 @@ MANAGED_COHORT = {
         "starlight-mega-menu",
         "statistics",
         "certificate-management",
+        "blindfold-contract",
         "terraform-provider-xcsh",
         "traffic-generator",
         "vscode-xcsh",
@@ -359,8 +360,8 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     observed = {config["repository"] for config in configs}
     catalog = json.loads((repository_root / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
     expected = {f"https://github.com/{repository}" for repository in catalog["repositories"]}
-    if len(expected) != 43 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
-        raise ConfigError("governed repository catalog must contain exactly 43 unique f5-sales-demo repositories")
+    if len(expected) != 44 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
+        raise ConfigError("governed repository catalog must contain exactly 44 unique f5-sales-demo repositories")
     if observed != expected:
         raise ConfigError(
             "ARC configuration coverage mismatch: "
