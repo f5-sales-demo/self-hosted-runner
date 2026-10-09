@@ -70,11 +70,13 @@
     "minimum_quota_headroom_ratio": 0.2
   },
   "pool_capacity": {
-    "socketless": 30,
-    "compute": 12,
+    "socketless": 24,
+    "compute": 5,
     "compute-16-vcpu-candidate": 1,
     "compute-32-vcpu-density-candidate": 10,
-    "container-build": 5
+    "container-build": 8,
+    "terraform": 168
   },
-  "node_retention_minutes": 60
+  "node_retention_minutes": 60,
+  "capacity_calculation": "config/arc-calculated-capacity.json"
 }

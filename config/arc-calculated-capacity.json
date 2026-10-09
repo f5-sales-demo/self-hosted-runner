@@ -1,0 +1,268 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-10-09T20:30:20.340433+00:00",
+  "headroom_ratio": 0.2,
+  "source": "EKS describe-nodegroup, Kubernetes node allocatable resources, and DaemonSet requests",
+  "node_profiles": {
+    "socketless": {
+      "node_maximum": 30,
+      "observed_nodes": 16,
+      "schedulable_per_node": {
+        "cpu_millicores": 7755,
+        "memory_bytes": 31851470848,
+        "pod_slots": 52
+      }
+    },
+    "compute": {
+      "node_maximum": 7,
+      "observed_nodes": 7,
+      "schedulable_per_node": {
+        "cpu_millicores": 15735,
+        "memory_bytes": 62887112704,
+        "pod_slots": 104
+      }
+    },
+    "container-build": {
+      "node_maximum": 10,
+      "observed_nodes": 7,
+      "schedulable_per_node": {
+        "cpu_millicores": 15735,
+        "memory_bytes": 62887112704,
+        "pod_slots": 104
+      }
+    }
+  },
+  "workload_requests": {
+    "socketless": {
+      "node_profile": "socketless",
+      "cpu_millicores": 7000,
+      "memory_bytes": 25769803776,
+      "pods": 1,
+      "runners_per_node": 1,
+      "capacity_with_headroom": 24
+    },
+    "terraform": {
+      "node_profile": "socketless",
+      "cpu_millicores": 1000,
+      "memory_bytes": 2147483648,
+      "pods": 1,
+      "runners_per_node": 7,
+      "capacity_with_headroom": 168
+    },
+    "container-build": {
+      "node_profile": "container-build",
+      "cpu_millicores": 13000,
+      "memory_bytes": 34359738368,
+      "pods": 1,
+      "runners_per_node": 1,
+      "capacity_with_headroom": 8
+    },
+    "compute": {
+      "node_profile": "compute",
+      "cpu_millicores": 14000,
+      "memory_bytes": 51539607552,
+      "pods": 1,
+      "runners_per_node": 1,
+      "capacity_with_headroom": 5
+    }
+  },
+  "repository_limits": {
+    "https://github.com/f5-sales-demo/administration": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/api-protection": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/api-specs-enriched": {
+      "socketless": 6,
+      "container-build": 2,
+      "compute": 2,
+      "compute-32-vcpu-density-candidate": 2
+    },
+    "https://github.com/f5-sales-demo/api-specs": {
+      "socketless": 6,
+      "container-build": 2
+    },
+    "https://github.com/f5-sales-demo/apt-repo": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/blindfold-contract": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/bot-advanced": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/bot-standard": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/canada": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/cdn-simulator": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/cdn": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/certificate-management": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/console": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/csd": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/ddos": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/demo-resource-template": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/demo-resources": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/devcontainer": {
+      "socketless": 4,
+      "container-build": 2
+    },
+    "https://github.com/f5-sales-demo/dns": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/docs-builder": {
+      "socketless": 4,
+      "container-build": 2
+    },
+    "https://github.com/f5-sales-demo/docs-control": {
+      "socketless": 8,
+      "container-build": 2
+    },
+    "https://github.com/f5-sales-demo/docs-icons": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/docs-theme": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/f5-sales-demo.github.io": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/gitops": {
+      "socketless": 3,
+      "container-build": 1,
+      "terraform": 10
+    },
+    "https://github.com/f5-sales-demo/herdr": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/html-to-markdown": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/i18n-core": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/marketplace-claude-code": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/marketplace": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/multi-cloud-networking": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/nginx": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/observability": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/origin-server": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/starlight-llms-txt": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/starlight-mega-menu": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/statistics": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/terraform-provider-xcsh": {
+      "socketless": 6,
+      "container-build": 2,
+      "compute": 6,
+      "compute-32-vcpu-density-candidate": 3
+    },
+    "https://github.com/f5-sales-demo/traffic-generator": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/vscode-xcsh": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/was": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/webapp-api-protection": {
+      "socketless": 3,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/xcsh-action": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/xcsh-chrome-extension": {
+      "socketless": 4,
+      "container-build": 1
+    },
+    "https://github.com/f5-sales-demo/xcsh": {
+      "socketless": 10,
+      "container-build": 3,
+      "compute": 4,
+      "compute-16-vcpu-candidate": 1,
+      "compute-32-vcpu-density-candidate": 1
+    }
+  },
+  "demand_policy": {
+    "peak_extra": 2,
+    "p95_multiplier": 1.25,
+    "existing_limits": "Preserved pending representative demand measurement; do not increase above calculated capacity."
+  },
+  "qualification": {
+    "terraform_request": "candidate pending live measurements",
+    "seed_startup": "first startup exceeded 180 seconds; keep acceptance pending"
+  }
+}
