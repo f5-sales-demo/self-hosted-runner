@@ -204,6 +204,8 @@ def load_config(path: Path, repository_root: Path):
         if root not in resolved.parents or not resolved.is_file():
             raise ConfigError(f"{context}.values does not name an existing values file")
         expected_values = f"arc/{profile}-values.yaml"
+        if repository == "https://github.com/f5-sales-demo/gitops" and profile == "container-build":
+            expected_values = "arc/gitops-container-build-values.yaml"
         if values != expected_values:
             raise ConfigError(f"{context}.values must equal {expected_values}")
         normalized.append(dict(spec))
