@@ -93,37 +93,13 @@ MANAGED_SHARED_LABELS = {
     "socketless": "managed-socketless",
     "container-build": "managed-container-build",
 }
+# Repository limits are centrally recorded with live capacity evidence.
+CAPACITY_POLICY = json.loads((Path(__file__).resolve().parent.parent / "config/arc-calculated-capacity.json").read_text())
 EXPECTED_CAPS = {
-    "https://github.com/f5-sales-demo/gitops": (3, 1, 10),
-    "https://github.com/f5-sales-demo/xcsh": (10, 3, 4),
-    "https://github.com/f5-sales-demo/f5-sales-demo.github.io": (3, 1),
-    "https://github.com/f5-sales-demo/docs-builder": (4, 2),
-    "https://github.com/f5-sales-demo/docs-icons": (3, 1),
-    "https://github.com/f5-sales-demo/docs-theme": (3, 1),
-    "https://github.com/f5-sales-demo/i18n-core": (3, 1),
-    "https://github.com/f5-sales-demo/starlight-llms-txt": (3, 1),
-    **{repository: (3, 1) for repository in MANAGED_COHORT},
-    "https://github.com/f5-sales-demo/gitops": (3, 1, 10),
-    **{
-        f"https://github.com/f5-sales-demo/{name}": limits
-        for name, limits in {
-            "docs-control": (8, 2),
-            "api-specs": (6, 2),
-            "api-specs-enriched": (6, 2, 2),
-            "terraform-provider-xcsh": (6, 2, 6),
-            "devcontainer": (4, 2),
-            "console": (4, 1),
-            "marketplace": (4, 1),
-            "marketplace-claude-code": (4, 1),
-            "multi-cloud-networking": (4, 1),
-            "origin-server": (4, 1),
-            "starlight-mega-menu": (4, 1),
-            "vscode-xcsh": (4, 1),
-            "xcsh-action": (4, 1),
-            "xcsh-chrome-extension": (4, 1),
-        }.items()
-    },
+    repository: tuple(limits[profile] for profile in ("socketless", "container-build", "compute") if profile in limits)
+    for repository, limits in CAPACITY_POLICY["repository_limits"].items()
 }
+
 CANDIDATE_CAPS = {
     "https://github.com/f5-sales-demo/xcsh": {
         "compute-16-vcpu-candidate": 1,
@@ -300,13 +276,10 @@ def load_config(path: Path, repository_root: Path):
             continue
         if spec["profile"] == "terraform" and label != "gitops-terraform":
             raise ConfigError("terraform runner label must equal gitops-terraform")
-        cap_index = {"socketless": 0, "container-build": 1, "compute": 2, "terraform": 2}[spec["profile"]]
-        caps = EXPECTED_CAPS[repository]
-        if cap_index >= len(caps):
-            raise ConfigError(
-                f"{repository} is not approved for the {spec['profile']} profile"
-            )
-        expected_maximum = caps[cap_index]
+        limits = CAPACITY_POLICY["repository_limits"][repository]
+        if spec["profile"] not in limits:
+            raise ConfigError(f"{repository} is not approved for the {spec['profile']} profile")
+        expected_maximum = limits[spec["profile"]]
         if maximum != expected_maximum:
             raise ConfigError(
                 f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
