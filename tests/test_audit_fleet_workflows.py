@@ -26,7 +26,7 @@ class FleetAuditTests(unittest.TestCase):
 
     def test_manifest_contains_the_governed_fleet(self) -> None:
         fleet = json.loads((ROOT / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
-        self.assertEqual(len(fleet["repositories"]), 44)
+        self.assertEqual(len(fleet["repositories"]), 45)
         self.assertIn("f5-sales-demo/docs-control", fleet["repositories"])
         self.assertIn("f5-sales-demo/herdr", fleet["repositories"])
 

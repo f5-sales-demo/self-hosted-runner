@@ -136,13 +136,14 @@ class ArcConfigTests(unittest.TestCase):
             "nginx": (3, 1),
             "observability": (3, 1),
             "statistics": (3, 1),
+            "gitops": (3, 1),
             "certificate-management": (3, 1),
             "blindfold-contract": (3, 1),
             "traffic-generator": (3, 1),
             "was": (3, 1),
             "webapp-api-protection": (3, 1),
         }
-        self.assertEqual(37, len(expected))
+        self.assertEqual(38, len(expected))
         self.assertEqual(
             {f"https://github.com/f5-sales-demo/{name}" for name in expected},
             MODULE.MANAGED_COHORT,
@@ -290,7 +291,7 @@ class ArcConfigTests(unittest.TestCase):
             repository.split("/", 1)[1] for repository in catalog["repositories"]
         }
         self.assertEqual(expected, {path.stem for path in CONFIG_DIR.glob("*.yaml")})
-        self.assertEqual(44, len(expected))
+        self.assertEqual(45, len(expected))
 
     def test_all_configs_have_globally_safe_identities(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))
@@ -305,8 +306,8 @@ class ArcConfigTests(unittest.TestCase):
             for config in configs
             if config["repository"] in MODULE.MANAGED_COHORT
         ]
-        self.assertEqual(37, len(managed))
-        self.assertEqual(44, len(configs))
+        self.assertEqual(38, len(managed))
+        self.assertEqual(45, len(configs))
 
     def test_complete_config_set_rejects_missing_repository(self) -> None:
         paths = sorted(CONFIG_DIR.glob("*.yaml"))

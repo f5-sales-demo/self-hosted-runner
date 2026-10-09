@@ -1,0 +1,45 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitops-terraform-state
+  labels:
+    app.kubernetes.io/part-of: gitops
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: arc-runners-gitops-terraform
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gitops-terraform
+  namespace: arc-runners-gitops-terraform
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: terraform-state
+  namespace: gitops-terraform-state
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, create, update, patch, delete]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: gitops-terraform-state
+  namespace: gitops-terraform-state
+subjects:
+  - kind: ServiceAccount
+    name: gitops-terraform
+    namespace: arc-runners-gitops-terraform
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: terraform-state
