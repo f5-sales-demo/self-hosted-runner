@@ -10,6 +10,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 PROFILES = {
+    "terraform",
     "socketless",
     "container-build",
     "compute",
@@ -76,6 +77,7 @@ MANAGED_COHORT = {
         "origin-server",
         "starlight-mega-menu",
         "statistics",
+        "gitops",
         "certificate-management",
         "blindfold-contract",
         "terraform-provider-xcsh",
@@ -92,6 +94,7 @@ MANAGED_SHARED_LABELS = {
     "container-build": "managed-container-build",
 }
 EXPECTED_CAPS = {
+    "https://github.com/f5-sales-demo/gitops": (3, 1, 10),
     "https://github.com/f5-sales-demo/xcsh": (10, 3, 4),
     "https://github.com/f5-sales-demo/f5-sales-demo.github.io": (3, 1),
     "https://github.com/f5-sales-demo/docs-builder": (4, 2),
@@ -100,6 +103,7 @@ EXPECTED_CAPS = {
     "https://github.com/f5-sales-demo/i18n-core": (3, 1),
     "https://github.com/f5-sales-demo/starlight-llms-txt": (3, 1),
     **{repository: (3, 1) for repository in MANAGED_COHORT},
+    "https://github.com/f5-sales-demo/gitops": (3, 1, 10),
     **{
         f"https://github.com/f5-sales-demo/{name}": limits
         for name, limits in {
@@ -193,6 +197,8 @@ def load_config(path: Path, repository_root: Path):
             "https://github.com/f5-sales-demo/api-specs-enriched",
             "https://github.com/f5-sales-demo/terraform-provider-xcsh",
         }
+        if profile == "terraform" and repository != "https://github.com/f5-sales-demo/gitops":
+            raise ConfigError("terraform profile is reserved for GitOps")
         if profile in COMPUTE_PROFILES and repository not in compute_allowlist:
             raise ConfigError("compute profile is outside the exact approved allowlist")
         for field, seen_values in unique.items():
@@ -239,7 +245,7 @@ def load_config(path: Path, repository_root: Path):
             (MANAGED_COHORT, MANAGED_SHARED_LABELS, "managed"),
         )
         for cohort, shared_labels, name in contracts:
-            if spec["profile"] in COMPUTE_PROFILES:
+            if spec["profile"] in COMPUTE_PROFILES or spec["profile"] == "terraform":
                 continue
             expected = shared_labels.get(spec["profile"])
             if repository in cohort and label != expected:
@@ -292,7 +298,9 @@ def load_config(path: Path, repository_root: Path):
                     f"{repository} {spec['profile']} max_runners must equal {expected_maximum}"
                 )
             continue
-        cap_index = {"socketless": 0, "container-build": 1, "compute": 2}[spec["profile"]]
+        if spec["profile"] == "terraform" and label != "gitops-terraform":
+            raise ConfigError("terraform runner label must equal gitops-terraform")
+        cap_index = {"socketless": 0, "container-build": 1, "compute": 2, "terraform": 2}[spec["profile"]]
         caps = EXPECTED_CAPS[repository]
         if cap_index >= len(caps):
             raise ConfigError(
@@ -360,8 +368,8 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     observed = {config["repository"] for config in configs}
     catalog = json.loads((repository_root / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
     expected = {f"https://github.com/{repository}" for repository in catalog["repositories"]}
-    if len(expected) != 44 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
-        raise ConfigError("governed repository catalog must contain exactly 44 unique f5-sales-demo repositories")
+    if len(expected) != 45 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
+        raise ConfigError("governed repository catalog must contain exactly 45 unique f5-sales-demo repositories")
     if observed != expected:
         raise ConfigError(
             "ARC configuration coverage mismatch: "
@@ -386,7 +394,7 @@ def enabled_config(
         for pool in pools.values()
         if isinstance(pool, dict) and pool.get("profile") in PROFILES
     }
-    missing = PROFILES - profiles
+    missing = (PROFILES - {"terraform"}) - profiles
     if missing:
         raise ConfigError(
             f"runner-pool contract is missing ARC profiles: {sorted(missing)}"
@@ -398,6 +406,8 @@ def enabled_config(
         and pool.get("profile") in PROFILES
         and pool.get("enabled") is True
     }
+    if "socketless" in enabled:
+        enabled.add("terraform")
     if (
         enable_compute_32_vcpu_candidate
         and config["repository"]

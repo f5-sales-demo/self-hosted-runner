@@ -118,7 +118,9 @@ for config in "$@"; do
     fi
     grep -Fq "$github_url" "$rendered_manifest"
     grep -Fq "$scale_set_name" "$rendered_manifest"
-    grep -Fq "runner-profile: $profile" "$rendered_manifest"
+    node_profile=$profile
+    [[ "$profile" != terraform ]] || node_profile=socketless
+    grep -Fq "runner-profile: $node_profile" "$rendered_manifest"
     grep -Fq 'name: RUNNER_PROFILE' "$rendered_manifest"
     grep -Fq 'name: RUNNER_IMAGE_DIGEST' "$rendered_manifest"
     grep -Fq 'name: ghcr-pull' "$rendered_manifest"

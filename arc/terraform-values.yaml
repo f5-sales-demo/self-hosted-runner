@@ -1,0 +1,108 @@
+githubConfigSecret: arc-github-app
+controllerServiceAccount:
+  name: arc-gha-rs-controller
+  namespace: arc-systems
+listenerTemplate:
+  spec:
+    nodeSelector:
+      runner-profile: system
+    tolerations:
+      - key: CriticalAddonsOnly
+        operator: Exists
+        effect: NoSchedule
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+template:
+  spec:
+    serviceAccountName: gitops-terraform
+    automountServiceAccountToken: true
+    imagePullSecrets:
+      - name: ghcr-pull
+    nodeSelector:
+      runner-profile: socketless
+    tolerations:
+      - key: runner-profile
+        operator: Equal
+        value: socketless
+        effect: NoSchedule
+    securityContext:
+      fsGroup: 1001
+    initContainers:
+      - name: init-runner-runtime
+        image: RUNNER_IMAGE_REQUIRED
+        command: [/bin/bash, -ec]
+        args:
+          - >-
+            install -d -m 0700 /runner-runtime/home /runner-runtime/_work
+            /runner-runtime/_diag /runner-runtime/_temp &&
+            find /home/runner -mindepth 1 -maxdepth 1
+            -exec cp --archive --no-preserve=ownership
+            --target-directory=/runner-runtime {} + &&
+            exec /usr/local/libexec/prepare-runner-tool-cache
+        env:
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+        volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
+    containers:
+      - name: runner
+        image: RUNNER_IMAGE_REQUIRED
+        imagePullPolicy: IfNotPresent
+        command: [/bin/bash, -c]
+        args: ["/usr/local/bin/require-landlock-abi && exec /home/runner/run.sh"]
+        env:
+          - name: RUNNER_PROFILE
+            value: terraform
+          - name: RUNNER_IMAGE_DIGEST
+            value: RUNNER_IMAGE_REQUIRED
+          - name: HOME
+            value: /runner-runtime/home
+          - name: RUNNER_RUNTIME_DIR
+            value: /runner-runtime
+          - name: RUNNER_TOOL_CACHE
+            value: /runner-runtime/_tool
+          - name: RUNNER_TEMP
+            value: /runner-runtime/_temp
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1001
+        volumeMounts:
+          - name: runner-runtime
+            mountPath: /runner-runtime
+          - name: runner-runtime
+            mountPath: /home/runner
+          - name: runner-runtime
+            mountPath: /tmp
+            subPath: _temp
+        resources:
+          requests:
+            cpu: "1"
+            memory: 2Gi
+          limits:
+            cpu: "1"
+            memory: 4Gi
+    volumes:
+      - name: runner-runtime
+        emptyDir:
+          sizeLimit: 50Gi
