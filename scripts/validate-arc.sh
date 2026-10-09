@@ -135,16 +135,20 @@ for config in "$@"; do
       fi
     else
       grep -Fq "$dind_image" "$rendered_manifest"
-      grep -Fq "$seed_image" "$rendered_manifest"
+      if [[ "$repository_name" != gitops ]]; then
+        grep -Fq "$seed_image" "$rendered_manifest"
+      fi
       grep -Fq 'privileged: true' "$rendered_manifest"
       grep -Fq 'DOCKER_HOST' "$rendered_manifest"
       dind_line=$(grep -n -m1 -- 'name: dind$' "$rendered_manifest" | cut -d: -f1 || true)
       seed_line=$(grep -n -m1 -- 'name: load-super-linter-seed$' "$rendered_manifest" | cut -d: -f1 || true)
-      if [[ -z "$dind_line" || -z "$seed_line" ]]; then
+      if [[ "$repository_name" == gitops ]]; then
+        [[ -n "$dind_line" && -z "$seed_line" ]]
+      elif [[ -z "$dind_line" || -z "$seed_line" ]]; then
         echo "$config $profile did not render the dind and seed-loader init containers" >&2
         exit 1
       fi
-      if ((dind_line >= seed_line)); then
+      if [[ "$repository_name" != gitops ]] && ((dind_line >= seed_line)); then
         echo "$config $profile rendered the seed loader before the restartable dind init container" >&2
         exit 1
       fi

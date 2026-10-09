@@ -1,0 +1,206 @@
+githubConfigSecret: arc-github-app
+controllerServiceAccount:
+  name: arc-gha-rs-controller
+  namespace: arc-systems
+listenerTemplate:
+  spec:
+    nodeSelector:
+      runner-profile: system
+    tolerations:
+    - key: CriticalAddonsOnly
+      operator: Exists
+      effect: NoSchedule
+    containers:
+    - name: listener
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+template:
+  spec:
+    imagePullSecrets:
+    - name: ghcr-pull
+    nodeSelector:
+      runner-profile: container-build
+    tolerations:
+    - key: runner-profile
+      operator: Equal
+      value: container-build
+      effect: NoSchedule
+    securityContext:
+      fsGroup: 123
+    initContainers:
+    - name: init-runner-runtime
+      image: RUNNER_IMAGE_REQUIRED
+      command:
+      - /bin/bash
+      - -ec
+      args:
+      - install -d -m 0700 /runner-runtime/home /runner-runtime/_work /runner-runtime/_diag
+        /runner-runtime/_temp && find /home/runner -mindepth 1 -maxdepth 1 -exec cp
+        --archive --no-preserve=ownership --target-directory=/runner-runtime {} +
+        && exec /usr/local/libexec/prepare-runner-tool-cache
+      env:
+      - name: RUNNER_RUNTIME_DIR
+        value: /runner-runtime
+      - name: RUNNER_TOOL_CACHE
+        value: /runner-runtime/_tool
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1001
+      volumeMounts:
+      - name: runner-runtime
+        mountPath: /runner-runtime
+    - name: init-dind-externals
+      image: RUNNER_IMAGE_REQUIRED
+      command:
+      - cp
+      - -r
+      - /home/runner/externals/.
+      - /home/runner/tmpDir/
+      volumeMounts:
+      - name: dind-externals
+        mountPath: /home/runner/tmpDir
+    - name: dind
+      image: docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+      command:
+      - /bin/sh
+      - -c
+      args:
+      - "set -u\nevidence=/runner-runtime/_temp/dind-sidecar.json\nwrite_evidence()\
+        \ {\n  cpu_stat=/sys/fs/cgroup/cpu.stat\n  periods=$(awk '$1 == \"nr_periods\"\
+        \ {print $2}' \"$cpu_stat\")\n  throttled=$(awk '$1 == \"nr_throttled\" {print\
+        \ $2}' \"$cpu_stat\")\n  throttled_usec=$(awk '$1 == \"throttled_usec\" {print\
+        \ $2}' \"$cpu_stat\")\n  memory_current=$(cat /sys/fs/cgroup/memory.current)\n\
+        \  memory_peak=$(cat /sys/fs/cgroup/memory.peak)\n  memory_limit=$(cat /sys/fs/cgroup/memory.max)\n\
+        \  [ \"$memory_limit\" != max ] || memory_limit=0\n  oom_kill=$(awk '$1 ==\
+        \ \"oom_kill\" {print $2}' /sys/fs/cgroup/memory.events)\n  read_bytes=$(awk\
+        \ '{for (i=2; i<=NF; i++) {split($i,a,\"=\"); if (a[1]==\"rbytes\") n+=a[2]}}\
+        \ END {print n+0}' /sys/fs/cgroup/io.stat)\n  write_bytes=$(awk '{for (i=2;\
+        \ i<=NF; i++) {split($i,a,\"=\"); if (a[1]==\"wbytes\") n+=a[2]}} END {print\
+        \ n+0}' /sys/fs/cgroup/io.stat)\n  set -- $(df -Pk /var/lib/docker | awk 'NR\
+        \ == 2 {print $2*1024, $3*1024, $4*1024, $3/$2}')\n  temporary=\"$evidence.$$\"\
+        \n  printf '{\"schema_version\":1,\"cpu\":{\"nr_periods\":%s,\"nr_throttled\"\
+        :%s,\"throttled_usec\":%s},\"memory\":{\"current_bytes\":%s,\"peak_bytes\"\
+        :%s,\"limit_bytes\":%s,\"oom_kill\":%s},\"io\":{\"read_bytes\":%s,\"write_bytes\"\
+        :%s},\"disk\":{\"capacity_bytes\":%.0f,\"used_bytes\":%.0f,\"available_bytes\"\
+        :%.0f,\"used_ratio\":%s}}\\n' \\\n    \"${periods:-0}\" \"${throttled:-0}\"\
+        \ \"${throttled_usec:-0}\" \\\n    \"$memory_current\" \"$memory_peak\" \"\
+        $memory_limit\" \"${oom_kill:-0}\" \\\n    \"$read_bytes\" \"$write_bytes\"\
+        \ \"$1\" \"$2\" \"$3\" \"$4\" \\\n    >\"$temporary\" && chmod 0644 \"$temporary\"\
+        \ && mv -f \"$temporary\" \"$evidence\"\n}\ndockerd --host=unix:///var/run/docker.sock\
+        \ --group=123 &\ndaemon=$!\nsampler=\nstop() {\n  [ -z \"$sampler\" ] || kill\
+        \ \"$sampler\" 2>/dev/null || true\n  kill -TERM \"$daemon\" 2>/dev/null ||\
+        \ true\n}\ntrap stop TERM INT HUP\n(\n  while kill -0 \"$daemon\" 2>/dev/null;\
+        \ do\n    write_evidence || true\n    sleep 0.25\n  done\n) &\nsampler=$!\n\
+        wait \"$daemon\"\nstatus=$?\nkill \"$sampler\" 2>/dev/null || true\nwait \"\
+        $sampler\" 2>/dev/null || true\nexit \"$status\"\n"
+      env:
+      - name: DOCKER_TLS_CERTDIR
+        value: ''
+      restartPolicy: Always
+      securityContext:
+        privileged: true
+      startupProbe:
+        exec:
+          command:
+          - docker
+          - info
+        failureThreshold: 24
+        periodSeconds: 5
+      resources:
+        requests:
+          cpu: '9'
+          memory: 24Gi
+        limits:
+          cpu: '10'
+          memory: 32Gi
+      volumeMounts:
+      - name: work
+        mountPath: /home/runner/_work
+      - name: dind-sock
+        mountPath: /var/run
+      - name: dind-externals
+        mountPath: /home/runner/externals
+      - name: dind-storage
+        mountPath: /var/lib/docker
+      - name: runner-runtime
+        mountPath: /runner-runtime
+    containers:
+    - name: runner
+      image: RUNNER_IMAGE_REQUIRED
+      imagePullPolicy: IfNotPresent
+      command:
+      - /bin/bash
+      - -c
+      args:
+      - /usr/local/bin/require-landlock-abi && exec /home/runner/run.sh
+      env:
+      - name: RUNNER_PROFILE
+        value: container-build
+      - name: RUNNER_IMAGE_DIGEST
+        value: RUNNER_IMAGE_REQUIRED
+      - name: HOME
+        value: /runner-runtime/home
+      - name: RUNNER_RUNTIME_DIR
+        value: /runner-runtime
+      - name: RUNNER_TOOL_CACHE
+        value: /runner-runtime/_tool
+      - name: RUNNER_TEMP
+        value: /runner-runtime/_temp
+      - name: DOCKER_HOST
+        value: unix:///var/run/docker.sock
+      - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+        value: '120'
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop:
+          - ALL
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 1001
+      resources:
+        requests:
+          cpu: '4'
+          memory: 8Gi
+        limits:
+          cpu: '4'
+          memory: 12Gi
+      volumeMounts:
+      - name: runner-runtime
+        mountPath: /runner-runtime
+      - name: work
+        mountPath: /home/runner/_work
+      - name: dind-sock
+        mountPath: /var/run
+      - name: runner-runtime
+        mountPath: /home/runner
+      - name: runner-runtime
+        mountPath: /tmp
+        subPath: _temp
+      - name: dind-storage
+        mountPath: /var/lib/docker
+        readOnly: true
+    volumes:
+    - name: runner-runtime
+      emptyDir:
+        sizeLimit: 50Gi
+    - name: work
+      emptyDir:
+        sizeLimit: 50Gi
+    - name: dind-sock
+      emptyDir: {}
+    - name: dind-externals
+      emptyDir: {}
+    - name: dind-storage
+      emptyDir:
+        sizeLimit: 100Gi
