@@ -97,10 +97,10 @@ template:
             subPath: _temp
         resources:
           requests:
-            cpu: "1"
+            cpu: "2"
             memory: 2Gi
           limits:
-            cpu: "1"
+            cpu: "2"
             memory: 4Gi
     volumes:
       - name: runner-runtime

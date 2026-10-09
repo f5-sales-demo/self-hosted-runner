@@ -43,11 +43,11 @@
     },
     "terraform": {
       "node_profile": "socketless",
-      "cpu_millicores": 1000,
+      "cpu_millicores": 2000,
       "memory_bytes": 2147483648,
       "pods": 1,
-      "runners_per_node": 7,
-      "capacity_with_headroom": 168
+      "runners_per_node": 3,
+      "capacity_with_headroom": 72
     },
     "container-build": {
       "node_profile": "container-build",
@@ -262,7 +262,7 @@
     "existing_limits": "Preserved pending representative demand measurement; do not increase above calculated capacity."
   },
   "qualification": {
-    "terraform_request": "candidate pending live measurements",
+    "terraform_request": "2 CPU/2 GiB retained: five plans median 1.486s, no throttle, peak <250 MiB; baseline median 1.489s.",
     "seed_startup": "first startup exceeded 180 seconds; keep acceptance pending"
   }
 }

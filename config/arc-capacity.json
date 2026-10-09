@@ -75,7 +75,7 @@
     "compute-16-vcpu-candidate": 1,
     "compute-32-vcpu-density-candidate": 10,
     "container-build": 8,
-    "terraform": 168
+    "terraform": 72
   },
   "node_retention_minutes": 60,
   "capacity_calculation": "config/arc-calculated-capacity.json"
