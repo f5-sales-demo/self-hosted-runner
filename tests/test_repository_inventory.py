@@ -39,7 +39,7 @@ class RepositoryInventoryTests(unittest.TestCase):
 
     def test_exact_inventory_and_clean_break_config(self):
         repositories = MODULE.inventory(ROOT)
-        self.assertEqual(43, len(repositories))
+        self.assertEqual(44, len(repositories))
         self.assertIn("f5-sales-demo/f5-sales-demo.github.io", repositories)
         config = MODULE.global_config(repositories)
         self.assertEqual("ignored", config["requireConfig"])
