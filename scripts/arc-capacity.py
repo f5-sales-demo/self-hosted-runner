@@ -1222,6 +1222,7 @@ def managed_profile(labels: list[str]) -> str | None:
         "compute-16-vcpu-candidate",
         "compute-32-vcpu-density-candidate",
         "compute",
+        "terraform",
         "container-build",
         "socketless",
     ):
@@ -1232,6 +1233,7 @@ def managed_profile(labels: list[str]) -> str | None:
 
 def node_profile_for_runner(profile: str) -> str:
     return {
+        "terraform": "socketless",
         "compute-16-vcpu-candidate": "compute-16-vcpu-candidate",
         "compute-32-vcpu-density-candidate": "compute-32-vcpu-density-candidate",
     }.get(profile, profile)
