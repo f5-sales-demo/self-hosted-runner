@@ -254,6 +254,10 @@
       "compute": 4,
       "compute-16-vcpu-candidate": 1,
       "compute-32-vcpu-density-candidate": 1
+    },
+    "https://github.com/f5-sales-demo/prompt-charity": {
+      "socketless": 3,
+      "container-build": 1
     }
   },
   "demand_policy": {
