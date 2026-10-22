@@ -307,7 +307,7 @@ class ArcConfigTests(unittest.TestCase):
             for config in configs
             if config["repository"] in MODULE.MANAGED_COHORT
         ]
-        self.assertEqual(38, len(managed))
+        self.assertEqual(39, len(managed))
         self.assertEqual(46, len(configs))
 
     def test_complete_config_set_rejects_missing_repository(self) -> None:

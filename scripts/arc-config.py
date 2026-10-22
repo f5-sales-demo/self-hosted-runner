@@ -344,8 +344,8 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     observed = {config["repository"] for config in configs}
     catalog = json.loads((repository_root / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
     expected = {f"https://github.com/{repository}" for repository in catalog["repositories"]}
-    if len(expected) != 45 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
-        raise ConfigError("governed repository catalog must contain exactly 45 unique f5-sales-demo repositories")
+    if len(expected) != 46 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
+        raise ConfigError("governed repository catalog must contain exactly 46 unique f5-sales-demo repositories")
     if observed != expected:
         raise ConfigError(
             "ARC configuration coverage mismatch: "
