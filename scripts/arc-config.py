@@ -77,6 +77,7 @@ MANAGED_COHORT = {
         "origin-server",
         "starlight-mega-menu",
         "statistics",
+        "prompt-charity",
         "gitops",
         "certificate-management",
         "blindfold-contract",

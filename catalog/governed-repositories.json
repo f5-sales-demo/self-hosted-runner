@@ -36,6 +36,7 @@
     "f5-sales-demo/nginx",
     "f5-sales-demo/observability",
     "f5-sales-demo/origin-server",
+    "f5-sales-demo/prompt-charity",
     "f5-sales-demo/starlight-llms-txt",
     "f5-sales-demo/starlight-mega-menu",
     "f5-sales-demo/statistics",
