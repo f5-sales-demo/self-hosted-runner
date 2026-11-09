@@ -23,6 +23,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up bounded isolated BuildKit
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
       - name: Validate catalog and audit fixtures
         run: |
           set -euo pipefail
@@ -48,7 +56,7 @@ jobs:
       - name: Build and verify socketless target without cache
         run: |
           set -euo pipefail
-          docker buildx build --progress=plain --no-cache --load --target standard --tag local/self-hosted-runner:standard .
+          python3 scripts/build-runner-image.py --target standard --tag local/self-hosted-runner:standard --diagnostics "$RUNNER_TEMP/runner-build-standard.jsonl"
           docker run --rm --network none --user 1001:1001 --entrypoint verify-runner-tools local/self-hosted-runner:standard standard
       - name: Prove standard target is socketless
         run: |
@@ -58,6 +66,15 @@ jobs:
             exit 1
           fi
 
+      - name: Retain no-cache build diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runner-build-standard-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runner-build-standard.jsonl
+          if-no-files-found: error
+          retention-days: 14
+
   container-build:
     runs-on: ubuntu-24.04
     timeout-minutes: 150
@@ -65,10 +82,18 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up bounded isolated BuildKit
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
       - name: Build and verify container-build target without cache
         run: |
           set -euo pipefail
-          docker buildx build --progress=plain --no-cache --load --target container-build --tag local/self-hosted-runner:container-build .
+          python3 scripts/build-runner-image.py --target container-build --tag local/self-hosted-runner:container-build --diagnostics "$RUNNER_TEMP/runner-build-container-build.jsonl"
           docker run --rm --network none --user 1001:1001 --entrypoint verify-runner-tools local/self-hosted-runner:container-build container-build
       - name: Smoke-test selected Docker action profiling
         env:
@@ -105,3 +130,12 @@ jobs:
              .sample_count > 0 and .cache_state == "cold" and
              .image.digest == $digest' \
             "$evidence/profile.json" >/dev/null
+
+      - name: Retain no-cache build diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runner-build-container-build-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/runner-build-container-build.jsonl
+          if-no-files-found: error
+          retention-days: 14
