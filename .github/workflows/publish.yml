@@ -37,6 +37,10 @@ jobs:
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
         with:
           driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
       - name: Authenticate to GHCR
         env:
           TOKEN: ${{ github.token }}

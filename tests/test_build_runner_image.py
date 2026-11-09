@@ -4,6 +4,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -41,6 +42,18 @@ class BuildDiagnosticsTests(unittest.TestCase):
         self.assertEqual(status, 17)
         self.assertTrue(any(item["event"] == "sample" for item in records))
         self.assertEqual(records[-1]["exitCode"], 17)
+
+    def test_proc_status_empty_fields_do_not_discard_memory_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status"
+            path.write_text("Name: docker\nVmRSS: 256 kB\nx86_Thread_features:\nVmHWM: 512 kB\n")
+            self.assertEqual(build.numbers(path, {"VmRSS", "VmHWM"}),
+                             {"VmRSS": 256, "VmHWM": 512})
+
+    def test_missing_telemetry_is_unavailable_not_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(build.numbers(Path(directory) / "missing"),
+                             {"unavailable": "FileNotFoundError"})
 
     def test_parent_signal_is_forwarded_and_retained(self):
         source = """

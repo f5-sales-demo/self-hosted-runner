@@ -19,7 +19,10 @@ def numbers(path: Path, selected: set[str] | None = None) -> dict:
     try:
         result = {}
         for line in path.read_text().splitlines():
-            key, value, *_ = line.replace(":", "").split()
+            parts = line.replace(":", "").split()
+            if len(parts) < 2:
+                continue
+            key, value, *_ = parts
             if (selected is None or key in selected) and value.isdigit():
                 result[key] = int(value)
         return result

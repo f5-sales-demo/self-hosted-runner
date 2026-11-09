@@ -23,6 +23,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up bounded isolated BuildKit
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
       - name: Validate catalog and audit fixtures
         run: |
           set -euo pipefail
@@ -74,6 +82,14 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+      - name: Set up bounded isolated BuildKit
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
       - name: Build and verify container-build target without cache
         run: |
           set -euo pipefail
