@@ -185,7 +185,7 @@
         "standard",
         "container-build"
       ],
-      "command": "/opt/actions-runner/bin/Runner.Listener --version",
+      "command": "/home/runner/bin/Runner.Listener --version",
       "expected": "2.338.2"
     },
     {
