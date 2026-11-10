@@ -265,7 +265,7 @@ class ImageContractTests(unittest.TestCase):
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8"))
         tools = {tool["name"]: tool for tool in catalog["tools"]}
         expected_versions = {
-            "bun": "1.4.2",
+            "bun": "1.4.4",
             "zig": "0.16.0",
             "rust-toolchain-manifest": "nightly-2026-09-03",
             "rustc": "1.100.0-nightly (2e2b193f8 2026-09-02)",
@@ -285,10 +285,10 @@ class ImageContractTests(unittest.TestCase):
         self.assertEqual("fdfind ", tools["fd"]["expected"])
         for name in expected_versions.keys() - {"llvm-nm"}:
             self.assertRegex(tools[name]["sha256"], r"^[0-9a-f]{64}$")
-        self.assertEqual(["1.4.2"], catalog["setup_actions"]["oven-sh/setup-bun"]["versions"])
+        self.assertEqual(["1.4.4"], catalog["setup_actions"]["oven-sh/setup-bun"]["versions"])
 
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn("ARG BUN_VERSION=1.4.2", dockerfile)
+        self.assertIn("ARG BUN_VERSION=1.4.4", dockerfile)
         self.assertIn("ARG RUST_TOOLCHAIN=nightly-2026-09-03", dockerfile)
         self.assertIn("ARG CARGO_NEXTEST_VERSION=0.9.143", dockerfile)
         self.assertIn("--component rustfmt --component clippy --component rust-analyzer", dockerfile)
