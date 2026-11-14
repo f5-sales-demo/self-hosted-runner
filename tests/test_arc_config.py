@@ -125,7 +125,7 @@ class ArcConfigTests(unittest.TestCase):
             "bot-standard": (3, 1),
             "cdn": (3, 1),
             "cdn-simulator": (3, 1),
-            "csd": (3, 1),
+            "client-side-defense": (3, 1),
             "ddos": (3, 1),
             "demo-resource-template": (3, 1),
             "demo-resources": (3, 1),

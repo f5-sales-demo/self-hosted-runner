@@ -60,7 +60,7 @@ MANAGED_COHORT = {
         "cdn",
         "cdn-simulator",
         "console",
-        "csd",
+        "client-side-defense",
         "ddos",
         "demo-resource-template",
         "demo-resources",
