@@ -4,9 +4,9 @@ set -euo pipefail
 config=${1:-}
 mode=${2:-all}
 case "$mode" in
-controller | cache | runners | all) ;;
+controller | cache | runners | toolchain-canary | all) ;;
 *)
-  echo "usage: scripts/arc-deploy.sh <repository-config> [controller|cache|runners|all]" >&2
+  echo "usage: scripts/arc-deploy.sh <repository-config> [controller|cache|runners|toolchain-canary|all]" >&2
   exit 2
   ;;
 esac
@@ -33,7 +33,11 @@ candidate_enabled=${TF_VAR_enable_compute_32_vcpu_candidate:-false}
 }
 config_args=(--enabled-only)
 [[ "$candidate_enabled" != true ]] || config_args+=(--enable-compute-32-vcpu-candidate)
+[[ "$mode" != toolchain-canary ]] || config_args+=(--enable-toolchain-canary)
 config_json=$(python3 scripts/arc-config.py "${config_args[@]}" "$config")
+if [[ "$mode" == toolchain-canary ]]; then
+  config_json=$(jq -ce '.scale_sets |= map(select(.profile == "compute-toolchain-canary")) | select(.scale_sets | length == 1)' <<<"$config_json")
+fi
 github_config_url=$(jq -er .repository <<<"$config_json")
 chart_version=0.14.2
 controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452
@@ -70,11 +74,19 @@ if [[ "$mode" == controller || "$mode" == all ]]; then
     --wait --timeout 10m
 fi
 
+image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io|[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)/self-hosted-runner@sha256:[0-9a-f]{64}$'
+if [[ "$mode" == toolchain-canary ]]; then
+  : "${TOOLCHAIN_CANARY_IMAGE:?Exact published canary image is required}"
+  : "${TOOLCHAIN_CANARY_SOURCE_SHA:?Verified merged image source is required}"
+  [[ "$TOOLCHAIN_CANARY_IMAGE" =~ ^ghcr\.io/f5-sales-demo/self-hosted-runner@sha256:[0-9a-f]{64}$ ]]
+  [[ "$TOOLCHAIN_CANARY_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+  scripts/verify-promotion.sh "$TOOLCHAIN_CANARY_IMAGE" "$TOOLCHAIN_CANARY_SOURCE_SHA"
+fi
+
 if [[ "$mode" == cache || "$mode" == runners || "$mode" == all ]]; then
   : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE must be an immutable approved registry reference}"
   : "${CONTAINER_BUILD_IMAGE:?CONTAINER_BUILD_IMAGE must be an immutable approved registry reference}"
   : "${SUPER_LINTER_SEED_IMAGE:?SUPER_LINTER_SEED_IMAGE must be an immutable approved registry reference}"
-  image_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io|[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)/self-hosted-runner@sha256:[0-9a-f]{64}$'
   [[ "$SOCKETLESS_IMAGE" =~ $image_pattern ]]
   [[ "$CONTAINER_BUILD_IMAGE" =~ $image_pattern ]]
   [[ "$SUPER_LINTER_SEED_IMAGE" =~ $image_pattern ]]
@@ -141,9 +153,11 @@ if [[ "$mode" == cache || "$mode" == all ]]; then
   done
 fi
 
-if [[ "$mode" == runners || "$mode" == all ]]; then
-  kubectl apply -f arc/candidate-priority-class.yaml
-  kubectl apply -f arc/compute-16-vcpu-candidate-priority-class.yaml
+if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]; then
+  if [[ "$mode" != toolchain-canary ]]; then
+    kubectl apply -f arc/candidate-priority-class.yaml
+    kubectl apply -f arc/compute-16-vcpu-candidate-priority-class.yaml
+  fi
   pull_chart gha-runner-scale-set "$scale_set_chart_digest"
   scale_set_chart="$tmpdir/gha-runner-scale-set-$chart_version.tgz"
 
@@ -155,17 +169,22 @@ if [[ "$mode" == runners || "$mode" == all ]]; then
     values=$(jq -er .values <<<"$spec")
     min_runners=$(jq -er .min_runners <<<"$spec")
     max_runners=$(jq -er .max_runners <<<"$spec")
-    image=$SOCKETLESS_IMAGE
-    [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
-    [[ "$profile" != *-candidate ]] || image=$COMPUTE_CANDIDATE_IMAGE
+    if [[ "$profile" == compute-toolchain-canary ]]; then
+      image=$TOOLCHAIN_CANARY_IMAGE
+    else
+      image=$SOCKETLESS_IMAGE
+      [[ "$profile" != container-build ]] || image=$CONTAINER_BUILD_IMAGE
+      [[ "$profile" != *-candidate ]] || image=$COMPUTE_CANDIDATE_IMAGE
+    fi
+    seed_image=${SUPER_LINTER_SEED_IMAGE:-}
 
     kubectl get secret arc-github-app -n "$namespace" >/dev/null
     [[ "$image" != ghcr.io/* ]] || kubectl get secret ghcr-pull -n "$namespace" >/dev/null
     rendered_values="$tmpdir/$profile-values.yaml"
     if [[ "$image" == ghcr.io/* ]]; then
-      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$SUPER_LINTER_SEED_IMAGE|g" "$values" >"$rendered_values"
+      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$seed_image|g" "$values" >"$rendered_values"
     else
-      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$SUPER_LINTER_SEED_IMAGE|g" "$values" | sed '/imagePullSecrets:/,+1d' >"$rendered_values"
+      sed -e "s|RUNNER_IMAGE_REQUIRED|$image|g" -e "s|SUPER_LINTER_SEED_IMAGE_REQUIRED|$seed_image|g" "$values" | sed '/imagePullSecrets:/,+1d' >"$rendered_values"
     fi
     helm upgrade --install "$release" "$scale_set_chart" \
       --namespace "$namespace" \

@@ -66,7 +66,7 @@ class AksArcContractTests(unittest.TestCase):
         self.assertRegex(deploy, r"scale_set_chart_digest=sha256:[0-9a-f]{64}")
         self.assertRegex(build, r"docker\.io/library/docker@sha256:[0-9a-f]{64}")
         self.assertIn("RUNNER_IMAGE_REQUIRED", build)
-        self.assertIn("controller|cache|runners|all", deploy)
+        self.assertIn("controller|cache|runners|toolchain-canary|all", deploy)
         self.assertIn("scripts/arc-config.py", deploy)
         self.assertIn("--set-string runnerScaleSetName=", deploy)
         self.assertIn("--set minRunners=", deploy)
@@ -114,7 +114,7 @@ class AksArcContractTests(unittest.TestCase):
         )
         self.assertIn("namespace: {{ .Release.Namespace }}", prepull)
         runners_block = deploy.split(
-            'if [[ "$mode" == runners || "$mode" == all ]]', 1
+            'if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]', 1
         )[1]
         self.assertNotIn("runner-image-cache arc/prepull", runners_block)
 
