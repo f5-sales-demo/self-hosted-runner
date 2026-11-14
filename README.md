@@ -132,7 +132,8 @@ runner images. ACR/ECR deployments also require
 `SUPER_LINTER_SEED_SOURCE_IMAGE` and byte-verify it against the mirrored digest
 before rendering any runner. The seed must use the same registry as the
 container-build image so the pod has one explicit registry trust path.
-All repository scale sets use zero idle runners. Two shared image-cache
+Repository scale sets use zero idle runners except the provider stable compute
+profile, which reserves one idle runner. Two shared image-cache
 DaemonSets run in `arc-runner-cache`, one per node profile; repository
 namespaces do not carry duplicate cache releases.
 
