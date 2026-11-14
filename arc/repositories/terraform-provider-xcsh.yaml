@@ -36,6 +36,15 @@
       "values": "arc/compute-32-vcpu-density-candidate-values.yaml",
       "min_runners": 0,
       "max_runners": 3
+    },
+    {
+      "profile": "compute-toolchain-canary",
+      "namespace": "arc-runners-terraform-provider-xcsh-compute-toolchain-canary",
+      "release": "terraform-provider-xcsh-compute-toolchain-canary",
+      "runner_scale_set_name": "terraform-provider-xcsh-toolchain-canary",
+      "values": "arc/compute-toolchain-canary-values.yaml",
+      "min_runners": 0,
+      "max_runners": 1
     }
   ]
 }

@@ -120,6 +120,7 @@ for config in "$@"; do
     grep -Fq "$scale_set_name" "$rendered_manifest"
     node_profile=$profile
     [[ "$profile" != terraform ]] || node_profile=socketless
+    [[ "$profile" != compute-toolchain-canary ]] || node_profile=compute
     grep -Fq "runner-profile: $node_profile" "$rendered_manifest"
     grep -Fq 'name: RUNNER_PROFILE' "$rendered_manifest"
     grep -Fq 'name: RUNNER_IMAGE_DIGEST' "$rendered_manifest"

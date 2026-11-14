@@ -9,15 +9,26 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
+TOOLCHAIN_CANARY_PROFILE = "compute-toolchain-canary"
+TOOLCHAIN_CANARY_POOL_PROFILE = "compute"
+TOOLCHAIN_CANARY_REPOSITORY = "https://github.com/f5-sales-demo/terraform-provider-xcsh"
+TOOLCHAIN_CANARY_LABEL = "terraform-provider-xcsh-toolchain-canary"
+
 PROFILES = {
     "terraform",
     "socketless",
     "container-build",
     "compute",
+    TOOLCHAIN_CANARY_PROFILE,
     "compute-16-vcpu-candidate",
     "compute-32-vcpu-density-candidate",
 }
-COMPUTE_PROFILES = {"compute", "compute-16-vcpu-candidate", "compute-32-vcpu-density-candidate"}
+COMPUTE_PROFILES = {
+    "compute",
+    "compute-16-vcpu-candidate",
+    "compute-32-vcpu-density-candidate",
+    TOOLCHAIN_CANARY_PROFILE,
+}
 REQUIRED_PROFILES = {"socketless", "container-build"}
 TOP_FIELDS = {"repository", "scale_sets"}
 SCALE_SET_FIELDS = {
@@ -95,9 +106,17 @@ MANAGED_SHARED_LABELS = {
     "container-build": "managed-container-build",
 }
 # Repository limits are centrally recorded with live capacity evidence.
-CAPACITY_POLICY = json.loads((Path(__file__).resolve().parent.parent / "config/arc-calculated-capacity.json").read_text())
+CAPACITY_POLICY = json.loads(
+    (
+        Path(__file__).resolve().parent.parent / "config/arc-calculated-capacity.json"
+    ).read_text()
+)
 EXPECTED_CAPS = {
-    repository: tuple(limits[profile] for profile in ("socketless", "container-build", "compute") if profile in limits)
+    repository: tuple(
+        limits[profile]
+        for profile in ("socketless", "container-build", "compute")
+        if profile in limits
+    )
     for repository, limits in CAPACITY_POLICY["repository_limits"].items()
 }
 
@@ -110,6 +129,7 @@ CANDIDATE_CAPS = {
         "compute-32-vcpu-density-candidate": 2,
     },
     "https://github.com/f5-sales-demo/terraform-provider-xcsh": {
+        TOOLCHAIN_CANARY_PROFILE: 1,
         "compute-32-vcpu-density-candidate": 3,
     },
 }
@@ -169,12 +189,22 @@ def load_config(path: Path, repository_root: Path):
                 f"{context}.profile must uniquely select a supported profile"
             )
         seen_profiles.add(profile)
+        if profile == TOOLCHAIN_CANARY_PROFILE and (
+            repository != TOOLCHAIN_CANARY_REPOSITORY
+            or spec["runner_scale_set_name"] != TOOLCHAIN_CANARY_LABEL
+        ):
+            raise ConfigError(
+                "toolchain canary is reserved for the exact provider label"
+            )
         compute_allowlist = {
             "https://github.com/f5-sales-demo/xcsh",
             "https://github.com/f5-sales-demo/api-specs-enriched",
             "https://github.com/f5-sales-demo/terraform-provider-xcsh",
         }
-        if profile == "terraform" and repository != "https://github.com/f5-sales-demo/gitops":
+        if (
+            profile == "terraform"
+            and repository != "https://github.com/f5-sales-demo/gitops"
+        ):
             raise ConfigError("terraform profile is reserved for GitOps")
         if profile in COMPUTE_PROFILES and repository not in compute_allowlist:
             raise ConfigError("compute profile is outside the exact approved allowlist")
@@ -205,7 +235,10 @@ def load_config(path: Path, repository_root: Path):
         if root not in resolved.parents or not resolved.is_file():
             raise ConfigError(f"{context}.values does not name an existing values file")
         expected_values = f"arc/{profile}-values.yaml"
-        if repository == "https://github.com/f5-sales-demo/gitops" and profile == "container-build":
+        if (
+            repository == "https://github.com/f5-sales-demo/gitops"
+            and profile == "container-build"
+        ):
             expected_values = "arc/gitops-container-build-values.yaml"
         if values != expected_values:
             raise ConfigError(f"{context}.values must equal {expected_values}")
@@ -281,7 +314,9 @@ def load_config(path: Path, repository_root: Path):
             raise ConfigError("terraform runner label must equal gitops-terraform")
         limits = CAPACITY_POLICY["repository_limits"][repository]
         if spec["profile"] not in limits:
-            raise ConfigError(f"{repository} is not approved for the {spec['profile']} profile")
+            raise ConfigError(
+                f"{repository} is not approved for the {spec['profile']} profile"
+            )
         expected_maximum = limits[spec["profile"]]
         if maximum != expected_maximum:
             raise ConfigError(
@@ -342,10 +377,21 @@ def validate_complete_config_set(paths: list[Path], repository_root: Path):
     """Require the checked-in configuration set to cover the exact ARC fleet."""
     configs = validate_config_set(paths, repository_root)
     observed = {config["repository"] for config in configs}
-    catalog = json.loads((repository_root / "catalog/governed-repositories.json").read_text(encoding="utf-8"))
-    expected = {f"https://github.com/{repository}" for repository in catalog["repositories"]}
-    if len(expected) != 46 or any(not repository.startswith("https://github.com/f5-sales-demo/") for repository in expected):
-        raise ConfigError("governed repository catalog must contain exactly 46 unique f5-sales-demo repositories")
+    catalog = json.loads(
+        (repository_root / "catalog/governed-repositories.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    expected = {
+        f"https://github.com/{repository}" for repository in catalog["repositories"]
+    }
+    if len(expected) != 46 or any(
+        not repository.startswith("https://github.com/f5-sales-demo/")
+        for repository in expected
+    ):
+        raise ConfigError(
+            "governed repository catalog must contain exactly 46 unique f5-sales-demo repositories"
+        )
     if observed != expected:
         raise ConfigError(
             "ARC configuration coverage mismatch: "
@@ -359,6 +405,7 @@ def enabled_config(
     repository_root: Path,
     *,
     enable_compute_32_vcpu_candidate: bool = False,
+    enable_toolchain_canary: bool = False,
 ) -> dict:
     """Return only scale sets backed by enabled runner pools."""
     contract = strict_json(repository_root / "terraform/runner-pools.json")
@@ -370,7 +417,13 @@ def enabled_config(
         for pool in pools.values()
         if isinstance(pool, dict) and pool.get("profile") in PROFILES
     }
-    missing = (PROFILES - {"terraform"}) - profiles
+    required_profiles = {
+        TOOLCHAIN_CANARY_POOL_PROFILE
+        if profile == TOOLCHAIN_CANARY_PROFILE
+        else profile
+        for profile in PROFILES - {"terraform"}
+    }
+    missing = required_profiles - profiles
     if missing:
         raise ConfigError(
             f"runner-pool contract is missing ARC profiles: {sorted(missing)}"
@@ -382,16 +435,18 @@ def enabled_config(
         and pool.get("profile") in PROFILES
         and pool.get("enabled") is True
     }
+    if (
+        enable_toolchain_canary
+        and config["repository"] == TOOLCHAIN_CANARY_REPOSITORY
+        and TOOLCHAIN_CANARY_POOL_PROFILE in enabled
+    ):
+        enabled.add(TOOLCHAIN_CANARY_PROFILE)
     if "socketless" in enabled:
         enabled.add("terraform")
-    if (
-        enable_compute_32_vcpu_candidate
-        and config["repository"]
-        in {
-            "https://github.com/f5-sales-demo/terraform-provider-xcsh",
-            "https://github.com/f5-sales-demo/xcsh",
-        }
-    ):
+    if enable_compute_32_vcpu_candidate and config["repository"] in {
+        "https://github.com/f5-sales-demo/terraform-provider-xcsh",
+        "https://github.com/f5-sales-demo/xcsh",
+    }:
         enabled.add("compute-32-vcpu-density-candidate")
     return {
         **config,
@@ -419,6 +474,11 @@ def main(argv=None):
         action="store_true",
         help="include the AWS-only xcsh 32-vCPU candidate with --enabled-only",
     )
+    parser.add_argument(
+        "--enable-toolchain-canary",
+        action="store_true",
+        help="include the provider-only canary when the existing compute pool is enabled",
+    )
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parent.parent
     try:
@@ -435,6 +495,7 @@ def main(argv=None):
                         config,
                         root,
                         enable_compute_32_vcpu_candidate=args.enable_compute_32_vcpu_candidate,
+                        enable_toolchain_canary=args.enable_toolchain_canary,
                     )
                     for config in result
                 ]
@@ -443,6 +504,7 @@ def main(argv=None):
                     result,
                     root,
                     enable_compute_32_vcpu_candidate=args.enable_compute_32_vcpu_candidate,
+                    enable_toolchain_canary=args.enable_toolchain_canary,
                 )
     except ConfigError as exc:
         print(f"ARC configuration error: {exc}", file=sys.stderr)
