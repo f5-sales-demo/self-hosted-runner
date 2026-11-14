@@ -121,7 +121,7 @@
       "socketless": 4,
       "container-build": 1
     },
-    "https://github.com/f5-sales-demo/csd": {
+    "https://github.com/f5-sales-demo/client-side-defense": {
       "socketless": 3,
       "container-build": 1
     },
