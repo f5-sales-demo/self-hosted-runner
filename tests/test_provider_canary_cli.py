@@ -157,6 +157,12 @@ class ProviderCanaryCliTest(unittest.TestCase):
         self.assertIn("minRunners=0", upgrade["args"])
         self.assertIn("maxRunners=1", upgrade["args"])
         self.assertIn(IMAGE, upgrade["values"])
+        self.assertIn("runner-profile: compute\n", upgrade["values"])
+        self.assertNotIn("runner-profile: compute-toolchain-canary", upgrade["values"])
+        self.assertIn("value: compute\n", upgrade["values"])
+        self.assertIn("/usr/local/bin/require-landlock-abi", upgrade["values"])
+        self.assertNotIn("privileged: true", upgrade["values"])
+        self.assertNotIn("DOCKER_HOST", upgrade["values"])
         self.assertIn("ARC listeners ready for 1 runner namespaces", result.stdout)
         attestations = [
             row
