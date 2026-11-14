@@ -77,11 +77,13 @@
       "field": "go-version",
       "versions": [
         "1.25.12",
-        "1.25.13"
+        "1.25.13",
+        "1.27.4"
       ],
       "cache_paths": {
         "1.25.12": "/opt/hostedtoolcache/go/1.25.12/x64.complete",
-        "1.25.13": "/opt/hostedtoolcache/go/1.25.13/x64.complete"
+        "1.25.13": "/opt/hostedtoolcache/go/1.25.13/x64.complete",
+        "1.27.4": "/opt/hostedtoolcache/go/1.27.4/x64.complete"
       }
     },
     "astral-sh/setup-uv": {
@@ -123,7 +125,8 @@
       "field": "terraform_version",
       "versions": [
         "1.15.8",
-        "1.16.3"
+        "1.16.3",
+        "1.17.2"
       ]
     },
     "actions/setup-java": {
@@ -295,6 +298,18 @@
     },
     {
       "name": "go",
+      "version": "1.27.4",
+      "source": "https://go.dev/dl/go1.27.4.linux-amd64.tar.gz",
+      "sha256": "7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "go version",
+      "expected": "go1.27.4"
+    },
+    {
+      "name": "go-1.25.13",
       "version": "1.25.13",
       "source": "https://go.dev/dl/go1.25.13.linux-amd64.tar.gz",
       "sha256": "39042a078ea9ceebe3ecda4a7188f0f5b96e14a071d27923ba7f40b456e85ae3",
@@ -302,7 +317,7 @@
         "standard",
         "container-build"
       ],
-      "command": "go version",
+      "command": "/opt/go-1.25.13/bin/go version",
       "expected": "go1.25.13"
     },
     {
@@ -845,6 +860,18 @@
     },
     {
       "name": "terraform",
+      "version": "1.17.2",
+      "source": "https://releases.hashicorp.com/terraform/1.17.2/terraform_1.17.2_linux_amd64.zip",
+      "sha256": "e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b",
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
+      "command": "terraform version",
+      "expected": "Terraform v1.17.2"
+    },
+    {
+      "name": "terraform-1.16.3",
       "version": "1.16.3",
       "source": "https://releases.hashicorp.com/terraform/1.16.3/terraform_1.16.3_linux_amd64.zip",
       "sha256": "093b6ae9a2228af5029c41606bc96eb583553528aad1bfe7e0b4d62fc91e25d8",
@@ -852,7 +879,7 @@
         "standard",
         "container-build"
       ],
-      "command": "terraform version",
+      "command": "/opt/terraform/1.16.3/terraform version",
       "expected": "Terraform v1.16.3"
     },
     {
@@ -1012,15 +1039,15 @@
     },
     {
       "name": "golangci-lint",
-      "version": "2.12.2",
-      "source": "https://github.com/golangci/golangci-lint/releases/download/v2.12.2/golangci-lint-2.12.2-linux-amd64.tar.gz",
-      "sha256": "8df580d2670fed8fa984aac0507099af8df275e665215f5c7a2ae3943893a553",
+      "version": "2.15.0",
+      "source": "https://github.com/golangci/golangci-lint/releases/download/v2.15.0/golangci-lint-2.15.0-linux-amd64.tar.gz",
+      "sha256": "9b7fe6a6bf6334b98decf8d86b11415ea7889afdabdd1959fdce23af2a9ebcea",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "golangci-lint --version",
-      "expected": "2.12.2"
+      "expected": "2.15.0"
     },
     {
       "name": "zizmor",
