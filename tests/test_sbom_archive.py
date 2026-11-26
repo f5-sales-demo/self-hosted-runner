@@ -87,6 +87,18 @@ class SbomArchiveTests(unittest.TestCase):
     def test_wrong_platform_is_rejected(self) -> None:
         self.assertNotEqual(self.verify(architecture="arm64").returncode, 0)
 
+    def test_cli_identifies_attribution_failure_without_dumping_payload(self) -> None:
+        result = self.verify(architecture="arm64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("missing or ambiguous Linux/amd64 image", result.stderr)
+        self.assertNotIn("synthetic-package", result.stderr)
+
+    def test_cli_identifies_foreign_subject_without_dumping_payload(self) -> None:
+        result = self.verify(foreign=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("foreign SPDX statement subject", result.stderr)
+        self.assertNotIn("synthetic-package", result.stderr)
+
     def test_hosted_probe_exports_registry_candidate_without_publishing(self) -> None:
         workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
         self.assertIn("runs-on: ubuntu-24.04", workflow)

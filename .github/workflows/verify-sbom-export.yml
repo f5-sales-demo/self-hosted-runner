@@ -71,7 +71,7 @@ jobs:
             --provenance=false --sbom="generator=${scanner}" \
             --output "type=oci,dest=${SBOM_PROBE_DIR}/probe.oci.tar" \
             "$SBOM_PROBE_DIR" 2>&1 | tee "$SBOM_PROBE_DIR/export.log"
-          python3 scripts/verify-sbom.py --oci-archive "$SBOM_PROBE_DIR/probe.oci.tar" |
+          python3 scripts/verify-sbom.py --oci-archive "$SBOM_PROBE_DIR/probe.oci.tar" 2>&1 |
             tee "$SBOM_PROBE_DIR/receipt.txt"
           printf 'profile=%s originalImage=%s originalSource=%s scanner=%s\n' \
             "$PROFILE" "$reference" "$BASE_SOURCE_SHA" "$scanner" >> "$SBOM_PROBE_DIR/receipt.txt"
