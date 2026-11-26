@@ -104,6 +104,17 @@ def main() -> int:
             failures.append("{} cannot compile and run a {} smoke test: {!r}".format(compiler, language, compiler_output.strip()))
         else:
             print("[ok] {} {} smoke test".format(compiler, language))
+    systemd_source = "#include <systemd/sd-daemon.h>\nint main(void) { return sd_listen_fds(0) < 0; }"
+    systemd_path = "/tmp/runner-systemd-link-smoke"
+    systemd_code, systemd_output = run(
+        "printf '%s\\n' {} | cc -x c - -lsystemd -o {} && {} && rm -f {}".format(
+            shlex.quote(systemd_source), systemd_path, systemd_path, systemd_path
+        )
+    )
+    if systemd_code:
+        failures.append("systemd development library cannot compile and link: {!r}".format(systemd_output.strip()))
+    else:
+        print("[ok] systemd development library header and linkage")
     if failures:
         print("\n".join("[error] {}".format(failure) for failure in failures), file=sys.stderr)
         return 1
