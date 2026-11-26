@@ -46,7 +46,7 @@ ARG HELM_VERSION=3.21.3
 ARG HELM_SHA256=15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
 ARG ANDROID_TOOLS_REVISION=11076708
 ARG ANDROID_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
-ARG APT_SNAPSHOT=20260810T000000Z
+ARG APT_SNAPSHOT=20261126T000000Z
 ARG CHROME_VERSION=151.0.7922.77
 ARG CHROME_SHA256=60a324a6e1d27b20f2035a2cdaf71641a739fe1f5571f63794773225820bce8a
 ARG CHROMEDRIVER_VERSION=151.0.7922.77
@@ -135,14 +135,19 @@ RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmak
     && rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
     && for attempt in 1 2 3 4 5 6 7 8; do \
-      if apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 update \
-        && install -d -m 0755 -o _apt -g root /var/cache/apt/archives/partial \
-        && rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
-        && apt-get --print-uris --yes --no-install-recommends install $packages \
-          | awk '/^\047https:/ { gsub(/\047/, "", $1); print $1, $2, $4 }' \
-          | xargs -r -n3 -P16 sh -c '/usr/lib/apt/apt-helper -o Acquire::Retries=5 -o Acquire::https::Timeout=30 download-file "$0" "/var/cache/apt/archives/partial/$1" "$2" >/dev/null' \
-        && find /var/cache/apt/archives/partial -maxdepth 1 -type f -name '*.deb' -exec mv -t /var/cache/apt/archives {} + \
-        && apt-get --no-download --yes --no-install-recommends install $packages; then break; fi; \
+      if apt-get -o Acquire::Retries=5 -o Acquire::https::Timeout=30 update; then \
+        package_plan=$(mktemp) \
+        && apt-get --print-uris --yes --no-install-recommends install $packages > "$package_plan" || exit 1; \
+        install -d -m 0755 -o _apt -g root /var/cache/apt/archives/partial \
+          && rm -f /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* || exit 1; \
+        if awk '/^\047https:/ { gsub(/\047/, "", $1); print $1, $2, $4 }' "$package_plan" \
+          | xargs -r -n3 -P16 sh -c '/usr/lib/apt/apt-helper -o Acquire::Retries=5 -o Acquire::https::Timeout=30 download-file "$0" "/var/cache/apt/archives/partial/$1" "$2" >/dev/null'; then \
+          find /var/cache/apt/archives/partial -maxdepth 1 -type f -name '*.deb' -exec mv -t /var/cache/apt/archives {} + \
+            && apt-get --no-download --yes --no-install-recommends install $packages || exit 1; \
+          rm -f "$package_plan"; break; \
+        fi; \
+        rm -f "$package_plan"; \
+      fi; \
       test "$attempt" -eq 8 && exit 1; \
       rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/*; sleep $((attempt * 15)); \
     done \
