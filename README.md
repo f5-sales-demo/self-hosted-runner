@@ -109,9 +109,10 @@ python3 scripts/check-tool-updates.py --format json
 
 1. Merge a reviewed builder PR. Only the GitHub-hosted publish workflow builds
    and pushes a candidate.
-2. Record the three published digests and verify their GitHub provenance. The
-   standard and container-build images additionally use
-   `scripts/verify-promotion.sh` for their resident tool contracts.
+2. Record the three published digests. Run `scripts/verify-promotion.sh` to
+   verify exact-source GitHub provenance and each image's registry-hosted SPDX
+   SBOM. The publisher uses a digest-pinned BuildKit scanner; it does not upload
+   size-limited SPDX payloads through GitHub attestation actions.
 3. On the Ubuntu workstation, run `scripts/preload-image.sh` for the standard
    and container-build digests. The seed digest is pulled by the container-build
    pre-pull DaemonSet and its archive/image identities are verified per job.

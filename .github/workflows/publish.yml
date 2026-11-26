@@ -58,6 +58,8 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
+          SBOM_SCANNER="$(jq -er ' .base_images.sbom_scanner ' catalog/tool-catalog.json)"
+          [[ "$SBOM_SCANNER" =~ ^docker\.io/docker/buildkit-syft-scanner@sha256:[0-9a-f]{64}$ ]]
           tag="sha-${GITHUB_SHA}-${PROFILE}"
           docker buildx build \
             --no-cache \
@@ -66,6 +68,7 @@ jobs:
             --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
             --label "org.opencontainers.image.created=${SOURCE_DATE_EPOCH:-0}" \
             --provenance=mode=max \
+            --sbom="generator=${SBOM_SCANNER}" \
             --push \
             --tag "${IMAGE}:${tag}" \
             .
