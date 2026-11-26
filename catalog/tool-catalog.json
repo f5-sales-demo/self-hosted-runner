@@ -100,7 +100,7 @@
       "tool": "biome",
       "field": "version",
       "versions": [
-        "2.5.6"
+        "2.6.9"
       ]
     },
     "astral-sh/ruff-action": {
@@ -616,15 +616,15 @@
     },
     {
       "name": "biome",
-      "version": "2.5.6",
-      "source": "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%402.5.6/biome-linux-x64",
-      "sha256": "3cc9a0c3fa26ac26a89e8a3b203c010c9ae88e36f69a2679e79981f267ce9d57",
+      "version": "2.6.9",
+      "source": "https://github.com/biomejs/biome/releases/download/%40biomejs/biome%402.6.9/biome-linux-x64",
+      "sha256": "5409e32eb17b47e0d1d9bbf213b749eba1f9c35d8b18fbd2ee55971157918a57",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "biome --version",
-      "expected": "2.5.6"
+      "expected": "2.6.9"
     },
     {
       "name": "ruff",
@@ -823,7 +823,7 @@
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z development packages",
       "profiles": ["standard", "container-build"],
-      "command": "pkg-config --exists cairo pango libjpeg libgif librsvg-2.0",
+      "command": "pkg-config --exists cairo pango libjpeg libgif librsvg-2.0 libsystemd",
       "expected": ""
     },
     {

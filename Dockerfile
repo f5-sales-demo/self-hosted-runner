@@ -55,8 +55,8 @@ ARG GECKODRIVER_VERSION=0.37.1
 ARG GECKODRIVER_SHA256=e815130ea95983e162ae91843b48d3a3ce991735635fce83a647afde21e09f7e
 ARG UV_VERSION=0.8.24
 ARG UV_SHA256=db8179fffd97b7557b9a519bae82eaa4f499b02ef546f738a35e74e26c47e6b7
-ARG BIOME_VERSION=2.5.6
-ARG BIOME_SHA256=3cc9a0c3fa26ac26a89e8a3b203c010c9ae88e36f69a2679e79981f267ce9d57
+ARG BIOME_VERSION=2.6.9
+ARG BIOME_SHA256=5409e32eb17b47e0d1d9bbf213b749eba1f9c35d8b18fbd2ee55971157918a57
 ARG ACTIONLINT_VERSION=1.7.12
 ARG ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
 ARG RUFF_VERSION=0.16.0
@@ -131,7 +131,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # signed indexes, fetch them concurrently through APT's checksum-verifying
 # helper, and then prohibit network access during installation. No service is
 # enabled or started here; every target runs as the unprivileged runner user.
-RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 locales llvm make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross sqlite3 sudo swig unzip wget xz-utils zip zstd libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth' \
+RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmake curl dbus-x11 default-mysql-client dnsutils dpkg-dev file fonts-liberation git git-lfs gnupg gpg iproute2 iputils-ping jq libasound2t64 libatk-bridge2.0-0 libatk1.0-0 libcups2t64 libdrm2 libgbm1 libgtk-3-0 libicu74 libnss3 libx11-xcb1 libxcomposite1 libxdamage1 libxrandr2 libsecret-1-0 libssl3 libsystemd-dev locales llvm make maven mercurial netcat-openbsd openjdk-17-jdk openjdk-21-jdk p7zip-full php-cli php-curl php-mbstring php-xml pipx pkg-config postgresql-client python-is-python3 python3 python3-dev python3-keyring python3-pip python3-venv python3-yaml ruby-full rustup shellcheck gcc-aarch64-linux-gnu libc6-dev-arm64-cross sqlite3 sudo swig unzip wget xz-utils zip zstd libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep imagemagick xvfb xauth' \
     && rm -f /etc/apt/sources.list.d/* \
     && { echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble main restricted universe multiverse"; echo "deb [check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/${APT_SNAPSHOT} noble-updates main restricted universe multiverse"; } > /etc/apt/sources.list \
     && for attempt in 1 2 3 4 5 6 7 8; do \
