@@ -23,6 +23,7 @@ jobs:
     permissions:
       contents: read
       packages: read
+      attestations: read
     strategy:
       fail-fast: false
       matrix:
@@ -47,6 +48,7 @@ jobs:
           printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
       - name: Export and verify original-image SPDX evidence
         env:
+          GH_TOKEN: ${{ github.token }}
           PROFILE: ${{ matrix.profile }}
           BASE_SOURCE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |

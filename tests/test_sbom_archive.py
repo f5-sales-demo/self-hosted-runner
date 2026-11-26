@@ -90,6 +90,8 @@ class SbomArchiveTests(unittest.TestCase):
     def test_hosted_probe_exports_registry_candidate_without_publishing(self) -> None:
         workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
         self.assertIn("runs-on: ubuntu-24.04", workflow)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
+        self.assertIn("attestations: read", workflow)
         self.assertIn("--output", workflow)
         self.assertIn("type=oci", workflow)
         self.assertIn("--oci-archive", workflow)
