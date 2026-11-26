@@ -34,6 +34,20 @@ if name == "gh":
     if args[:2] == ["attestation", "verify"]:
         sys.exit(int(os.environ.get("PROVENANCE_EXIT", "0")))
     sys.exit(97)
+if name == "docker":
+    if args[:3] != ["buildx", "imagetools", "inspect"] or args[-1] != os.environ["TOOLCHAIN_CANARY_IMAGE"]:
+        sys.exit(97)
+    code = int(os.environ.get("SBOM_EXIT", "0"))
+    if code:
+        sys.exit(code)
+    print(json.dumps({"SPDX": {
+        "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT",
+        "name": "synthetic-canary", "dataLicense": "CC0-1.0",
+        "documentNamespace": "https://example.com/spdx/synthetic-canary",
+        "creationInfo": {"created": "2026-11-01T00:00:00Z", "creators": ["Tool: syft"]},
+        "packages": [{"name": "synthetic-package", "SPDXID": "SPDXRef-package"}]
+    }}))
+    sys.exit(0)
 if name == "helm":
     if args == ["version", "--short"]:
         print("v3.21.3+g1ad6e68")
@@ -68,7 +82,7 @@ class ProviderCanaryCliTest(unittest.TestCase):
         subprocess.run(["git", "init", "--quiet", str(self.root)], check=True)
         self.bin = self.root / "bin"
         self.bin.mkdir()
-        for name in ("gh", "helm", "kubectl"):
+        for name in ("gh", "docker", "helm", "kubectl"):
             command = self.bin / name
             command.write_text(COMMAND_FIXTURE)
             command.chmod(0o700)
@@ -181,6 +195,15 @@ class ProviderCanaryCliTest(unittest.TestCase):
                 and row["args"][0] in {"apply", "delete", "create", "patch"},
                 row,
             )
+
+    def test_failed_sbom_refuses_all_upgrades(self):
+        self.env["SBOM_EXIT"] = "44"
+        result = self.deploy()
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assert_no_mutations()
+        calls = [row for row in self.commands() if row["command"] == "docker"]
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["args"][-1], IMAGE)
 
     def test_failed_provenance_refuses_all_upgrades(self):
         self.env["PROVENANCE_EXIT"] = "43"

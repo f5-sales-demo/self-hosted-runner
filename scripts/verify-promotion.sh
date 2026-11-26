@@ -23,4 +23,9 @@ gh attestation verify "oci://${image}" \
   --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
   --source-digest "$revision" \
   --deny-self-hosted-runners
+# Require the original platform's registry SPDX SBOM after provenance verification.
+docker buildx imagetools inspect \
+  --format '{{json (index .SBOM "linux/amd64")}}' "$image" | \
+  python3 "$(dirname "${BASH_SOURCE[0]}")/verify-sbom.py"
+
 printf "verified GitHub provenance for %s from %s\n" "$image" "$revision"

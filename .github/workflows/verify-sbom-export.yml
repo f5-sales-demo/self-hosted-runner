@@ -1,0 +1,91 @@
+name: Verify published runner SBOM export
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/verify-sbom-export.yml
+      - .github/workflows/publish.yml
+      - catalog/tool-catalog.json
+      - scripts/verify-sbom.py
+      - tests/test_sbom_archive.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: runner-sbom-export-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sbom-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+      attestations: read
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [standard, container-build, super-linter-seed]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up bounded isolated BuildKit
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
+        with:
+          driver: docker-container
+          driver-opts: |
+            memory=8g
+            memory-swap=10g
+            env.GOMEMLIMIT=6GiB
+      - name: Authenticate for immutable package reads
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Export and verify original-image SPDX evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROFILE: ${{ matrix.profile }}
+          BASE_SOURCE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          image=ghcr.io/f5-sales-demo/self-hosted-runner
+          tag="${image}:sha-${BASE_SOURCE_SHA}-${PROFILE}"
+          digest="$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er '.digest')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          reference="${image}@${digest}"
+          probe_reference="${image}:sbom-probe-${BASE_SOURCE_SHA}-${PROFILE}"
+          gh attestation verify "oci://${reference}" --repo f5-sales-demo/self-hosted-runner \
+            --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
+            --source-digest "$BASE_SOURCE_SHA" --deny-self-hosted-runners
+          scanner="$(jq -er '.base_images.sbom_scanner' catalog/tool-catalog.json)"
+          [[ "$scanner" =~ ^docker\.io/docker/buildkit-syft-scanner@sha256:[0-9a-f]{64}$ ]]
+          SBOM_PROBE_DIR="${RUNNER_TEMP}/sbom-export-${PROFILE}"
+          mkdir -p "$SBOM_PROBE_DIR"
+          printf 'FROM %s\n' "$reference" > "$SBOM_PROBE_DIR/Dockerfile"
+          printf 'profile=%s originalImage=%s originalSource=%s scanner=%s probeName=%s\n' \
+            "$PROFILE" "$reference" "$BASE_SOURCE_SHA" "$scanner" "$probe_reference" >> "$SBOM_PROBE_DIR/receipt.txt"
+          docker buildx build --no-cache --platform linux/amd64 \
+            --tag "$probe_reference" \
+            --provenance=false --sbom="generator=${scanner}" \
+            --output "type=oci,dest=${SBOM_PROBE_DIR}/probe.oci.tar" \
+            "$SBOM_PROBE_DIR" 2>&1 | tee "$SBOM_PROBE_DIR/export.log"
+          python3 scripts/verify-sbom.py --oci-archive "$SBOM_PROBE_DIR/probe.oci.tar" \
+            --attribution-report "$SBOM_PROBE_DIR/attribution.json" 2>&1 |
+            tee -a "$SBOM_PROBE_DIR/receipt.txt"
+      - name: Retain export diagnostics and attribution receipt
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: runner-sbom-export-${{ matrix.profile }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/sbom-export-${{ matrix.profile }}/export.log
+            ${{ runner.temp }}/sbom-export-${{ matrix.profile }}/receipt.txt
+            ${{ runner.temp }}/sbom-export-${{ matrix.profile }}/attribution.json
+          if-no-files-found: error
+          retention-days: 14
