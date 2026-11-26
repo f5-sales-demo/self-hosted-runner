@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
+import hashlib
 import json
 import re
 import sys
+import tarfile
+from pathlib import Path
 from urllib.parse import urlparse
 
 
@@ -53,13 +57,116 @@ def validate(payload: object) -> int:
     return len(packages)
 
 
+def load_archive(path: Path) -> tuple[object, dict[str, object]]:
+    """Read attributed attestations without extracting an OCI archive."""
+    with tarfile.open(path) as archive:
+        members = archive.getmembers()
+        names = [member.name for member in members]
+        if len(names) != len(set(names)):
+            raise ValueError("ambiguous OCI archive members")
+        lookup = {member.name: member for member in members}
+
+        def read_json(name: str, descriptor: dict[str, object] | None = None) -> tuple[dict[str, object], bytes]:
+            member = lookup.get(name)
+            if member is None or not member.isfile():
+                raise ValueError("missing OCI metadata blob")
+            stream = archive.extractfile(member)
+            if stream is None:
+                raise ValueError("unreadable OCI metadata blob")
+            with stream:
+                data = stream.read()
+            if descriptor is not None:
+                digest = descriptor.get("digest")
+                if descriptor.get("size") != len(data) or digest != "sha256:" + hashlib.sha256(data).hexdigest():
+                    raise ValueError("OCI metadata digest or size mismatch")
+            value = json.loads(data)
+            if not isinstance(value, dict):
+                raise ValueError("invalid OCI metadata object")
+            return value, data
+
+        def read_blob(descriptor: dict[str, object]) -> tuple[dict[str, object], bytes]:
+            digest = descriptor.get("digest")
+            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise ValueError("invalid OCI descriptor digest")
+            return read_json("blobs/sha256/" + digest.removeprefix("sha256:"), descriptor)
+
+        images: set[str] = set()
+        attestations: list[tuple[dict[str, object], dict[str, object]]] = []
+
+        def walk(index: dict[str, object]) -> None:
+            manifests = index.get("manifests")
+            if not isinstance(manifests, list):
+                raise ValueError("invalid OCI image index")
+            for descriptor in manifests:
+                if not isinstance(descriptor, dict):
+                    raise ValueError("invalid OCI image descriptor")
+                manifest, _ = read_blob(descriptor)
+                if "manifests" in manifest:
+                    walk(manifest)
+                    continue
+                annotations = descriptor.get("annotations", {})
+                if not isinstance(annotations, dict):
+                    raise ValueError("invalid OCI descriptor annotations")
+                if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+                    attestations.append((descriptor, manifest))
+                elif descriptor.get("platform") == {"os": "linux", "architecture": "amd64"}:
+                    images.add(str(descriptor["digest"]))
+
+        index, _ = read_json("index.json")
+        walk(index)
+        if len(images) != 1:
+            raise ValueError("missing or ambiguous Linux/amd64 image")
+        image = next(iter(images))
+        documents: list[tuple[object, bytes]] = []
+        for descriptor, manifest in attestations:
+            annotations = descriptor["annotations"]
+            if annotations.get("vnd.docker.reference.digest") != image:
+                raise ValueError("foreign OCI attestation attribution")
+            layers = manifest.get("layers")
+            if not isinstance(layers, list):
+                raise ValueError("invalid OCI attestation layers")
+            for layer in layers:
+                if not isinstance(layer, dict):
+                    raise ValueError("invalid OCI attestation layer")
+                if layer.get("mediaType") != "application/vnd.in-toto+json":
+                    continue
+                statement, raw = read_blob(layer)
+                if statement.get("predicateType") != "https://spdx.dev/Document":
+                    continue
+                subjects = statement.get("subject")
+                if not isinstance(subjects, list) or not subjects or not all(
+                    isinstance(subject, dict)
+                    and isinstance(subject.get("digest"), dict)
+                    and subject["digest"].get("sha256") == image.removeprefix("sha256:")
+                    for subject in subjects
+                ):
+                    raise ValueError("foreign SPDX statement subject")
+                documents.append((statement.get("predicate"), raw))
+        if len(documents) != 1:
+            raise ValueError("missing or ambiguous SPDX attestation")
+        document, raw = documents[0]
+        return {"SPDX": document}, {
+            "sourceManifest": image,
+            "sbomBytes": len(raw),
+            "sbomSha256": hashlib.sha256(raw).hexdigest(),
+        }
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--oci-archive", type=Path)
+    args = parser.parse_args()
     try:
-        count = validate(json.load(sys.stdin))
-    except (ValueError, TypeError, OSError):
+        if args.oci_archive is None:
+            payload, proof = json.load(sys.stdin), {}
+        else:
+            payload, proof = load_archive(args.oci_archive)
+        count = validate(payload)
+    except (ValueError, TypeError, OSError, KeyError, tarfile.TarError):
         print("registry SPDX SBOM is missing, malformed, or incomplete", file=sys.stderr)
         return 1
-    print(f"verified SPDX SBOM packages={count}")
+    details = " ".join(f"{name}={value}" for name, value in proof.items())
+    print(f"verified SPDX SBOM packages={count}" + (" " + details if details else ""))
     return 0
 
 
