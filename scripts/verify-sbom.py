@@ -61,7 +61,7 @@ def validate(payload: object) -> int:
     return len(packages)
 
 
-def load_archive(path: Path) -> tuple[object, dict[str, object]]:
+def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[object, dict[str, object]]:
     """Read attributed attestations without extracting an OCI archive."""
     with tarfile.open(path) as archive:
         members = archive.getmembers()
@@ -118,6 +118,18 @@ def load_archive(path: Path) -> tuple[object, dict[str, object]]:
 
         index, _ = read_json("index.json")
         walk(index)
+        report: dict[str, object] = {
+            "imageManifests": sorted(images), "statements": [],
+            "inspectionComplete": False,
+        }
+        subject_reports: list[dict[str, object]] = []
+        report["statements"] = subject_reports
+
+        def retain_report() -> None:
+            if attribution_report is not None:
+                attribution_report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+        retain_report()
         if len(images) != 1:
             raise SbomValidationError("missing or ambiguous Linux/amd64 image")
         image = next(iter(images))
@@ -138,6 +150,23 @@ def load_archive(path: Path) -> tuple[object, dict[str, object]]:
                 if statement.get("predicateType") != "https://spdx.dev/Document":
                     continue
                 subjects = statement.get("subject")
+                # Retain only verified metadata digests and structural counts.
+                # Names, package inventories and arbitrary payload values are
+                # excluded, including when a subject fails validation.
+                subject_reports.append({
+                    "attestationManifest": descriptor["digest"],
+                    "imageAttribution": image,
+                    "statementDigest": layer["digest"],
+                    "subjectCount": len(subjects) if isinstance(subjects, list) else None,
+                    "subjectSha256": [
+                        subject["digest"]["sha256"] for subject in subjects
+                        if isinstance(subject, dict)
+                        and isinstance(subject.get("digest"), dict)
+                        and isinstance(subject["digest"].get("sha256"), str)
+                        and re.fullmatch(r"[0-9a-f]{64}", subject["digest"]["sha256"])
+                    ] if isinstance(subjects, list) else [],
+                })
+                retain_report()
                 if not isinstance(subjects, list) or not subjects or not all(
                     isinstance(subject, dict)
                     and isinstance(subject.get("digest"), dict)
@@ -148,6 +177,8 @@ def load_archive(path: Path) -> tuple[object, dict[str, object]]:
                 documents.append((statement.get("predicate"), raw))
         if len(documents) != 1:
             raise SbomValidationError("missing or ambiguous SPDX attestation")
+        report["inspectionComplete"] = True
+        retain_report()
         document, raw = documents[0]
         return {"SPDX": document}, {
             "sourceManifest": image,
@@ -159,12 +190,15 @@ def load_archive(path: Path) -> tuple[object, dict[str, object]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oci-archive", type=Path)
+    parser.add_argument("--attribution-report", type=Path)
     args = parser.parse_args()
+    if args.attribution_report is not None and args.oci_archive is None:
+        parser.error("--attribution-report requires --oci-archive")
     try:
         if args.oci_archive is None:
             payload, proof = json.load(sys.stdin), {}
         else:
-            payload, proof = load_archive(args.oci_archive)
+            payload, proof = load_archive(args.oci_archive, args.attribution_report)
         count = validate(payload)
     except SbomValidationError as error:
         print(f"registry SPDX SBOM validation failed: {error}", file=sys.stderr)

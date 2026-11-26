@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import subprocess
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -98,6 +99,45 @@ class SbomArchiveTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("foreign SPDX statement subject", result.stderr)
         self.assertNotIn("synthetic-package", result.stderr)
+
+    def test_hosted_probe_names_oci_output_and_retains_subject_diagnostics(self) -> None:
+        workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
+        self.assertIn('--tag "$probe_reference"', workflow)
+        self.assertIn("probe_reference=", workflow)
+        self.assertIn("--attribution-report", workflow)
+        self.assertIn("/attribution.json", workflow)
+
+    def test_cli_retains_foreign_subject_structure_without_spdx_payload(self) -> None:
+        archive = self.archive(foreign=True)
+        report = archive.parent / "attribution.json"
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/verify-sbom.py"),
+             "--oci-archive", str(archive), "--attribution-report", str(report)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(report.is_file(), result.stderr)
+        value = json.loads(report.read_text())
+        self.assertEqual(value["statements"][0]["subjectCount"], 1)
+        self.assertEqual(value["statements"][0]["subjectSha256"], ["f" * 64])
+        self.assertNotIn("synthetic-package", report.read_text())
+        self.assertNotIn("synthetic-probe", report.read_text())
+        self.assertIn("foreign SPDX statement subject", result.stderr)
+
+    def test_cli_retains_valid_subject_binding_with_success(self) -> None:
+        archive = self.archive()
+        report = archive.parent / "attribution.json"
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/verify-sbom.py"),
+             "--oci-archive", str(archive), "--attribution-report", str(report)],
+            capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        value = json.loads(report.read_text())
+        self.assertEqual(value["statements"][0]["subjectCount"], 1)
+        self.assertEqual(value["statements"][0]["subjectSha256"],
+                         [value["imageManifests"][0].removeprefix("sha256:")])
+        self.assertTrue(value["inspectionComplete"])
 
     def test_hosted_probe_exports_registry_candidate_without_publishing(self) -> None:
         workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
