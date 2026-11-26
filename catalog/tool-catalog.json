@@ -117,7 +117,7 @@
       "tool": "bun",
       "field": "bun-version",
       "versions": [
-        "1.4.4"
+        "1.4.5"
       ]
     },
     "hashicorp/setup-terraform": {
@@ -836,15 +836,15 @@
     },
     {
       "name": "bun",
-      "version": "1.4.4",
-      "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip",
-      "sha256": "bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c",
+      "version": "1.4.5",
+      "source": "https://github.com/oven-sh/bun/releases/download/bun-v1.4.5/bun-linux-x64.zip",
+      "sha256": "94559b3b528995a49452f9f2404cec74f2efd7d06e0a000a8cd214b02c3666eb",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "bun --version",
-      "expected": "1.4.4"
+      "expected": "1.4.5"
     },
     {
       "name": "zig",
