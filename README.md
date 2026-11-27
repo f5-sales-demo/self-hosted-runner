@@ -168,7 +168,8 @@ the kernel that actually governs the job rather than the image build host.
 
 `renovate-system/` is the isolated build context for the organization-owned
 Renovate bot. The
-upstream receipt pins Renovate 44.52.1 by manifest digest; a path-scoped
+upstream receipt records the qualified current stable Renovate release and
+its manifest digest in `renovate-system/image-source.json`; a path-scoped
 GitHub-hosted workflow
 publishes the derived GHCR image with provenance.
 `scripts/promote-renovate-image.sh` copies that
