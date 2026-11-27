@@ -104,8 +104,42 @@ jobs:
           docker run --rm --entrypoint docker-action-profile \
             local/self-hosted-runner:container-build --help >/dev/null
           docker pull "$SMOKE_IMAGE" >/dev/null
-          evidence=$(mktemp -d)
-          trap 'rm -rf "$evidence"' EXIT
+          evidence="$RUNNER_TEMP/docker-profile-smoke"
+          mkdir -m 700 "$evidence"
+          scope="profile-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          observer_closed=false
+          docker ps --all --no-trunc --filter "name=^/$scope$" --format '{{json .}}' >"$evidence/initial-containers.jsonl"
+          [[ ! -s "$evidence/initial-containers.jsonl" ]]
+          docker image inspect --format '{{json .}}' "$SMOKE_IMAGE" >"$evidence/image.json"
+          cleanup() {
+            if [[ -n "${observer:-}" && "$observer_closed" == false ]]; then
+              wait "$observer" || true
+            fi
+            [[ -f "$evidence/container-id" ]] || return 0
+            [[ -f "$evidence/container-original.json" ]] || return 1
+            IFS= read -r cid <"$evidence/container-id"
+            [[ "$cid" =~ ^[0-9a-f]{64}$ ]] || return 1
+            docker container inspect --format '{{json .}}' "$cid" >"$evidence/container-before-cleanup.json" || return 1
+            jq -e --arg cid "$cid" --arg scope "$scope" \
+              --slurpfile original "$evidence/container-original.json" \
+              '.Id == $cid and .Id == $original[0].Id and
+               .Image == $original[0].Image and .Created == $original[0].Created and
+               .Config.Labels["xcsh.profile.smoke"] == $scope and
+               .State.Running == false and
+               (.State.Status == "exited" or .State.Status == "created")' \
+              "$evidence/container-before-cleanup.json" >/dev/null || return 1
+            docker container rm "$cid" >"$evidence/container-removal.txt" || return 1
+            docker ps --all --no-trunc --filter "name=^/$scope$" --format '{{json .}}' >"$evidence/final-containers.jsonl" || return 1
+            [[ ! -s "$evidence/final-containers.jsonl" ]]
+          }
+          finish() {
+            local outcome=$?
+            if ! cleanup; then
+              outcome=1
+            fi
+            exit "$outcome"
+          }
+          trap finish EXIT
           scripts/docker-action-profile.py \
             --name image-smoke \
             --image "$SMOKE_IMAGE" \
@@ -122,8 +156,19 @@ jobs:
           done
           [[ -f "$evidence/ready" ]]
           sleep 0.25
-          docker run --rm "$SMOKE_IMAGE" sh -c 'sleep 3'
+          docker container create --name "$scope" --label "xcsh.profile.smoke=$scope" \
+            "$SMOKE_IMAGE" sh -c 'sleep 3' >"$evidence/container-id"
+          IFS= read -r cid <"$evidence/container-id"
+          [[ "$cid" =~ ^[0-9a-f]{64}$ ]]
+          docker container inspect --format '{{json .}}' "$cid" >"$evidence/container-original.json"
+          jq -e --arg cid "$cid" --arg scope "$scope" --slurpfile image "$evidence/image.json" \
+            '.Id == $cid and .Image == $image[0].Id and
+             (.Created | type) == "string" and
+             .Config.Labels["xcsh.profile.smoke"] == $scope and
+             .State.Status == "created"' "$evidence/container-original.json" >/dev/null
+          docker container start --attach "$cid"
           wait "$observer"
+          observer_closed=true
           jq -e \
             --arg digest "$SMOKE_DIGEST" \
             '.observer.result == "completed" and .exit.code == 0 and
@@ -136,6 +181,8 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: runner-build-container-build-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/runner-build-container-build.jsonl
+          path: |
+            ${{ runner.temp }}/runner-build-container-build.jsonl
+            ${{ runner.temp }}/docker-profile-smoke
           if-no-files-found: error
           retention-days: 14

@@ -10,10 +10,12 @@ import queue
 import re
 import signal
 import subprocess
-import threading
 import time
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
+
+from profile_capture import Observation, ObservationIncomplete, resume
 
 SCHEMA_VERSION = 2
 SUPER_LINTER_ACTION_COMMIT = "4ce20838b8ab83717e78138c5b3a1407148e0918"
@@ -80,23 +82,26 @@ def parse_percent(value: str) -> float:
     return max(0.0, float(value[:-1]) / 100.0)
 
 
-def run_json(docker: str, arguments: list[str]) -> dict:
-    result = subprocess.run(
-        [docker, *arguments],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        timeout=10,
+def run_json(
+    docker: str, arguments: list[str], observation: Observation, *, allow_failure=False
+) -> dict:
+    payload = json.loads(
+        observation.run([docker, *arguments], allow_failure=allow_failure)
     )
-    payload = json.loads(result.stdout)
     if not isinstance(payload, dict):
         raise TypeError("Docker returned a non-object")
     return payload
 
 
-def image_identity(docker: str, reference: str, expected: str | None) -> dict:
-    image = run_json(docker, ["image", "inspect", "--format", "{{json .}}", reference])
+def image_identity(
+    docker: str, reference: str, expected: str | None, observation: Observation
+) -> dict:
+    image = run_json(
+        docker,
+        ["image", "inspect", "--format", "{{json .}}", reference],
+        observation,
+        allow_failure=True,
+    )
     image_id = image.get("Id")
     repo_digests = sorted(
         value.rsplit("@", 1)[1]
@@ -183,8 +188,7 @@ def seed_evidence(
         and SHA256.fullmatch(str(value.get("loaded_image_id"))) is not None
         and re.fullmatch(r"[0-9a-f]{64}", str(value.get("image_config_sha256")))
         is not None
-        and re.fullmatch(r"[0-9a-f]{64}", str(value.get("rootfs_sha256")))
-        is not None
+        and re.fullmatch(r"[0-9a-f]{64}", str(value.get("rootfs_sha256"))) is not None
     )
     source_hit = value.get("result") == "hit" and value.get("qualified") is True
     result = value.get("result")
@@ -377,8 +381,10 @@ def disk_evidence(path: Path) -> dict:
     }
 
 
-def existing_containers(docker: str, image_id: str) -> set[str]:
-    result = subprocess.run(
+def existing_containers(
+    docker: str, image_id: str, observation: Observation
+) -> set[str]:
+    result = observation.run(
         [
             docker,
             "ps",
@@ -389,13 +395,8 @@ def existing_containers(docker: str, image_id: str) -> set[str]:
             "--format",
             "{{.ID}}",
         ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        timeout=10,
     )
-    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+    return {line.strip() for line in result.decode().splitlines() if line.strip()}
 
 
 def event_fields(payload: dict) -> tuple[str, str, dict]:
@@ -410,54 +411,79 @@ def event_fields(payload: dict) -> tuple[str, str, dict]:
 
 
 class EventReader:
-    def __init__(self, docker: str, image_reference: str):
-        self.events: queue.Queue[dict] = queue.Queue()
-        self.process = subprocess.Popen(
+    """Finite, contiguous event windows; retain the original command and partial log."""
+
+    def __init__(self, docker: str, image_reference: str, observation: Observation):
+        self.events: queue.Queue[dict] = queue.Queue(maxsize=4096)
+        self.docker, self.image_reference, self.observation = (
+            docker,
+            image_reference,
+            observation,
+        )
+        self.since = observation.request["startedEpoch"]
+        self.until = self.since
+        self.folder: Path | None = None
+        self.offset = 0
+        self.partial = b""
+
+    def start(self) -> None:
+        remaining = self.observation.deadline - time.monotonic()
+        if remaining <= 0:
+            raise ObservationIncomplete("original_event_deadline_expired")
+        self.until = min(
+            time.time() + 2,
+            self.observation.request["startedEpoch"]
+            + self.observation.deadline
+            - self.observation.request["startedMonotonic"],
+        )
+        self.folder = self.observation.start(
             [
-                docker,
+                self.docker,
                 "events",
+                "--since",
+                f"{self.since:.9f}",
+                "--until",
+                f"{self.until:.9f}",
                 "--filter",
                 "type=container",
                 "--filter",
-                f"image={image_reference}",
+                f"image={self.image_reference}",
                 "--format",
                 "{{json .}}",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            start_new_session=True,
+            ]
         )
-        self.thread = threading.Thread(target=self._read, daemon=True)
+        self.offset, self.partial = 0, b""
 
-    def _read(self) -> None:
-        assert self.process.stdout is not None
-        for line in self.process.stdout:
-            try:
+    def poll(self, *, renew=True) -> None:
+        assert self.folder is not None
+        path = self.folder / "stdout.private.log"
+        if path.exists():
+            with path.open("rb") as stream:
+                stream.seek(self.offset)
+                data = stream.read()
+            self.offset += len(data)
+            lines = (self.partial + data).split(b"\n")
+            self.partial = lines.pop()
+            for line in lines:
                 payload = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if isinstance(payload, dict):
-                self.events.put(payload)
-
-    def start(self) -> None:
-        self.thread.start()
-
-    def close(self) -> None:
-        if self.process.poll() is None:
-            try:
-                os.killpg(self.process.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
-        try:
-            self.process.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            try:
-                os.killpg(self.process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            self.process.wait(timeout=2)
-        self.thread.join(timeout=1)
+                if not isinstance(payload, dict):
+                    raise ObservationIncomplete("event_not_object")
+                self.events.put_nowait(payload)
+        result = resume(self.folder)
+        if result["status"] == "unresolved":
+            raise ObservationIncomplete(result["reason"])
+        if result["status"] == "complete":
+            if result["code"] != 0 or any(result["truncated"].values()) or self.partial:
+                raise ObservationIncomplete("event_capture_incomplete")
+            if (
+                renew
+                and self.until
+                < self.observation.request["startedEpoch"]
+                + self.observation.deadline
+                - self.observation.request["startedMonotonic"]
+            ):
+                self.since = self.until
+                self.start()
 
 
 def safe_metadata(args: argparse.Namespace) -> dict[str, str | None]:
@@ -568,7 +594,23 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     started_at = datetime.now(UTC)
-    started = time.monotonic()
+    config = {
+        "kind": "docker-action",
+        "arguments": {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        },
+        "cwd": str(Path.cwd()),
+    }
+    capture_root = args.output.with_name(args.output.name + ".capture")
+    if capture_root.exists():
+        return Observation.inspect(capture_root, config).get("code", 2)
+    if args.output.exists():
+        raise FileExistsError(args.output)
+    observation = Observation(
+        capture_root, config, args.timeout, sources=[Path(__file__)]
+    )
+    started = observation.request["startedMonotonic"]
     seed = seed_evidence(
         args.seed_result_file,
         args.expected_action_commit,
@@ -601,7 +643,7 @@ def main(argv: list[str] | None = None) -> int:
     memory_peak: int | None = None
     memory_limit: int | None = None
     block_read = block_write = network_receive = network_transmit = 0
-    pids_peak = 0
+    pids_peak: int | None = None
     cache_state = (
         ("warm" if seed["qualified"] else "cold")
         if args.cache_state == "auto"
@@ -609,8 +651,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     image = {"id": None, "digest": None, "size_bytes": None}
     baseline: set[str] = set()
-    wait_process: subprocess.Popen[str] | None = None
     wait_observed_at: float | None = None
+    selected_created: str | None = None
+    state_exit: int | None = None
     die_observed = False
     last_sample = time.monotonic()
     image_available_at: float | None = None
@@ -620,7 +663,9 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         try:
-            image = image_identity(args.docker, args.image, args.expected_digest)
+            image = image_identity(
+                args.docker, args.image, args.expected_digest, observation
+            )
             image_available_at = time.monotonic()
         except (
             subprocess.SubprocessError,
@@ -630,11 +675,11 @@ def main(argv: list[str] | None = None) -> int:
         ):
             if args.cache_state == "auto":
                 cache_state = "cold"
-            deadline = time.monotonic() + min(args.timeout, 300)
+            deadline = min(observation.deadline, started + 300)
             while time.monotonic() < deadline and not stop_requested:
                 try:
                     image = image_identity(
-                        args.docker, args.image, args.expected_digest
+                        args.docker, args.image, args.expected_digest, observation
                     )
                     image_available_at = time.monotonic()
                     break
@@ -647,21 +692,26 @@ def main(argv: list[str] | None = None) -> int:
                     time.sleep(args.interval)
             else:
                 raise RuntimeError("selected image did not become available")
-        baseline = existing_containers(args.docker, str(image["id"]))
-        reader = EventReader(args.docker, args.image)
+        baseline = existing_containers(args.docker, str(image["id"]), observation)
+        reader = EventReader(args.docker, args.image, observation)
         reader.start()
         # Give the Docker CLI time to subscribe before advertising readiness.
         time.sleep(min(0.25, max(0.05, args.interval)))
-        if reader.process.poll() is not None:
+        if resume(reader.folder)["status"] == "unresolved":
             raise RuntimeError("Docker event subscription exited before readiness")
         if args.pid_file:
-            args.pid_file.parent.mkdir(parents=True, exist_ok=True)
-            args.pid_file.write_text(f"{os.getpid()}\n", encoding="utf-8")
+            observation.publish_marker(args.pid_file, status="observing")
         if args.ready_file:
-            args.ready_file.parent.mkdir(parents=True, exist_ok=True)
-            args.ready_file.write_text("ready\n", encoding="utf-8")
+            observation.publish_marker(args.ready_file, status="ready")
 
         while time.monotonic() - started < args.timeout:
+            if stop_requested or observation.cancel_requested():
+                observer_result, observer_detail = (
+                    "cancelled",
+                    "observer_cancel_requested",
+                )
+                break
+            reader.poll()
             while True:
                 try:
                     event = reader.events.get_nowait()
@@ -686,22 +736,22 @@ def main(argv: list[str] | None = None) -> int:
                                 "{{json .}}",
                                 container_id,
                             ],
+                            observation,
                         )
-                        if details.get("Image") != image["id"]:
+                        if (
+                            details.get("Image") != image["id"]
+                            or details.get("Id") != container_id
+                            or not isinstance(details.get("Created"), str)
+                        ):
                             raise RuntimeError(
                                 "matching event failed immutable image verification"
                             )
                         selected_id = container_id
+                        selected_created = details["Created"]
                         selected_at = time.monotonic()
                         # CPU integration begins with the selected container,
                         # excluding any time spent waiting for late creation.
                         last_sample = time.monotonic()
-                        wait_process = subprocess.Popen(
-                            [args.docker, "wait", container_id],
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL,
-                            text=True,
-                        )
                 elif selected_id == container_id and action == "oom":
                     oom = True
                 elif selected_id == container_id and action == "die":
@@ -715,6 +765,8 @@ def main(argv: list[str] | None = None) -> int:
                     stats = run_json(
                         args.docker,
                         ["stats", "--no-stream", "--format", "{{json .}}", selected_id],
+                        observation,
+                        allow_failure=True,
                     )
                 except (
                     subprocess.SubprocessError,
@@ -754,27 +806,47 @@ def main(argv: list[str] | None = None) -> int:
                     network_transmit = max(network_transmit, net_out)
                     block_read = max(block_read, block_in)
                     block_write = max(block_write, block_out)
-                    pids_peak = max(pids_peak, pids)
+                    pids_peak = max(pids_peak or 0, pids)
                     last_sample = now
-            if selected_id and wait_process and wait_process.poll() is not None:
-                if wait_observed_at is None:
-                    wait_observed_at = time.monotonic()
-                if exit_code is None and wait_process.stdout:
-                    value = wait_process.stdout.read().strip()
-                    if value.isdigit():
-                        exit_code = int(value)
-                # Docker wait can complete just before queued oom/die events. Prefer
-                # the filtered event stream, with a bounded fallback if it disappears.
+            if selected_id:
+                details = run_json(
+                    args.docker,
+                    ["container", "inspect", "--format", "{{json .}}", selected_id],
+                    observation,
+                )
+                if (
+                    details.get("Id") != selected_id
+                    or details.get("Image") != image["id"]
+                    or details.get("Created") != selected_created
+                ):
+                    raise ObservationIncomplete("selected_container_identity_changed")
+                state = details.get("State", {})
+                if state.get("Running") is False and state.get("Status") == "exited":
+                    value = state.get("ExitCode")
+                    if (
+                        not isinstance(value, int)
+                        or isinstance(value, bool)
+                        or not 0 <= value <= 255
+                        or not state.get("FinishedAt")
+                    ):
+                        raise ObservationIncomplete("container_exit_state_incomplete")
+                    if exit_code is not None and exit_code != value:
+                        raise ObservationIncomplete("container_exit_evidence_conflicts")
+                    state_exit = exit_code = value
+                    oom = oom or state.get("OOMKilled") is True
+                    if wait_observed_at is None:
+                        wait_observed_at = time.monotonic()
+            if state_exit is not None and wait_observed_at is not None:
                 drained = die_observed or time.monotonic() - wait_observed_at >= 1.0
                 if exit_code is not None and drained:
                     observer_result = "completed"
                     observer_detail = "container_exit_observed"
                     return_code = 0
                     break
-            if stop_requested:
+            if stop_requested or observation.cancel_requested():
                 if observer_result != "ambiguous":
                     observer_result = "cancelled"
-                    observer_detail = "observer_signal"
+                    observer_detail = "observer_cancel_requested"
                 break
             time.sleep(args.interval)
         else:
@@ -786,24 +858,32 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.SubprocessError,
         ValueError,
         json.JSONDecodeError,
-    ):
-        observer_result = "profiler_error"
-        observer_detail = "docker_observation_failed"
+    ) as error:
+        if observation.cancel_requested():
+            observer_result, observer_detail = "cancelled", "observer_cancel_requested"
+        else:
+            observer_result = "profiler_error"
+            observer_detail = "docker_observation_failed"
+        atomic_json(
+            capture_root / "observation-error.private.json",
+            {
+                "type": type(error).__name__,
+                "reason": str(error),
+                "traceback": traceback.format_exc(),
+            },
+        )
     finally:
-        if reader:
-            reader.close()
-        if wait_process and wait_process.poll() is None:
-            wait_process.terminate()
-            try:
-                wait_process.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                wait_process.kill()
-                wait_process.wait(timeout=2)
+        observed_outcome = time.monotonic()
+        observed_wall = datetime.now(UTC)
+        closed = observation.close(budget=5)
         for signum, handler in previous.items():
             signal.signal(signum, handler)
+    if not closed:
+        return_code = 2
+        observer_result, observer_detail = "unresolved", "original_commands_not_closed"
 
-    duration = max(0.0, time.monotonic() - started)
-    completed_monotonic = time.monotonic()
+    duration = max(0.0, observed_outcome - started)
+    completed_monotonic = observed_outcome
     if selected_id and dind_end is None:
         dind_end = read_dind_evidence(args.dind_evidence_file)
     if exit_code is not None and exit_code > 128:
@@ -822,7 +902,7 @@ def main(argv: list[str] | None = None) -> int:
         "pair_id": args.pair_id,
         "cache_state": cache_state,
         "started_at": started_at.isoformat(),
-        "completed_at": datetime.now(UTC).isoformat(),
+        "completed_at": observed_wall.isoformat(),
         "duration_seconds": duration,
         "sample_count": samples,
         "seed": seed,
@@ -858,10 +938,14 @@ def main(argv: list[str] | None = None) -> int:
         "observer": {"result": observer_result, "detail": observer_detail},
     }
     atomic_json(args.output, profile)
+    outcome = observation.finish(
+        args.output,
+        code=return_code,
+        result=observer_result,
+        observed_at=observed_outcome,
+    )
     write_summary(profile)
-    if args.pid_file:
-        args.pid_file.unlink(missing_ok=True)
-    return return_code
+    return outcome["code"]
 
 
 if __name__ == "__main__":
