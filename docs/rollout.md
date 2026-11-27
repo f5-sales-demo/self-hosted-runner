@@ -93,8 +93,9 @@ Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore t
    before squash-merging eligible minor/patch PRs, while major updates remain manual.
    Platform-native automerge stays disabled because the
    fleet does not enforce required status checks and GitHub could otherwise merge before CI starts.
-   The seven-day release-age gate remains strict, but the self-hosted administrator configuration
-   forces both immediate PR creation and Renovate-managed automerge after that gate passes. Fleet CI starts
+   The xcsh and marketplace prerelease projects select current stable updates immediately, with
+   zero release age for every update manager. The self-hosted administrator configuration forces
+   immediate PR creation and Renovate-managed automerge after applicable eligibility checks pass. Fleet CI starts
    on `pull_request`, so a package rule merged into grouped branch configuration cannot be allowed
    to leave an eligible update as a bare branch with indefinitely pending checks.
    npm dependency ranges use `bump` so a newer version already admitted by a caret range still
