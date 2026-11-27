@@ -140,11 +140,20 @@ jobs:
             exit "$outcome"
           }
           trap finish EXIT
-          scripts/docker-action-profile.py \
+          docker run --rm --read-only --network none \
+            --name "$scope-observer" --cidfile "$evidence/observer-container-id" \
+            --label "xcsh.profile.smoke=$scope-observer" \
+            --user "$(id -u):$(id -g)" \
+            --group-add "$(stat -c '%g' /var/run/docker.sock)" \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev \
+            --volume /var/run/docker.sock:/var/run/docker.sock:ro \
+            --volume "$evidence:$evidence" \
+            --entrypoint docker-action-profile \
+            local/self-hosted-runner:container-build \
             --name image-smoke \
             --image "$SMOKE_IMAGE" \
             --expected-digest "$SMOKE_DIGEST" \
-            --cache-state cold \
+            --cache-state warm \
             --output "$evidence/profile.json" \
             --ready-file "$evidence/ready" \
             --interval 0.1 \
@@ -169,10 +178,14 @@ jobs:
           docker container start --attach "$cid"
           wait "$observer"
           observer_closed=true
+          IFS= read -r observer_cid <"$evidence/observer-container-id"
+          [[ "$observer_cid" =~ ^[0-9a-f]{64}$ ]]
+          docker ps --all --no-trunc --filter "id=$observer_cid" --format '{{json .}}' >"$evidence/final-observer-containers.jsonl"
+          [[ ! -s "$evidence/final-observer-containers.jsonl" ]]
           jq -e \
             --arg digest "$SMOKE_DIGEST" \
             '.observer.result == "completed" and .exit.code == 0 and
-             .sample_count > 0 and .cache_state == "cold" and
+             .sample_count > 0 and .cache_state == "warm" and
              .image.digest == $digest' \
             "$evidence/profile.json" >/dev/null
 
