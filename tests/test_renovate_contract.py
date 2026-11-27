@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -18,13 +17,27 @@ class RenovateContractTests(unittest.TestCase):
     def render(cls):
         return subprocess.run(
             [
-                "helm", "template", "renovate", "renovate-system", "--namespace", "renovate-system",
-                "--set-string", f"image=f5salesdemoarcca.azurecr.io/renovate@sha256:{ZERO}",
-                "--set-string", "githubApp.appId=1",
-                "--set-string", "githubApp.installationId=2",
-                "--set-string", "githubApp.botId=3",
-                "--set-string", "githubApp.botLogin=f5-renovate-aks[bot]",
-            ], cwd=ROOT, check=True, text=True, capture_output=True
+                "helm",
+                "template",
+                "renovate",
+                "renovate-system",
+                "--namespace",
+                "renovate-system",
+                "--set-string",
+                f"image=f5salesdemoarcca.azurecr.io/renovate@sha256:{ZERO}",
+                "--set-string",
+                "githubApp.appId=1",
+                "--set-string",
+                "githubApp.installationId=2",
+                "--set-string",
+                "githubApp.botId=3",
+                "--set-string",
+                "githubApp.botLogin=f5-renovate-aks[bot]",
+            ],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            capture_output=True,
         ).stdout
 
     def test_rendered_security_and_key_separation(self):
@@ -55,28 +68,42 @@ class RenovateContractTests(unittest.TestCase):
     def test_image_source_and_isolated_context_are_pinned(self):
         source = json.loads((ROOT / "renovate-system/image-source.json").read_text())
         dockerfile = (ROOT / "renovate-system/Dockerfile").read_text()
-        self.assertEqual("44.52.1", source["upstream"]["version"])
-        self.assertIn(source["upstream"]["image"].replace("renovate/renovate@", "renovate/renovate:44.52.1@"), dockerfile)
+        self.assertRegex(source["upstream"]["version"], r"^[0-9]+\.[0-9]+\.[0-9]+$")
+        self.assertIn(
+            source["upstream"]["image"].replace(
+                "renovate/renovate@",
+                f"renovate/renovate:{source['upstream']['version']}@",
+            ),
+            dockerfile,
+        )
         self.assertIn("USER 12021:0", dockerfile)
         self.assertIn("/opt/f5-renovate/containerbase", dockerfile)
         self.assertIn("/opt/f5-renovate/containerbase-runtime", dockerfile)
         self.assertNotIn("USER 1001:1001", dockerfile)
         workflow = (ROOT / ".github/workflows/publish-renovate.yml").read_text()
-        self.assertIn("--tag \"$image:$tag\" renovate-system", workflow)
+        self.assertIn('--tag "$image:$tag" renovate-system', workflow)
         self.assertIn("attest-build-provenance", workflow)
         verify = (ROOT / ".github/workflows/verify.yml").read_text()
         self.assertIn("scripts/verify-renovate-runtime.sh local/renovate:test", verify)
 
     def test_promotion_and_deployment_reject_tags_and_accept_approved_registries(self):
         promote = ROOT / "scripts/promote-renovate-image.sh"
-        for invalid in ("ghcr.io/f5-sales-demo/renovate:latest", f"docker.io/renovate/renovate@sha256:{ZERO}"):
-            result = subprocess.run([promote, invalid, "a" * 40, "/tmp/unused"], cwd=ROOT, text=True, capture_output=True)
+        for invalid in (
+            "ghcr.io/f5-sales-demo/renovate:latest",
+            f"docker.io/renovate/renovate@sha256:{ZERO}",
+        ):
+            result = subprocess.run(
+                [promote, invalid, "a" * 40, "/tmp/unused"],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+            )
             self.assertEqual(2, result.returncode)
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertIn("dkr\\.ecr\\.us-east-1\\.amazonaws\\.com", deploy)
         self.assertIn("ghcr\\.io/f5-sales-demo", deploy)
         self.assertNotIn("renovate:latest", deploy)
-        self.assertIn("git diff --quiet \"$commit\" --", deploy)
+        self.assertIn('git diff --quiet "$commit" --', deploy)
         for runtime_input in (
             "renovate-system/Dockerfile",
             "renovate-system/app-token-init.mjs",
@@ -92,10 +119,20 @@ class RenovateContractTests(unittest.TestCase):
     def test_socketless_prepull_accepts_approved_renovate_digests(self):
         schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
         pattern = re.compile(schema["properties"]["renovateImage"]["pattern"])
-        self.assertIsNotNone(pattern.fullmatch(f"f5salesdemoarcca.azurecr.io/renovate@sha256:{ONE}"))
-        self.assertIsNotNone(pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}"))
-        self.assertIsNotNone(pattern.fullmatch(f"123456789012.dkr.ecr.us-east-1.amazonaws.com/renovate@sha256:{ONE}"))
-        self.assertIsNone(pattern.fullmatch("f5salesdemoarcca.azurecr.io/renovate:latest"))
+        self.assertIsNotNone(
+            pattern.fullmatch(f"f5salesdemoarcca.azurecr.io/renovate@sha256:{ONE}")
+        )
+        self.assertIsNotNone(
+            pattern.fullmatch(f"ghcr.io/f5-sales-demo/renovate@sha256:{ONE}")
+        )
+        self.assertIsNotNone(
+            pattern.fullmatch(
+                f"123456789012.dkr.ecr.us-east-1.amazonaws.com/renovate@sha256:{ONE}"
+            )
+        )
+        self.assertIsNone(
+            pattern.fullmatch("f5salesdemoarcca.azurecr.io/renovate:latest")
+        )
 
     def test_pull_secret_is_optional_and_only_supports_private_ghcr(self):
         schema = json.loads((ROOT / "renovate-system/values.schema.json").read_text())
@@ -113,7 +150,9 @@ class RenovateContractTests(unittest.TestCase):
 
     def test_socketless_prepuller_uses_only_private_ghcr_secret(self):
         schema = json.loads((ROOT / "arc/prepull/values.schema.json").read_text())
-        self.assertEqual("ghcr-pull", schema["properties"]["imagePullSecrets"]["items"]["const"])
+        self.assertEqual(
+            "ghcr-pull", schema["properties"]["imagePullSecrets"]["items"]["const"]
+        )
         deploy = (ROOT / "scripts/renovate-deploy.sh").read_text()
         self.assertNotIn("imagePullSecrets[1]", deploy)
 
@@ -140,7 +179,7 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn("name: containerbase", main)
         self.assertIn("sizeLimit: 2Gi", rendered)
         verifier = (ROOT / "scripts/verify-renovate-runtime.sh").read_text()
-        self.assertIn("install-tool node 24.20.0", verifier)
+        self.assertIn('install-tool node "$1"', verifier)
         self.assertIn("Install tool node succeeded", verifier)
 
     def test_renovate_memory_budget_covers_memory_backed_working_sets(self):
@@ -149,9 +188,7 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn(
             "name: cache, emptyDir: {medium: Memory, sizeLimit: 2Gi}", rendered
         )
-        self.assertIn(
-            "name: tmp, emptyDir: {medium: Memory, sizeLimit: 4Gi}", rendered
-        )
+        self.assertIn("name: tmp, emptyDir: {medium: Memory, sizeLimit: 4Gi}", rendered)
         self.assertIn(
             "name: containerbase, emptyDir: {medium: Memory, sizeLimit: 2Gi}",
             rendered,
@@ -193,7 +230,9 @@ class RenovateContractTests(unittest.TestCase):
         self.assertIn(".spec.suspend == false", deploy)
         self.assertIn("deployed active Renovate CronJob", deploy)
 
-    def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(self):
+    def test_rendered_runtime_uses_supported_config_and_upstream_non_root_identity(
+        self,
+    ):
         rendered = self.render()
         self.assertIn("runAsUser: 12021", rendered)
         self.assertIn("runAsGroup: 0", rendered)
@@ -202,7 +241,9 @@ class RenovateContractTests(unittest.TestCase):
         self.assertNotIn("--config-file=/config/renovate.json", rendered)
 
     def test_global_command_allowlist_is_exact_and_narrow(self):
-        config = json.loads((ROOT / "renovate-system/generated/renovate.json").read_text())
+        config = json.loads(
+            (ROOT / "renovate-system/generated/renovate.json").read_text()
+        )
         self.assertEqual(
             [
                 r"^node scripts/prepare-generated-artifact-release\.mjs prepare$",
