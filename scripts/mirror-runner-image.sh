@@ -11,6 +11,11 @@ reference_pattern='^(ghcr\.io/f5-sales-demo|f5salesdemoarcca\.azurecr\.io|[0-9]{
 [[ "$source_image" =~ $reference_pattern ]] || { echo "source must be an approved immutable GHCR, ACR, or ECR digest" >&2; exit 2; }
 repository=${BASH_REMATCH[2]}
 digest=${BASH_REMATCH[3]}
+source_docker_config=${GHCR_SOURCE_DOCKER_CONFIG:-}
+[[ -z "$source_docker_config" || "$source_image" == ghcr.io/* ]] || {
+  echo "GHCR_SOURCE_DOCKER_CONFIG requires a GHCR source" >&2
+  exit 2
+}
 
 for command in docker jq; do command -v "$command" >/dev/null; done
 config=$(mktemp -d)
@@ -22,6 +27,30 @@ login_registry() {
   local registry=$1
   case "$registry" in
     ghcr.io)
+      if [[ -n "$source_docker_config" ]]; then
+        [[ -r "$source_docker_config/config.json" ]] || {
+          echo "configured GHCR source credentials are unreadable" >&2
+          exit 1
+        }
+        if ! jq -se '
+          if length != 1 then error("expected one source configuration document")
+          else .[0] end |
+          . as $input |
+          ($input.auths["ghcr.io"] // null) as $auth |
+          ($input.credHelpers["ghcr.io"] // $input.credsStore // null) as $helper |
+          if ($helper | type == "string" and length > 0) then
+            {auths: {}, credHelpers: {"ghcr.io": $helper}}
+          elif ($auth | type == "object") and
+            ([$auth.auth, $auth.identitytoken] |
+              any(.[]; type == "string" and length > 0)) then
+            {auths: {"ghcr.io": $auth}}
+          else error("configured GHCR credentials are unavailable") end
+        ' "$source_docker_config/config.json" >"$config/config.json"; then
+          echo "configured GHCR source credentials are invalid" >&2
+          exit 1
+        fi
+        return
+      fi
       command -v gh >/dev/null
       gh auth token | docker login ghcr.io --username "$(gh api user --jq .login)" --password-stdin >/dev/null
       ;;
@@ -47,6 +76,11 @@ login_registry() {
 }
 
 login_registry "${source_image%%/*}"
+source_raw=$(docker buildx imagetools inspect --raw "$source_image" | sha256sum | cut -d' ' -f1)
+[[ "sha256:$source_raw" == "$digest" ]] || {
+  echo "source manifest does not match the reviewed digest" >&2
+  exit 1
+}
 if [[ "$mode" == copy ]]; then
   target_pattern='^(f5salesdemoarcca\.azurecr\.io|[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)/(self-hosted-runner|renovate)$'
   [[ "$target" =~ $target_pattern && "${BASH_REMATCH[2]}" == "$repository" ]] || { echo "copy target must be the matching approved ACR or ECR repository" >&2; exit 2; }
@@ -61,7 +95,6 @@ else
   login_registry "${mirror_image%%/*}"
 fi
 
-source_raw=$(docker buildx imagetools inspect --raw "$source_image" | sha256sum | cut -d' ' -f1)
 mirror_raw=$(docker buildx imagetools inspect --raw "$mirror_image" | sha256sum | cut -d' ' -f1)
 [[ "sha256:$source_raw" == "$digest" && "$source_raw" == "$mirror_raw" ]] || {
   echo "source and mirror manifests are not byte-identical" >&2

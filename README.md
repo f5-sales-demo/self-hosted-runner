@@ -18,6 +18,15 @@ Every production reference is an immutable GHCR, ACR, or ECR digest. GHCR is
 the publication authority; provider registries are byte-identical deployment
 mirrors. Tags are discovery aids only and must never be placed in runner policy.
 
+For a GHCR source, set `GHCR_SOURCE_DOCKER_CONFIG` to an existing Docker
+configuration directory when its registry credentials differ from the GitHub
+CLI token. The mirror helper retains only GHCR authentication in its temporary
+configuration and removes that configuration when it exits. Other credentials
+and the original configuration remain unchanged. A configured GHCR credential
+helper applies only to GHCR; target-registry login still verifies the target
+account. Missing source access fails before copying, without authentication
+fallback. The default path continues to use the GitHub CLI token.
+
 ## What is pinned
 
 - Ubuntu, Node, and Docker CLI base images are digest-pinned in the
