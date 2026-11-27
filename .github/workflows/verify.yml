@@ -178,7 +178,7 @@ jobs:
           docker container start --attach "$cid"
           wait "$observer"
           observer_closed=true
-          IFS= read -r observer_cid <"$evidence/observer-container-id"
+          observer_cid=$(<"$evidence/observer-container-id")
           [[ "$observer_cid" =~ ^[0-9a-f]{64}$ ]]
           docker ps --all --no-trunc --filter "id=$observer_cid" --format '{{json .}}' >"$evidence/final-observer-containers.jsonl"
           [[ ! -s "$evidence/final-observer-containers.jsonl" ]]
