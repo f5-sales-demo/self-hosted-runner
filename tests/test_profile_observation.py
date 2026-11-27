@@ -11,6 +11,7 @@ import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location(
@@ -162,6 +163,47 @@ class ProfileObservationTests(unittest.TestCase):
             self.assertEqual("original_observer_not_verified", result["reason"])
             binding.write_bytes(original)
             self.assertTrue(observer.close(budget=3))
+
+    def unavailable_process_closure(self, failure):
+        with self.directory() as root:
+            observer = self.observation(root)
+            observer.run(self.command("pass"))
+            command = root / "capture/command-000000"
+            terminal = json.loads((command / "terminal.private.json").read_bytes())
+            pids = {terminal[role]["pid"] for role in ("worker", "child")}
+            identity = CAPTURE.identity
+            read_text = Path.read_text
+
+            def missing_identity(pid):
+                return None if pid in pids else identity(pid)
+
+            def unreadable_stat(path, *args, **kwargs):
+                if (
+                    path.parent.parent == Path("/proc")
+                    and path.name == "stat"
+                    and int(path.parent.name) in pids
+                ):
+                    if failure == "denied":
+                        raise PermissionError("controlled process evidence denial")
+                    return "malformed process lifetime evidence"
+                return read_text(path, *args, **kwargs)
+
+            with (
+                patch.object(CAPTURE, "identity", side_effect=missing_identity),
+                patch.object(Path, "read_text", unreadable_stat),
+            ):
+                self.assertFalse(observer.close(budget=0.04))
+            # Natural closure may now be proven, but it cannot erase missing proof.
+            self.assertTrue(observer.close(budget=3))
+            result = observer.finish(self.output(root), code=0, result="completed")
+            self.assertEqual("unresolved", result["result"])
+            self.assertNotEqual(0, result["code"])
+
+    def test_process_identity_unavailable_is_not_original_absence(self):
+        self.unavailable_process_closure("denied")
+
+    def test_malformed_process_lifetime_is_not_original_absence(self):
+        self.unavailable_process_closure("malformed")
 
 
 if __name__ == "__main__":

@@ -111,6 +111,60 @@ def process_state(pid: int) -> str | None:
         return None
 
 
+def original_process_absent(original: dict) -> bool:
+    """Prove original process absence without equating unreadable identity to exit.
+
+    Process lifetime uses PID, start ticks and boot identity. A changed executable
+    or cmdline can belong to the same live process and cannot prove absence.
+    """
+    try:
+        pid = original["pid"]
+        start = original["startTicks"]
+        boot = original["bootId"]
+        if (
+            type(pid) is not int
+            or pid <= 0
+            or not isinstance(start, str)
+            or not start.isdecimal()
+        ):
+            return False
+        if (
+            not isinstance(boot, str)
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", boot)
+            is None
+        ):
+            return False
+    except (KeyError, TypeError):
+        return False
+    root = Path("/proc") / str(pid)
+    try:
+        raw = (root / "stat").read_text()
+    except FileNotFoundError:
+        # Missing stat alone could be incomplete evidence for an existing PID.
+        try:
+            root.stat()
+        except FileNotFoundError:
+            return True
+        except OSError:
+            return False
+        return False
+    except OSError:
+        return False
+    try:
+        fields = raw.rpartition(") ")[2].split()
+        observed_boot = Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        if raw.partition(" (")[0] != str(pid) or not fields[19].isdecimal():
+            return False
+        if (
+            re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", observed_boot)
+            is None
+        ):
+            return False
+        return start != fields[19] or boot != observed_boot
+    except (OSError, IndexError):
+        return False
+
+
 def _spawn_receipt(pid: int, request: dict, request_hash: str) -> dict | None:
     """Retain a naturally exited, unreaped child owned by successful Popen exec.
 
@@ -640,7 +694,7 @@ class Observation:
             closed = "reason" not in result and all(
                 c["status"] == "complete"
                 and all(
-                    identity(c[role]["pid"]) is None for role in ("worker", "child")
+                    original_process_absent(c[role]) for role in ("worker", "child")
                 )
                 for c in captures
             )
