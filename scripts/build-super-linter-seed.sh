@@ -2,11 +2,11 @@
 set -euo pipefail
 
 output=${1:-.super-linter-seed}
-action_commit=4ce20838b8ab83717e78138c5b3a1407148e0918
-index_digest=sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996
-manifest_digest=sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849
+action_commit=2da136927bd4a73596db63044b504547c62cb854
+index_digest=sha256:7620fb6f07a1908b0642d9ddc4f49da7d9f2b9497bcafee4d3d151d1e5567c0b
+manifest_digest=sha256:496fe2e10c487771d42eede90cacfc767324db5ac9ddc9f3b2f490afa0a1db73
 repository=ghcr.io/super-linter/super-linter
-tag=$repository:v8.7.0
+tag=$repository:v9.0.0
 
 for command in docker jq sha256sum zstd; do
   command -v "$command" >/dev/null
