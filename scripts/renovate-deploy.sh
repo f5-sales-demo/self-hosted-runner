@@ -6,7 +6,7 @@ lock=$1
 : "${KUBECONFIG:?KUBECONFIG must point to the protected cluster administrator config}"
 case "$(stat -c '%a' "$KUBECONFIG")" in 400|600) ;; *) echo "KUBECONFIG must have mode 0400 or 0600" >&2; exit 1;; esac
 for command in base64 git helm jq kubectl; do command -v "$command" >/dev/null; done
-[[ "$(helm version --short)" == v3.21.3+g1ad6e68 ]]
+[[ "$(helm version --short)" == v4.3.2+g8346aaa ]]
 deploy_timeout=15m
 : "${SOCKETLESS_IMAGE:?SOCKETLESS_IMAGE is required}"
 image=${RENOVATE_DEPLOY_IMAGE:-$(jq -er .derived.acr "$lock")}

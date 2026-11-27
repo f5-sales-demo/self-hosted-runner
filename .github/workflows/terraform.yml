@@ -31,21 +31,23 @@ jobs:
           persist-credentials: false
       - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd
         with:
-          terraform_version: "1.14.4"
+          terraform_version: "1.17.2"
           terraform_wrapper: false
-      - name: Install pinned Helm and actionlint
+      - name: Install qualified current Helm and actionlint
         run: |
           set -euo pipefail
           curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/helm.tgz \
-            https://get.helm.sh/helm-v3.21.3-linux-amd64.tar.gz
-          echo "15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0  /tmp/helm.tgz" | sha256sum --check --strict
+            https://get.helm.sh/helm-v4.3.2-linux-amd64.tar.gz
+          echo "d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983  /tmp/helm.tgz" | sha256sum --check --strict
           tar -xzf /tmp/helm.tgz -C /tmp
-          sudo install -m 0555 /tmp/linux-amd64/helm /usr/local/bin/helm
+          install -d -m 0755 "$RUNNER_TEMP/arc-toolchain"
+          install -m 0555 /tmp/linux-amd64/helm "$RUNNER_TEMP/arc-toolchain/helm"
+          echo "$RUNNER_TEMP/arc-toolchain" >>"$GITHUB_PATH"
           curl --fail --location --proto '=https' --tlsv1.2 --output /tmp/actionlint.tgz \
             https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
           echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  /tmp/actionlint.tgz" | sha256sum --check --strict
           tar -xzf /tmp/actionlint.tgz -C /tmp actionlint
-          sudo install -m 0555 /tmp/actionlint /usr/local/bin/actionlint
+          install -m 0555 /tmp/actionlint "$RUNNER_TEMP/arc-toolchain/actionlint"
       - name: Check Terraform formatting
         run: terraform fmt -check -recursive terraform
       - name: Validate every independent Terraform root without a backend
@@ -60,7 +62,7 @@ jobs:
             terraform -chdir="$root" validate
           done
       - name: Validate provider contracts and mocked plan policy
-        run: python3 -m unittest tests.test_aks_arc_contract tests.test_runner_platform_contract tests.test_aws_live_preflight tests.test_aws_plan_preflight
+        run: python3 -m unittest tests.test_aks_arc_contract tests.test_runner_platform_contract tests.test_aws_live_preflight tests.test_aws_plan_preflight tests.test_current_arc_helm
       - name: Render every ARC scale set and shared chart
         run: scripts/validate-arc.sh arc/repositories/*.yaml
       - name: Render pinned AWS platform add-ons

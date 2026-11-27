@@ -61,7 +61,7 @@ class AksArcContractTests(unittest.TestCase):
         build = (ROOT / "arc/container-build-values.yaml").read_text(encoding="utf-8")
         socketless = (ROOT / "arc/socketless-values.yaml").read_text(encoding="utf-8")
         deploy = (ROOT / "scripts/arc-deploy.sh").read_text(encoding="utf-8")
-        self.assertIn('tag: "0.14.2"', controller)
+        self.assertIn('tag: "0.15.1"', controller)
         self.assertRegex(deploy, r"controller_chart_digest=sha256:[0-9a-f]{64}")
         self.assertRegex(deploy, r"scale_set_chart_digest=sha256:[0-9a-f]{64}")
         self.assertRegex(build, r"docker\.io/library/docker@sha256:[0-9a-f]{64}")

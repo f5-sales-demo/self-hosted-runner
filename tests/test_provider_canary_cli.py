@@ -50,9 +50,9 @@ if name == "docker":
     sys.exit(0)
 if name == "helm":
     if args == ["version", "--short"]:
-        print("v3.21.3+g1ad6e68")
+        print("v4.3.2+g8346aaa")
     elif args and args[0] == "pull":
-        print("Digest: sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11")
+        print("Digest: sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365")
     elif not args or args[0] != "upgrade":
         sys.exit(97)
 if name == "kubectl":
