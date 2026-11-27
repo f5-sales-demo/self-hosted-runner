@@ -54,7 +54,9 @@ def validate_list(value, source: str) -> list[str]:
         raise InventoryError(f"{source} repositories must be sorted")
     invalid = [item for item in value if not REPOSITORY.fullmatch(item)]
     if invalid:
-        raise InventoryError(f"{source} contains invalid or foreign repositories: {invalid}")
+        raise InventoryError(
+            f"{source} contains invalid or foreign repositories: {invalid}"
+        )
     if "f5-sales-demo/self-hosted-runner" in value:
         raise InventoryError(f"{source} must exclude self-hosted-runner")
     return value
@@ -64,13 +66,17 @@ def inventory(root: Path = ROOT) -> list[str]:
     catalog = strict_json(root / "catalog/governed-repositories.json")
     catalog_repos = validate_list(catalog.get("repositories"), "catalog")
     if len(catalog_repos) != EXPECTED_COUNT:
-        raise InventoryError(f"catalog must contain exactly {EXPECTED_COUNT} repositories")
+        raise InventoryError(
+            f"catalog must contain exactly {EXPECTED_COUNT} repositories"
+        )
 
     arc_repos = []
     arc_dir = root / "arc/repositories"
     files = sorted(arc_dir.glob("*.yaml"))
     if len(files) != EXPECTED_COUNT:
-        raise InventoryError(f"ARC must contain exactly {EXPECTED_COUNT} repository files")
+        raise InventoryError(
+            f"ARC must contain exactly {EXPECTED_COUNT} repository files"
+        )
     for path in files:
         document = strict_json(path)
         url = document.get("repository") if isinstance(document, dict) else None
@@ -108,7 +114,7 @@ def global_config(repositories: list[str]) -> dict:
         "labels": [],
         "prConcurrentLimit": 10,
         "timezone": "America/Toronto",
-        "minimumReleaseAge": "7 days",
+        "minimumReleaseAge": "0 days",
         "internalChecksFilter": "strict",
         "force": {
             "prCreation": "immediate",
@@ -134,13 +140,6 @@ def global_config(repositories: list[str]) -> dict:
                 "rangeStrategy": "pin",
             },
             {
-                "description": "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin",
-                "matchRepositories": ["f5-sales-demo/vscode-xcsh"],
-                "matchManagers": ["npm"],
-                "matchPackageNames": ["@rolldown/plugin-babel"],
-                "enabled": False,
-            },
-            {
                 "groupName": "npm-minor-patch",
                 "matchManagers": ["npm"],
                 "matchUpdateTypes": ["minor", "patch"],
@@ -157,13 +156,6 @@ def global_config(repositories: list[str]) -> dict:
                 "platformAutomerge": False,
             },
             {
-                "description": "Keep docs-control uv input within the immutable runner catalog",
-                "matchRepositories": ["f5-sales-demo/docs-control"],
-                "matchManagers": ["github-actions"],
-                "matchPackageNames": ["astral-sh/uv"],
-                "allowedVersions": "0.8.24",
-            },
-            {
                 "description": "Regenerate docs-icons release artifacts on npm branches",
                 "matchRepositories": ["f5-sales-demo/docs-icons"],
                 "matchManagers": ["npm"],
@@ -177,11 +169,6 @@ def global_config(repositories: list[str]) -> dict:
                         "packages/*/icons.json",
                     ],
                 },
-            },
-            {
-                "description": "Use current stable dependencies immediately in prerelease projects",
-                "matchRepositories": ["f5-sales-demo/marketplace", "f5-sales-demo/xcsh"],
-                "minimumReleaseAge": "0 days",
             },
             {
                 "description": "Keep docs-control managed workflows canonical downstream",
@@ -212,7 +199,9 @@ def main(argv=None) -> int:
         except OSError:
             current = ""
         if current != expected:
-            print(f"{OUTPUT.relative_to(ROOT)} is stale; regenerate it", file=sys.stderr)
+            print(
+                f"{OUTPUT.relative_to(ROOT)} is stale; regenerate it", file=sys.stderr
+            )
             return 1
         return 0
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

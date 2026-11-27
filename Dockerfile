@@ -320,6 +320,7 @@ RUN uv venv --python /usr/bin/python3 --no-python-downloads /opt/provider-tools 
     && chmod -R a-w /opt/provider-tools /opt/provider-python.lock
 COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
 COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
+COPY --chown=root:root scripts/profile_capture.py /usr/local/bin/profile_capture.py
 COPY --chown=root:root scripts/runner-profile.py /usr/local/bin/runner-profile
 COPY --chown=root:root scripts/docker-action-profile.py /usr/local/bin/docker-action-profile
 COPY --chown=root:root scripts/prepare-runner-tool-cache.sh /usr/local/libexec/prepare-runner-tool-cache

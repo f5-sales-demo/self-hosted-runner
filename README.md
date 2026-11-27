@@ -168,7 +168,8 @@ the kernel that actually governs the job rather than the image build host.
 
 `renovate-system/` is the isolated build context for the organization-owned
 Renovate bot. The
-upstream receipt pins Renovate 44.52.1 by manifest digest; a path-scoped
+upstream receipt records the qualified current stable Renovate release and
+its manifest digest in `renovate-system/image-source.json`; a path-scoped
 GitHub-hosted workflow
 publishes the derived GHCR image with provenance.
 `scripts/promote-renovate-image.sh` copies that
@@ -180,7 +181,7 @@ rejected.
 The active CronJob runs at `20 5 * * *` in `America/Toronto` and uses a
 PEM-reading init container
 to validate exact App metadata,
-permissions, bot identity, and 38-repository selected scope. It hands a
+permissions, bot identity, and 46-repository selected scope. It hands a
 short-lived token through a
 memory-backed volume to the main container, which immediately unlinks it; the
 main container never
@@ -200,6 +201,12 @@ provisioning under that
 deployed filesystem contract; production probes exercise Rust with a
 representative prefilled
 download cache.
+
+All 46 governed repositories use zero release age for every update manager.
+Current stable releases are immediately eligible. Package updates have no
+historical uv or Babel/Rolldown holds; required review, passing CI and immutable
+artifact verification still apply. Qualify the current runtime and dependency
+graph before installing each update.
 
 Regenerate or verify the single global configuration with:
 

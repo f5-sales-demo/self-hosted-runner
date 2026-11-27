@@ -1,4 +1,4 @@
-FROM renovate/renovate:44.52.1@sha256:6922c734849f2ed1c01e3a7924bd60e25e0ea904731a67bad72b02d563c0c3c3
+FROM renovate/renovate:45.1.1@sha256:42eb22bccd07a3a9c9ba59e9de8d0b17005fcb6b775b2b7eed7cb3678dfc9068
 
 USER root
 RUN install -d -o 12021 -g 0 \

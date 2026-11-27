@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 from typing import cast
 
+from retained_command import run_command
+
 ROOT = Path(__file__).resolve().parent.parent
 PAYLOAD = b"content-verified immutable archive fixture\n" * 64
 
@@ -51,13 +53,17 @@ class ArtifactHandler(http.server.BaseHTTPRequestHandler):
 class ArtifactDownloadTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.temp = tempfile.TemporaryDirectory(prefix="runner-https-fixture-")
-        cls.directory = Path(cls.temp.name)
+        parent = os.environ.get("PROFILE_CAPTURE_TEST_ROOT")
+        if parent:
+            Path(parent).mkdir(parents=True, exist_ok=True)
+        cls.directory = Path(
+            tempfile.mkdtemp(prefix="runner-https-fixture-", dir=parent)
+        )
         cls.certificate = cls.directory / "certificate.pem"
         key = cls.directory / "key.pem"
         # A task-owned test credential, trusted only by the one curl subprocess.
         # No host trust store or certificate-verification bypass is used.
-        subprocess.run(
+        run_command(
             [
                 "openssl",
                 "req",
@@ -76,16 +82,12 @@ class ArtifactDownloadTests(unittest.TestCase):
                 "-addext",
                 "subjectAltName=IP:127.0.0.1",
             ],
+            cls.directory / "certificate-capture",
+            15,
             check=True,
-            capture_output=True,
-            timeout=15,
         )
         cls.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         cls.context.load_cert_chain(cls.certificate, key)
-
-    @classmethod
-    def tearDownClass(cls) -> None:
-        cls.temp.cleanup()
 
     def download(
         self, mode: str
@@ -107,10 +109,10 @@ class ArtifactDownloadTests(unittest.TestCase):
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
-            result = subprocess.run(
+            result = run_command(
                 argv,
-                capture_output=True,
-                timeout=30,
+                self.directory / (mode + "-capture"),
+                30,
                 env={**os.environ, "CURL_CA_BUNDLE": str(self.certificate)},
             )
         finally:

@@ -3,16 +3,19 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
+from retained_command import capture as CAPTURE
+
 ROOT = Path(__file__).resolve().parent.parent
+
 SPEC = importlib.util.spec_from_file_location(
     "docker_action_profile", ROOT / "scripts/docker-action-profile.py"
 )
@@ -24,6 +27,14 @@ IMAGE_ID = "sha256:" + "b" * 64
 CONTAINER_ID = "c" * 64
 
 
+@contextmanager
+def preserved_directory():
+    parent = os.environ.get("PROFILE_CAPTURE_TEST_ROOT")
+    if parent:
+        Path(parent).mkdir(parents=True, exist_ok=True)
+    yield tempfile.mkdtemp(prefix="profiler-regression-", dir=parent)
+
+
 class DockerActionProfileTests(unittest.TestCase):
     def fake_docker(self, root: Path, mode: str = "complete") -> Path:
         path = root / "docker"
@@ -32,12 +43,15 @@ class DockerActionProfileTests(unittest.TestCase):
 import json
 import sys
 import time
+from pathlib import Path
 
 args = sys.argv[1:]
 mode = {mode!r}
 digest = {DIGEST!r}
 image_id = {IMAGE_ID!r}
 container_id = {CONTAINER_ID!r}
+samples_path = Path(__file__ + ".stats-count")
+exited_path = Path(__file__ + ".exited")
 if args[:2] == ["image", "inspect"]:
     print(json.dumps({{"Id": image_id, "RepoDigests": ["example@" + digest], "Size": 123456}}))
 elif args[:1] == ["ps"]:
@@ -51,17 +65,30 @@ elif args[:1] == ["events"]:
     event("create", container_id)
     if mode == "ambiguous":
         event("create", "e" * 64)
-        time.sleep(30)
+        time.sleep(max(0, float(args[args.index("--until") + 1]) - time.time()))
     elif mode == "cancel":
-        time.sleep(30)
+        time.sleep(max(0, float(args[args.index("--until") + 1]) - time.time()))
     else:
-        time.sleep(0.15)
-        event("oom", container_id)
-        event("die", container_id, exitCode="23")
-        time.sleep(30)
+        # Keep the owned fixture running until the observer has captured two
+        # samples, within the same finite event window. Startup speed cannot
+        # silently turn a metrics test into an unsampled short action.
+        until = float(args[args.index("--until") + 1])
+        while mode != "fast" and time.time() < until:
+            if samples_path.exists() and int(samples_path.read_text()) >= 2:
+                break
+            time.sleep(0.005)
+        # A later contiguous window can observe completion after sampling.
+        if mode == "fast" or (samples_path.exists() and int(samples_path.read_text()) >= 2):
+            exited_path.write_text("exited")
+            event("oom", container_id)
+            event("die", container_id, exitCode="23")
+        time.sleep(max(0, float(args[args.index("--until") + 1]) - time.time()))
 elif args[:2] == ["container", "inspect"]:
-    print(json.dumps({{"Image": image_id, "State": {{"OOMKilled": False}}}}))
+    running = not exited_path.exists()
+    print(json.dumps({{"Id": container_id, "Created": "2026-11-27T00:00:00Z", "Image": image_id, "State": {{"OOMKilled": False, "Running": running, "Status": "running" if running else "exited", "ExitCode": 23, "FinishedAt": "" if running else "2026-11-27T00:00:01Z"}}}}))
 elif args[:1] == ["stats"]:
+    count = int(samples_path.read_text()) if samples_path.exists() else 0
+    samples_path.write_text(str(count + 1))
     if mode == "malformed":
         print(json.dumps({{"CPUPerc": "--", "PIDs": "--"}}))
     else:
@@ -69,12 +96,6 @@ elif args[:1] == ["stats"]:
         if mode == "zero_limit":
             memory_limit = "0B"
         elif mode == "flapping_limit":
-            count_path = __file__ + ".stats-count"
-            try:
-                count = int(open(count_path, encoding="utf-8").read())
-            except (FileNotFoundError, ValueError):
-                count = 0
-            open(count_path, "w", encoding="utf-8").write(str(count + 1))
             memory_limit = "2GiB" if count == 0 else "0B"
         print(json.dumps({{
             "CPUPerc": "125.5%",
@@ -86,7 +107,7 @@ elif args[:1] == ["stats"]:
         }}))
 elif args[:1] == ["wait"]:
     if mode in {{"ambiguous", "cancel"}}:
-        time.sleep(30)
+        time.sleep(max(0, float(args[args.index("--until") + 1]) - time.time()))
     print("23")
 else:
     raise SystemExit(2)
@@ -112,7 +133,7 @@ else:
             "--interval",
             "0.02",
             "--timeout",
-            "3",
+            "10",
         ]
 
     def test_size_and_event_parsers(self) -> None:
@@ -131,7 +152,7 @@ else:
         )
 
     def test_seed_hit_requires_all_immutable_identities(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             result = root / "seed.json"
             seed_digest = "sha256:" + "d" * 64
@@ -205,7 +226,7 @@ else:
         self.assertEqual(20, evidence["periods"])
         self.assertEqual(3, evidence["throttled_periods"])
         self.assertEqual(0.15, evidence["ratio"])
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             disk = MODULE.disk_evidence(Path(directory))
         self.assertTrue(disk["available"])
         self.assertLessEqual(disk["used_ratio"], 1)
@@ -251,7 +272,7 @@ else:
         self.assertEqual(0.4, dind["disk"]["used_ratio"])
 
     def test_completed_action_preserves_exit_and_redacts_inputs(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "profile.json"
             docker = self.fake_docker(root)
@@ -271,6 +292,7 @@ else:
             self.assertEqual("completed", profile["observer"]["result"])
             self.assertEqual(23, profile["exit"]["code"])
             self.assertTrue(profile["memory"]["oom"])
+            self.assertGreaterEqual(profile["sample_count"], 2)
             self.assertEqual(128 * 1024**2, profile["memory"]["peak_bytes"])
             self.assertEqual(37, profile["pids"]["peak"])
             schema = json.loads(
@@ -281,7 +303,7 @@ else:
             self.assertEqual(set(schema["required"]), set(profile))
 
     def test_cpu_integration_excludes_wait_for_container_creation(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "delayed.json"
             result = subprocess.run(
@@ -289,11 +311,32 @@ else:
             )
             self.assertEqual(0, result.returncode)
             profile = json.loads(output.read_text(encoding="utf-8"))
-            self.assertGreater(profile["sample_count"], 0)
-            self.assertLess(profile["cpu"]["usage_seconds"], 0.2)
+            self.assertGreaterEqual(profile["sample_count"], 2)
+            selected_duration = profile["timing"]["container_seconds"]
+            self.assertGreaterEqual(
+                profile["duration_seconds"] - selected_duration, 0.6
+            )
+            self.assertLessEqual(
+                profile["cpu"]["usage_seconds"] / 1.255, selected_duration
+            )
+
+    def test_short_action_does_not_invent_resource_samples(self) -> None:
+        with preserved_directory() as directory:
+            root = Path(directory)
+            output = root / "short.json"
+            result = subprocess.run(
+                self.command(self.fake_docker(root, "fast"), output), check=False
+            )
+            self.assertEqual(0, result.returncode)
+            profile = json.loads(output.read_text())
+            self.assertEqual(23, profile["exit"]["code"])
+            self.assertEqual(0, profile["sample_count"])
+            self.assertIsNone(profile["memory"]["peak_bytes"])
+            self.assertIsNone(profile["pids"]["peak"])
+            self.assertEqual(0, profile["cpu"]["usage_seconds"])
 
     def test_transient_stats_and_unwritable_summary_do_not_abort(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "profile.json"
             env = {
@@ -311,7 +354,7 @@ else:
             self.assertEqual(0, profile["sample_count"])
 
     def test_zero_memory_limit_is_normalized_to_null(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "profile.json"
             result = subprocess.run(
@@ -323,7 +366,7 @@ else:
             self.assertIsNone(profile["memory"]["peak_limit_ratio"])
 
     def test_zero_sample_does_not_erase_a_positive_memory_limit(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "profile.json"
             result = subprocess.run(
@@ -336,7 +379,7 @@ else:
             self.assertEqual(0.0625, profile["memory"]["peak_limit_ratio"])
 
     def test_ambiguity_fails_closed_with_valid_evidence(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "ambiguous.json"
             result = subprocess.run(
@@ -349,19 +392,26 @@ else:
                 "multiple_matching_containers", profile["observer"]["detail"]
             )
 
-    def test_signal_writes_cancelled_profile(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+    def test_bound_control_writes_cancelled_profile(self) -> None:
+        with preserved_directory() as directory:
             root = Path(directory)
             output = root / "cancel.json"
+            ready = root / "ready.json"
             process = subprocess.Popen(
                 self.command(self.fake_docker(root, "cancel"), output)
+                + ["--ready-file", str(ready)]
             )
-            time.sleep(0.3)
-            process.send_signal(signal.SIGTERM)
+            deadline = time.monotonic() + 2
+            while not ready.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            marker = json.loads(ready.read_bytes())
+            observer = Path(marker["capture"])
+            request = json.loads((observer / "observation.private.json").read_bytes())
+            CAPTURE.Observation.request_cancel(observer, request["config"])
             self.assertEqual(2, process.wait(timeout=5))
-            profile = json.loads(output.read_text(encoding="utf-8"))
+            profile = json.loads(output.read_text())
             self.assertEqual("cancelled", profile["observer"]["result"])
-            self.assertEqual("observer_signal", profile["observer"]["detail"])
+            self.assertEqual("observer_cancel_requested", profile["observer"]["detail"])
 
 
 if __name__ == "__main__":
