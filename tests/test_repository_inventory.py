@@ -18,6 +18,14 @@ SPEC.loader.exec_module(MODULE)
 
 
 class RepositoryInventoryTests(unittest.TestCase):
+    def test_updates_are_not_held_at_historical_package_versions(self):
+        config = MODULE.global_config(MODULE.inventory(ROOT))
+        for rule in config["packageRules"]:
+            with self.subTest(rule=rule.get("description", rule.get("groupName"))):
+                self.assertNotIn("allowedVersions", rule)
+                if rule.get("matchPackageNames"):
+                    self.assertIsNot(False, rule.get("enabled"))
+
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
@@ -124,32 +132,6 @@ class RepositoryInventoryTests(unittest.TestCase):
         self.assertEqual(["npm"], task["matchManagers"])
         self.assertEqual("always", task["recreateWhen"])
         self.assertEqual("branch", task["postUpgradeTasks"]["executionMode"])
-        peer_pin = next(
-            rule
-            for rule in config["packageRules"]
-            if rule.get("description")
-            == "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin"
-        )
-        self.assertEqual(["f5-sales-demo/vscode-xcsh"], peer_pin["matchRepositories"])
-        self.assertEqual(["npm"], peer_pin["matchManagers"])
-        self.assertEqual(["@rolldown/plugin-babel"], peer_pin["matchPackageNames"])
-        self.assertFalse(peer_pin["enabled"])
-        uv_catalog = next(
-            rule
-            for rule in config["packageRules"]
-            if rule.get("description")
-            == "Keep docs-control uv input within the immutable runner catalog"
-        )
-        self.assertEqual(
-            ["f5-sales-demo/docs-control"], uv_catalog["matchRepositories"]
-        )
-        self.assertEqual(["github-actions"], uv_catalog["matchManagers"])
-        self.assertEqual(["astral-sh/uv"], uv_catalog["matchPackageNames"])
-        self.assertEqual("0.8.24", uv_catalog["allowedVersions"])
-        self.assertGreater(
-            config["packageRules"].index(uv_catalog),
-            config["packageRules"].index(groups["actions-minor-patch"]),
-        )
         managed_workflows = next(
             rule
             for rule in config["packageRules"]
