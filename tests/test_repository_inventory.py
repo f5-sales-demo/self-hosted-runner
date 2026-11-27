@@ -37,6 +37,24 @@ class RepositoryInventoryTests(unittest.TestCase):
         callback(value["repositories"])
         path.write_text(json.dumps(value))
 
+    def test_prerelease_repositories_have_no_release_age_hold(self):
+        config = MODULE.global_config(MODULE.inventory(ROOT))
+        repositories = ["f5-sales-demo/marketplace", "f5-sales-demo/xcsh"]
+        for repository in repositories:
+            with self.subTest(repository=repository):
+                effective_age = config["minimumReleaseAge"]
+                for rule in config["packageRules"]:
+                    if repository in rule.get("matchRepositories", []):
+                        effective_age = rule.get("minimumReleaseAge", effective_age)
+                self.assertEqual("0 days", effective_age)
+        age_rules = [
+            rule for rule in config["packageRules"] if "minimumReleaseAge" in rule
+        ]
+        self.assertEqual(1, len(age_rules))
+        self.assertEqual(repositories, age_rules[0]["matchRepositories"])
+        self.assertNotIn("matchManagers", age_rules[0])
+        self.assertNotIn("matchUpdateTypes", age_rules[0])
+
     def test_exact_inventory_and_clean_break_config(self):
         repositories = MODULE.inventory(ROOT)
         self.assertEqual(46, len(repositories))

@@ -179,6 +179,11 @@ def global_config(repositories: list[str]) -> dict:
                 },
             },
             {
+                "description": "Use current stable dependencies immediately in prerelease projects",
+                "matchRepositories": ["f5-sales-demo/marketplace", "f5-sales-demo/xcsh"],
+                "minimumReleaseAge": "0 days",
+            },
+            {
                 "description": "Keep docs-control managed workflows canonical downstream",
                 "matchRepositories": [
                     repository
