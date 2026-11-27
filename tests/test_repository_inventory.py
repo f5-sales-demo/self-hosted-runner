@@ -37,9 +37,9 @@ class RepositoryInventoryTests(unittest.TestCase):
         callback(value["repositories"])
         path.write_text(json.dumps(value))
 
-    def test_prerelease_repositories_have_no_release_age_hold(self):
-        config = MODULE.global_config(MODULE.inventory(ROOT))
-        repositories = ["f5-sales-demo/marketplace", "f5-sales-demo/xcsh"]
+    def test_all_repositories_have_no_release_age_hold(self):
+        repositories = MODULE.inventory(ROOT)
+        config = MODULE.global_config(repositories)
         for repository in repositories:
             with self.subTest(repository=repository):
                 effective_age = config["minimumReleaseAge"]
@@ -50,10 +50,10 @@ class RepositoryInventoryTests(unittest.TestCase):
         age_rules = [
             rule for rule in config["packageRules"] if "minimumReleaseAge" in rule
         ]
-        self.assertEqual(1, len(age_rules))
-        self.assertEqual(repositories, age_rules[0]["matchRepositories"])
-        self.assertNotIn("matchManagers", age_rules[0])
-        self.assertNotIn("matchUpdateTypes", age_rules[0])
+        self.assertEqual("0 days", config["minimumReleaseAge"])
+        self.assertEqual(
+            [], age_rules, "global eligibility must cover every manager and update type"
+        )
 
     def test_exact_inventory_and_clean_break_config(self):
         repositories = MODULE.inventory(ROOT)
@@ -62,7 +62,7 @@ class RepositoryInventoryTests(unittest.TestCase):
         config = MODULE.global_config(repositories)
         self.assertEqual("ignored", config["requireConfig"])
         self.assertFalse(config["onboarding"])
-        self.assertEqual("7 days", config["minimumReleaseAge"])
+        self.assertEqual("0 days", config["minimumReleaseAge"])
         self.assertEqual("strict", config["internalChecksFilter"])
         self.assertEqual(
             {"prCreation": "immediate", "platformAutomerge": False},
@@ -80,8 +80,12 @@ class RepositoryInventoryTests(unittest.TestCase):
             "pre-release managers must be eligible on every production run",
         )
         groups = {rule.get("groupName"): rule for rule in config["packageRules"]}
-        self.assertEqual({"minor", "patch"}, set(groups["npm-minor-patch"]["matchUpdateTypes"]))
-        self.assertEqual({"minor", "patch"}, set(groups["actions-minor-patch"]["matchUpdateTypes"]))
+        self.assertEqual(
+            {"minor", "patch"}, set(groups["npm-minor-patch"]["matchUpdateTypes"])
+        )
+        self.assertEqual(
+            {"minor", "patch"}, set(groups["actions-minor-patch"]["matchUpdateTypes"])
+        )
         for group_name in ("npm-minor-patch", "actions-minor-patch"):
             rule = groups[group_name]
             self.assertTrue(rule["automerge"])
@@ -126,9 +130,7 @@ class RepositoryInventoryTests(unittest.TestCase):
             if rule.get("description")
             == "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin"
         )
-        self.assertEqual(
-            ["f5-sales-demo/vscode-xcsh"], peer_pin["matchRepositories"]
-        )
+        self.assertEqual(["f5-sales-demo/vscode-xcsh"], peer_pin["matchRepositories"])
         self.assertEqual(["npm"], peer_pin["matchManagers"])
         self.assertEqual(["@rolldown/plugin-babel"], peer_pin["matchPackageNames"])
         self.assertFalse(peer_pin["enabled"])
@@ -138,7 +140,9 @@ class RepositoryInventoryTests(unittest.TestCase):
             if rule.get("description")
             == "Keep docs-control uv input within the immutable runner catalog"
         )
-        self.assertEqual(["f5-sales-demo/docs-control"], uv_catalog["matchRepositories"])
+        self.assertEqual(
+            ["f5-sales-demo/docs-control"], uv_catalog["matchRepositories"]
+        )
         self.assertEqual(["github-actions"], uv_catalog["matchManagers"])
         self.assertEqual(["astral-sh/uv"], uv_catalog["matchPackageNames"])
         self.assertEqual("0.8.24", uv_catalog["allowedVersions"])
@@ -206,7 +210,9 @@ class RepositoryInventoryTests(unittest.TestCase):
         value = json.loads(capacity.read_text())
         value["repositories"].remove("f5-sales-demo/docs-icons")
         capacity.write_text(json.dumps(value))
-        with self.assertRaisesRegex(MODULE.InventoryError, "capacity inventory differs"):
+        with self.assertRaisesRegex(
+            MODULE.InventoryError, "capacity inventory differs"
+        ):
             MODULE.inventory(self.root)
 
     def test_committed_output_is_deterministic(self):

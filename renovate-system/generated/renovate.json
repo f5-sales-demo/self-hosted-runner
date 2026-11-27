@@ -54,7 +54,7 @@
   "labels": [],
   "prConcurrentLimit": 10,
   "timezone": "America/Toronto",
-  "minimumReleaseAge": "7 days",
+  "minimumReleaseAge": "0 days",
   "internalChecksFilter": "strict",
   "force": {
     "prCreation": "immediate",
@@ -157,14 +157,6 @@
           "packages/*/icons.json"
         ]
       }
-    },
-    {
-      "description": "Use current stable dependencies immediately in prerelease projects",
-      "matchRepositories": [
-        "f5-sales-demo/marketplace",
-        "f5-sales-demo/xcsh"
-      ],
-      "minimumReleaseAge": "0 days"
     },
     {
       "description": "Keep docs-control managed workflows canonical downstream",
