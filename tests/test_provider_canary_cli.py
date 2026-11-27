@@ -51,6 +51,10 @@ if name == "docker":
 if name == "helm":
     if args == ["version", "--short"]:
         print("v4.3.2+g8346aaa")
+    elif args and args[0] == "list":
+        release = "arc" if args[args.index("--namespace") + 1] == "arc-systems" else os.environ["RUNNER_NAMESPACE"].removeprefix("arc-runners-")
+        chart = os.environ.get("CURRENT_CONTROLLER_CHART", "gha-runner-scale-set-controller-0.15.1") if release == "arc" else "gha-runner-scale-set-0.15.1"
+        print(json.dumps([{"name": release, "chart": chart, "status": "deployed"}]))
     elif args and args[0] == "pull":
         print("Digest: sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365")
     elif not args or args[0] != "upgrade":

@@ -48,6 +48,28 @@ dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f
 test "$(helm version --short)" = "v4.3.2+g8346aaa"
 kubectl auth can-i '*' '*' --all-namespaces | grep -qx yes
 
+# Validate all affected installed releases before the first controller, cache,
+# priority-class or runner mutation. Helm cannot upgrade ARC CRDs itself.
+check_release_version() {
+  local release=$1 namespace=$2 chart=$3
+  shift 3
+  helm list --namespace "$namespace" --filter "^${release}$" --output json |
+    python3 scripts/arc-release-preflight.py "$release" "$chart" "$chart_version" "$@"
+}
+if [[ "$mode" != cache ]]; then
+  controller_args=()
+  if [[ "$mode" != controller && "$mode" != all ]]; then
+    controller_args+=(--require-installed)
+  fi
+  check_release_version arc arc-systems gha-runner-scale-set-controller "${controller_args[@]}"
+  if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]; then
+    while IFS= read -r spec; do
+      check_release_version "$(jq -er .release <<<"$spec")" \
+        "$(jq -er .namespace <<<"$spec")" gha-runner-scale-set
+    done < <(jq -c '.scale_sets[]' <<<"$config_json")
+  fi
+fi
+
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 export HELM_REGISTRY_CONFIG="$tmpdir/helm-registry.json"

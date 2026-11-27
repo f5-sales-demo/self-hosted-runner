@@ -39,3 +39,14 @@ Do not force resource ownership or server-side apply conflicts.
 
 [helm]: https://github.com/helm/helm/releases/tag/v4.3.2
 [arc]: https://github.com/actions/actions-runner-controller/releases/tag/gha-runner-scale-set-0.15.1
+
+The shared release preflight runs before any affected deployment mutation.
+Existing releases must have exact identity and a completed deployed state.
+The current release and the explicitly documented 0.15.0 to 0.15.1 patch
+transition are eligible. Cross-minor transitions require reviewed runner
+cleanup, controller reinstall and changed CRD handling under [GitHub's upgrade
+guidance][upgrade]. Runners require an installed compatible controller. This
+preserves the current fleet while the staging migration is qualified; it does
+not defer eligibility for new stable releases.
+
+[upgrade]: https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners-with-actions-runner-controller/deploying-runner-scale-sets-with-actions-runner-controller#upgrading-arc
