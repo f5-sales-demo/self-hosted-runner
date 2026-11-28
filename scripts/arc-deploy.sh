@@ -26,6 +26,7 @@ esac
 
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
+export HELM_PLUGINS="$repo_root/arc/helm-plugins"
 candidate_enabled=${TF_VAR_enable_compute_32_vcpu_candidate:-false}
 [[ "$candidate_enabled" =~ ^(true|false)$ ]] || {
   echo "TF_VAR_enable_compute_32_vcpu_candidate must be true or false" >&2
@@ -39,23 +40,43 @@ if [[ "$mode" == toolchain-canary ]]; then
   config_json=$(jq -ce '.scale_sets |= map(select(.profile == "compute-toolchain-canary")) | select(.scale_sets | length == 1)' <<<"$config_json")
 fi
 github_config_url=$(jq -er .repository <<<"$config_json")
-chart_version=0.14.2
-controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452
-scale_set_chart_digest=sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
-dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+chart_version=0.15.1
+controller_chart_digest=sha256:c2497a6dedaaa723322abfe9ea2f5a81b9b8fbb90b38e45d7835b6c7629a3aae
+scale_set_chart_digest=sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365
+dind_image=$(jq -er '.base_images.docker_dind' catalog/tool-catalog.json)
+[[ "$dind_image" =~ ^docker\.io/library/docker@sha256:[0-9a-f]{64}$ ]]
 
-test "$(helm version --short)" = "v3.21.3+g1ad6e68"
+test "$(helm version --short)" = "v4.3.2+g8346aaa"
 kubectl auth can-i '*' '*' --all-namespaces | grep -qx yes
+
+# Validate all affected installed releases before the first controller, cache,
+# priority-class or runner mutation. Helm cannot upgrade ARC CRDs itself.
+check_release_version() {
+  local release=$1 namespace=$2 chart=$3
+  shift 3
+  helm list --namespace "$namespace" --filter "^${release}$" --output json |
+    python3 scripts/arc-release-preflight.py "$release" "$chart" "$chart_version" "$@"
+}
+if [[ "$mode" != cache ]]; then
+  controller_args=()
+  if [[ "$mode" != controller && "$mode" != all ]]; then
+    controller_args+=(--require-installed)
+  fi
+  check_release_version arc arc-systems gha-runner-scale-set-controller "${controller_args[@]}"
+  if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]; then
+    while IFS= read -r spec; do
+      check_release_version "$(jq -er .release <<<"$spec")" \
+        "$(jq -er .namespace <<<"$spec")" gha-runner-scale-set
+    done < <(jq -c '.scale_sets[]' <<<"$config_json")
+  fi
+fi
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf -- "$tmpdir"' EXIT
 export HELM_REGISTRY_CONFIG="$tmpdir/helm-registry.json"
 printf '{}\n' >"$HELM_REGISTRY_CONFIG"
 chmod 0600 "$HELM_REGISTRY_CONFIG"
-if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  gh auth token | helm registry login ghcr.io \
-    --username "$(gh api user --jq .login)" --password-stdin >/dev/null
-fi
+scripts/arc-registry-context.sh "$HELM_REGISTRY_CONFIG"
 pull_chart() {
   local chart=$1 expected=$2 output actual
   output=$(helm pull "oci://ghcr.io/actions/actions-runner-controller-charts/$chart" \
@@ -70,7 +91,7 @@ if [[ "$mode" == controller || "$mode" == all ]]; then
   helm upgrade --install arc "$controller_chart" \
     --namespace arc-systems --create-namespace \
     --values arc/controller-values.yaml \
-    --post-renderer scripts/arc-controller-post-renderer.py \
+    --post-renderer arc-controller-image \
     --wait --timeout 10m
 fi
 

@@ -2,15 +2,22 @@
 
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "compute-toolchain-canary"
-NAMESPACE = "arc-runners-terraform-provider-xcsh-" + PROFILE
+POLICY = yaml.safe_load(
+    (ROOT / "arc/repositories/terraform-provider-xcsh.yaml").read_text()
+)
+NAMESPACE = next(
+    spec["namespace"] for spec in POLICY["scale_sets"] if spec["profile"] == PROFILE
+)
 RELEASE = "terraform-provider-xcsh-" + PROFILE
 IMAGE = "ghcr.io/f5-sales-demo/self-hosted-runner@sha256:" + "a" * 64
 SOURCE = "b" * 40
@@ -50,9 +57,13 @@ if name == "docker":
     sys.exit(0)
 if name == "helm":
     if args == ["version", "--short"]:
-        print("v3.21.3+g1ad6e68")
+        print("v4.3.2+g8346aaa")
+    elif args and args[0] == "list":
+        release = "arc" if args[args.index("--namespace") + 1] == "arc-systems" else os.environ["RUNNER_NAMESPACE"].removeprefix("arc-runners-")
+        chart = os.environ.get("CURRENT_CONTROLLER_CHART", "gha-runner-scale-set-controller-0.15.1") if release == "arc" else "gha-runner-scale-set-0.15.1"
+        print(json.dumps([{"name": release, "chart": chart, "status": "deployed"}]))
     elif args and args[0] == "pull":
-        print("Digest: sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11")
+        print("Digest: sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365")
     elif not args or args[0] != "upgrade":
         sys.exit(97)
 if name == "kubectl":
@@ -62,7 +73,7 @@ if name == "kubectl":
         pass
     elif args[:2] == ["get", "autoscalinglisteners,ephemeralrunnersets"]:
         print(json.dumps({"items": [
-            {"kind": "AutoscalingListener", "metadata": {"name": "canary-listener", "namespace": "arc-systems", "uid": "fixture-uid"}, "spec": {"autoscalingRunnerSetNamespace": os.environ["RUNNER_NAMESPACE"], "ephemeralRunnerSetName": "canary-set"}},
+            {"kind": "AutoscalingListener", "metadata": {"name": "canary-listener", "namespace": "example-system", "uid": "fixture-uid"}, "spec": {"autoscalingRunnerSetNamespace": os.environ["RUNNER_NAMESPACE"], "ephemeralRunnerSetName": "canary-set"}},
             {"kind": "EphemeralRunnerSet", "metadata": {"namespace": os.environ["RUNNER_NAMESPACE"], "name": "canary-set"}}
         ]}))
     elif args[:2] == ["get", "pods"]:
