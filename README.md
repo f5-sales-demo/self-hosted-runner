@@ -98,6 +98,35 @@ setup actions, floating tool versions, global installs, curl/wget installers,
 privileged package installation, and Docker/socket actions outside
 `container-build` are rejected unless their tool is supplied by the catalogue.
 
+## Original observer control
+
+`docker-action-profile control` operates on the original observation recorded
+beside its profile. It checks the owning process, workspace, output, phase,
+image and reviewed identities before accepting control. It preserves the
+original clock and never submits another observation.
+
+Use the same values that launched the observer:
+
+```bash
+control=(
+  --name super-linter --output "$profile_dir/profile.json"
+  --image "$SUPER_LINTER_IMAGE"
+  --expected-digest "$SUPER_LINTER_DIGEST"
+  --expected-action-commit "$SUPER_LINTER_ACTION_COMMIT"
+  --expected-manifest-digest "$SUPER_LINTER_MANIFEST_DIGEST"
+)
+docker-action-profile control wait-ready "${control[@]}" --wait 10
+docker-action-profile control inspect "${control[@]}"
+docker-action-profile control wait-complete "${control[@]}" --wait 20
+```
+
+`cancel` writes one exclusive, ownership-bound cancellation request. Repeating
+that same request does not rewrite it or reset the deadline. The observer and
+its commands close naturally; no signal is sent. `wait-complete` accepts a
+successful terminal only after every original process is absent. A changed,
+stopped, truncated, late or unresolved capture stays incomplete and retains
+its evidence and locks. Each wait is bounded to at most sixty seconds.
+
 ## Upstream update detection
 
 `Check runner tool updates` runs weekly and on demand. It compares the

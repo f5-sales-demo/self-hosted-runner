@@ -20,7 +20,7 @@ loaded_image_id=
 image_config_sha256=
 rootfs_sha256=
 archive_sha256=
-image_reference=ghcr.io/super-linter/super-linter:v8.7.0
+image_reference=ghcr.io/super-linter/super-linter:v9.0.0
 seed_digest=${seed_image##*@}
 
 field() {
@@ -34,6 +34,17 @@ remove_rejected() {
 }
 # shellcheck disable=SC2317,SC2329 # invoked by the EXIT trap
 write_result() {
+  # Rejected metadata is retained by the caller. Only validated identity
+  # characters enter this JSON receipt; malformed fields cannot forge a hit.
+  printf '%s\n' "$action_commit" | grep -Eq '^[0-9a-f]{40}$' || action_commit=
+  valid_digest "$index_digest" || index_digest=
+  valid_digest "$manifest_digest" || manifest_digest=
+  valid_digest "$seed_digest" || seed_digest=
+  valid_digest "$source_image_id" || source_image_id=
+  valid_digest "$loaded_image_id" || loaded_image_id=
+  printf '%s\n' "$image_config_sha256" | grep -Eq '^[0-9a-f]{64}$' || image_config_sha256=
+  printf '%s\n' "$rootfs_sha256" | grep -Eq '^[0-9a-f]{64}$' || rootfs_sha256=
+  printf '%s\n' "$archive_sha256" | grep -Eq '^[0-9a-f]{64}$' || archive_sha256=
   completed=$(date +%s)
   duration=$((completed - started))
   directory=${output%/*}
@@ -59,7 +70,7 @@ source_image_id=$(field IMAGE_ID)
 image_config_sha256=$(field IMAGE_CONFIG_SHA256)
 rootfs_sha256=$(field ROOTFS_SHA256)
 archive_sha256=$(field ARCHIVE_SHA256)
-image_reference=$(field IMAGE_REFERENCE)
+declared_image_reference=$(field IMAGE_REFERENCE)
 if [ "$action_commit" != "$expected_action" ] ||
   [ "$index_digest" != "$expected_index" ] ||
   [ "$manifest_digest" != "$expected_manifest" ] ||
@@ -68,17 +79,15 @@ if [ "$action_commit" != "$expected_action" ] ||
   ! printf '%s\n' "$image_config_sha256" | grep -Eq '^[0-9a-f]{64}$' ||
   ! printf '%s\n' "$rootfs_sha256" | grep -Eq '^[0-9a-f]{64}$' ||
   ! printf '%s\n' "$archive_sha256" | grep -Eq '^[0-9a-f]{64}$' ||
-  [ "$image_reference" != ghcr.io/super-linter/super-linter:v8.7.0 ]; then
+  [ "$declared_image_reference" != "$image_reference" ]; then
   result=rejected
   reason=immutable_identity_mismatch
-  remove_rejected ""
   exit 0
 fi
 actual_archive=$(sha256sum "$archive" 2>/dev/null | cut -d' ' -f1)
 if [ "$actual_archive" != "$archive_sha256" ]; then
   result=rejected
   reason=archive_digest_mismatch
-  remove_rejected ""
   exit 0
 fi
 if ! docker info >/dev/null 2>&1; then

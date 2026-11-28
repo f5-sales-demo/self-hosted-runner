@@ -5,25 +5,32 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import queue
 import re
 import signal
 import subprocess
+import sys
 import time
 import traceback
 from datetime import UTC, datetime
 from pathlib import Path
 
-from profile_capture import Observation, ObservationIncomplete, resume
+from profile_capture import (
+    Observation,
+    ObservationIncomplete,
+    original_process_absent,
+    resume,
+)
 
 SCHEMA_VERSION = 2
-SUPER_LINTER_ACTION_COMMIT = "4ce20838b8ab83717e78138c5b3a1407148e0918"
+SUPER_LINTER_ACTION_COMMIT = "2da136927bd4a73596db63044b504547c62cb854"
 SUPER_LINTER_INDEX_DIGEST = (
-    "sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996"
+    "sha256:7620fb6f07a1908b0642d9ddc4f49da7d9f2b9497bcafee4d3d151d1e5567c0b"
 )
 SUPER_LINTER_AMD64_MANIFEST = (
-    "sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849"
+    "sha256:496fe2e10c487771d42eede90cacfc767324db5ac9ddc9f3b2f490afa0a1db73"
 )
 SAFE_ENV = {
     "repository": "GITHUB_REPOSITORY",
@@ -531,7 +538,10 @@ def write_summary(profile: dict) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        epilog="Use docker-action-profile control for original observer readiness, inspection, cooperative cancellation and closure.",
+    )
     parser.add_argument("--name", dest="phase", required=True)
     parser.add_argument("--image", required=True)
     parser.add_argument("--expected-digest")
@@ -577,7 +587,152 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def control_main(argv: list[str]) -> int:
+    """Control the verified original observer without signals or submission."""
+    parser = argparse.ArgumentParser(description="Control one original Docker observer")
+    parser.add_argument(
+        "operation", choices=("inspect", "cancel", "wait-ready", "wait-complete")
+    )
+    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--name", required=True)
+    parser.add_argument("--image", required=True)
+    parser.add_argument("--expected-digest", required=True)
+    parser.add_argument("--expected-action-commit", required=True)
+    parser.add_argument("--expected-manifest-digest", required=True)
+    parser.add_argument("--wait", type=float, default=0)
+    args = parser.parse_args(argv)
+    if not math.isfinite(args.wait) or not 0 <= args.wait <= 60:
+        parser.error("wait must be finite and between zero and sixty seconds")
+    if not SHA256.fullmatch(args.expected_digest) or not SHA256.fullmatch(
+        args.expected_manifest_digest
+    ):
+        parser.error("image identities must be lowercase sha256 digests")
+    if not re.fullmatch(r"[0-9a-f]{40}", args.expected_action_commit):
+        parser.error("action identity must be a forty-character lowercase commit")
+    output = args.output.absolute()
+    root = output.with_name(output.name + ".capture")
+    deadline = time.monotonic() + args.wait
+
+    def emit(state: dict, code: int) -> int:
+        safe = {
+            key: state[key]
+            for key in (
+                "status",
+                "result",
+                "reason",
+                "code",
+                "owner",
+                "deadlineMonotonic",
+                "cancellationRequested",
+            )
+            if key in state
+        }
+        safe["submissionRepeated"] = False
+        print(json.dumps(safe, sort_keys=True))
+        return code
+
+    while True:
+        try:
+            request = json.loads((root / "observation.private.json").read_text())
+            config = request["config"]
+            expected = {
+                "phase": args.name,
+                "image": args.image,
+                "output": str(output),
+                "expected_digest": args.expected_digest,
+                "expected_action_commit": args.expected_action_commit,
+                "expected_manifest_digest": args.expected_manifest_digest,
+            }
+            if (
+                not isinstance(config, dict)
+                or not isinstance(config.get("arguments"), dict)
+                or config.get("kind") != "docker-action"
+                or config.get("cwd") != str(Path.cwd())
+                or any(
+                    config.get("arguments", {}).get(key) != value
+                    for key, value in expected.items()
+                )
+            ):
+                raise ObservationIncomplete("control_expectation_mismatch")
+            request, binding = Observation._binding(root, config)
+            state = Observation.inspect(root, config)
+            if state["status"] == "unresolved":
+                return emit(state, 2)
+            cancellation = root / "cancel.private.json"
+            if cancellation.exists() and json.loads(cancellation.read_text()) != {
+                "binding": binding,
+                "config": config,
+            }:
+                raise ObservationIncomplete("observation_cancellation_changed")
+            if args.operation == "inspect":
+                return emit(state, 0)
+            if args.operation == "cancel":
+                if state["status"] == "complete":
+                    return emit(state, state["code"])
+                if not cancellation.exists():
+                    try:
+                        Observation.request_cancel(root, config)
+                    except FileExistsError:
+                        if json.loads(cancellation.read_text()) != {
+                            "binding": binding,
+                            "config": config,
+                        }:
+                            raise ObservationIncomplete(
+                                "observation_cancellation_changed"
+                            )
+                return emit({**state, "cancellationRequested": True}, 0)
+            if args.operation == "wait-ready" and state["status"] == "pending":
+                marker_path = Path(config["arguments"]["ready_file"])
+                if marker_path.exists():
+                    if marker_path.is_symlink():
+                        raise ObservationIncomplete("observation_marker_changed")
+                    marker = json.loads(marker_path.read_text())
+                    if marker != {
+                        "status": "ready",
+                        "binding": binding,
+                        "owner": binding["owner"],
+                        "capture": str(root),
+                    }:
+                        raise ObservationIncomplete("observation_marker_changed")
+                    return emit({**state, "status": "ready"}, 0)
+            if args.operation == "wait-complete" and state["status"] == "complete":
+                commands = json.loads((root / "commands.private.json").read_text())[
+                    "commands"
+                ]
+                captures = [
+                    resume(root / entry["folder"], expected_argv=entry["argv"])
+                    for entry in commands
+                ]
+                closed = original_process_absent(binding["owner"]) and all(
+                    capture["status"] == "complete"
+                    and capture.get("withinDeadline")
+                    and not any(capture.get("truncated", {}).values())
+                    and all(
+                        original_process_absent(capture[role])
+                        for role in ("worker", "child")
+                    )
+                    for capture in captures
+                )
+                if closed and Observation.inspect(root, config) == state:
+                    return emit(state, state["code"])
+                state = {"status": "pending", "reason": "original_processes_not_closed"}
+        except FileNotFoundError:
+            state = {"status": "pending", "reason": "original_binding_not_available"}
+        except ObservationIncomplete as error:
+            return emit({"status": "unresolved", "reason": str(error)}, 2)
+        except (OSError, KeyError, ValueError, TypeError):
+            return emit(
+                {"status": "unresolved", "reason": "control_evidence_incomplete"}, 2
+            )
+        if time.monotonic() >= deadline:
+            return emit(state, 2)
+        time.sleep(min(0.05, max(0, deadline - time.monotonic())))
+
+
 def main(argv: list[str] | None = None) -> int:
+    selected = sys.argv[1:] if argv is None else argv
+    if selected and selected[0] == "control":
+        return control_main(selected[1:])
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.interval <= 0 or args.timeout <= 0:
