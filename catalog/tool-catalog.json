@@ -134,6 +134,9 @@
     "helm": {
       "strategy": "github-release",
       "repository": "helm/helm"
+    },
+    "google-cloud-cli": {
+      "strategy": "google-cloud-sdk"
     }
   },
   "setup_actions": {
@@ -831,15 +834,16 @@
     },
     {
       "name": "google-cloud-cli",
-      "version": "579.0.0",
-      "source": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-579.0.0-linux-x86_64.tar.gz",
-      "sha256": "a9a7fbe51cda37cf6142b1bbcff12227550e60a6c67e8cf84644fb301371c4de",
+      "version": "594.0.1",
+      "source": "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz",
+      "sha256": "c6fdba4cb1551b0da7c1d744eb0dfaf68b59861238d6a6b5ef6bad1ba596b567",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "gcloud version",
-      "expected": "Google Cloud SDK 579.0.0"
+      "expected": "Google Cloud SDK 594.0.1",
+      "size_bytes": 94829776
     },
     {
       "name": "kubectl",

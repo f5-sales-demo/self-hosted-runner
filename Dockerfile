@@ -61,8 +61,10 @@ ARG ACTIONLINT_VERSION=1.7.12
 ARG ACTIONLINT_SHA256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
 ARG RUFF_VERSION=0.16.0
 ARG RUFF_SHA256=98001c995a134d95f9bc83106a7f94b552971b583f1c0ab75fb656a881e13865
-ARG GCLOUD_VERSION=579.0.0
-ARG GCLOUD_SHA256=a9a7fbe51cda37cf6142b1bbcff12227550e60a6c67e8cf84644fb301371c4de
+ARG GCLOUD_VERSION=594.0.1
+ARG GCLOUD_SHA256=c6fdba4cb1551b0da7c1d744eb0dfaf68b59861238d6a6b5ef6bad1ba596b567
+ARG GCLOUD_URL=https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz
+ARG GCLOUD_SIZE=94829776
 ARG KUBECTL_VERSION=1.36.3
 ARG KUBECTL_SHA256=ebbd080e7c2e275093b55915722043257eb24004363e20acb3c4d71919f88336
 ARG KUSTOMIZE_VERSION=5.8.1
@@ -196,7 +198,7 @@ RUN set -eux; \
     echo "${BIOME_SHA256}  /tmp/biome" | sha256sum --check --strict; install -m 0555 /tmp/biome /usr/local/bin/biome; \
     curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/actionlint.tar.gz "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"; \
     echo "${ACTIONLINT_SHA256}  /tmp/actionlint.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/actionlint.tar.gz --directory /tmp actionlint && install -m 0555 /tmp/actionlint /usr/local/bin/actionlint; \
-    curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/gcloud.tar.gz "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-${GCLOUD_VERSION}-linux-x86_64.tar.gz"; \
+    python3 /usr/local/libexec/download-verified-artifact.py "${GCLOUD_URL}" "${GCLOUD_SHA256}" "${GCLOUD_SIZE}" /tmp/gcloud.tar.gz; \
     echo "${GCLOUD_SHA256}  /tmp/gcloud.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/gcloud.tar.gz --directory /opt && ln -s /opt/google-cloud-sdk/bin/gcloud /usr/local/bin/gcloud; \
     curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"; \
     echo "${KUBECTL_SHA256}  /tmp/kubectl" | sha256sum --check --strict; install -m 0555 /tmp/kubectl /usr/local/bin/kubectl; \
