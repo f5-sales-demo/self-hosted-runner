@@ -38,8 +38,10 @@ def validate(payload: object) -> int:
     if not isinstance(creation.get("created"), str) or not creation["created"]:
         raise SbomValidationError("missing SPDX creation time")
     creators = creation.get("creators")
-    if not isinstance(creators, list) or not creators or not all(
-        isinstance(creator, str) and creator.strip() for creator in creators
+    if (
+        not isinstance(creators, list)
+        or not creators
+        or not all(isinstance(creator, str) and creator.strip() for creator in creators)
     ):
         raise SbomValidationError("missing SPDX creator")
     packages = document.get("packages")
@@ -53,7 +55,9 @@ def validate(payload: object) -> int:
         identity = package.get("SPDXID")
         if not isinstance(name, str) or not name.strip():
             raise SbomValidationError("missing SPDX package name")
-        if not isinstance(identity, str) or not re.fullmatch(r"SPDXRef-[A-Za-z0-9.-]+", identity):
+        if not isinstance(identity, str) or not re.fullmatch(
+            r"SPDXRef-[A-Za-z0-9.-]+", identity
+        ):
             raise SbomValidationError("invalid SPDX package identity")
         if identity in identities:
             raise SbomValidationError("duplicate SPDX package identity")
@@ -61,7 +65,11 @@ def validate(payload: object) -> int:
     return len(packages)
 
 
-def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[object, dict[str, object]]:
+def load_archive(
+    path: Path,
+    attribution_report: Path | None = None,
+    expected_source_commit: str | None = None,
+) -> tuple[object, dict[str, object]]:
     """Read attributed attestations without extracting an OCI archive."""
     with tarfile.open(path) as archive:
         members = archive.getmembers()
@@ -70,7 +78,9 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
             raise SbomValidationError("ambiguous OCI archive members")
         lookup = {member.name: member for member in members}
 
-        def read_json(name: str, descriptor: dict[str, object] | None = None) -> tuple[dict[str, object], bytes]:
+        def read_json(
+            name: str, descriptor: dict[str, object] | None = None
+        ) -> tuple[dict[str, object], bytes]:
             member = lookup.get(name)
             if member is None or not member.isfile():
                 raise SbomValidationError("missing OCI metadata blob")
@@ -81,7 +91,10 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
                 data = stream.read()
             if descriptor is not None:
                 digest = descriptor.get("digest")
-                if descriptor.get("size") != len(data) or digest != "sha256:" + hashlib.sha256(data).hexdigest():
+                if (
+                    descriptor.get("size") != len(data)
+                    or digest != "sha256:" + hashlib.sha256(data).hexdigest()
+                ):
                     raise SbomValidationError("OCI metadata digest or size mismatch")
             value = json.loads(data)
             if not isinstance(value, dict):
@@ -90,11 +103,16 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
 
         def read_blob(descriptor: dict[str, object]) -> tuple[dict[str, object], bytes]:
             digest = descriptor.get("digest")
-            if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            if not isinstance(digest, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", digest
+            ):
                 raise SbomValidationError("invalid OCI descriptor digest")
-            return read_json("blobs/sha256/" + digest.removeprefix("sha256:"), descriptor)
+            return read_json(
+                "blobs/sha256/" + digest.removeprefix("sha256:"), descriptor
+            )
 
         images: set[str] = set()
+        image_metadata: dict[str, dict[str, object]] = {}
         attestations: list[tuple[dict[str, object], dict[str, object]]] = []
 
         def walk(index: dict[str, object]) -> None:
@@ -111,15 +129,23 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
                 annotations = descriptor.get("annotations", {})
                 if not isinstance(annotations, dict):
                     raise SbomValidationError("invalid OCI descriptor annotations")
-                if annotations.get("vnd.docker.reference.type") == "attestation-manifest":
+                if (
+                    annotations.get("vnd.docker.reference.type")
+                    == "attestation-manifest"
+                ):
                     attestations.append((descriptor, manifest))
-                elif descriptor.get("platform") == {"os": "linux", "architecture": "amd64"}:
+                elif descriptor.get("platform") == {
+                    "os": "linux",
+                    "architecture": "amd64",
+                }:
                     images.add(str(descriptor["digest"]))
+                    image_metadata[str(descriptor["digest"])] = manifest
 
         index, _ = read_json("index.json")
         walk(index)
         report: dict[str, object] = {
-            "imageManifests": sorted(images), "statements": [],
+            "imageManifests": sorted(images),
+            "statements": [],
             "inspectionComplete": False,
         }
         subject_reports: list[dict[str, object]] = []
@@ -127,12 +153,31 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
 
         def retain_report() -> None:
             if attribution_report is not None:
-                attribution_report.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+                attribution_report.write_text(
+                    json.dumps(report, indent=2) + "\n", encoding="utf-8"
+                )
 
         retain_report()
         if len(images) != 1:
             raise SbomValidationError("missing or ambiguous Linux/amd64 image")
         image = next(iter(images))
+        if expected_source_commit is not None:
+            if not re.fullmatch(r"[0-9a-f]{40}", expected_source_commit):
+                raise SbomValidationError("invalid expected source commit")
+            config_descriptor = image_metadata[image].get("config")
+            if not isinstance(config_descriptor, dict):
+                raise SbomValidationError("missing original image config")
+            config, _ = read_blob(config_descriptor)
+            runtime = config.get("config")
+            labels = runtime.get("Labels") if isinstance(runtime, dict) else None
+            if (
+                not isinstance(labels, dict)
+                or labels.get("org.opencontainers.image.revision")
+                != expected_source_commit
+            ):
+                raise SbomValidationError("image source commit mismatch")
+            report["sourceCommit"] = expected_source_commit
+            retain_report()
         documents: list[tuple[object, bytes]] = []
         for descriptor, manifest in attestations:
             annotations = descriptor["annotations"]
@@ -153,25 +198,39 @@ def load_archive(path: Path, attribution_report: Path | None = None) -> tuple[ob
                 # Retain only verified metadata digests and structural counts.
                 # Names, package inventories and arbitrary payload values are
                 # excluded, including when a subject fails validation.
-                subject_reports.append({
-                    "attestationManifest": descriptor["digest"],
-                    "imageAttribution": image,
-                    "statementDigest": layer["digest"],
-                    "subjectCount": len(subjects) if isinstance(subjects, list) else None,
-                    "subjectSha256": [
-                        subject["digest"]["sha256"] for subject in subjects
-                        if isinstance(subject, dict)
-                        and isinstance(subject.get("digest"), dict)
-                        and isinstance(subject["digest"].get("sha256"), str)
-                        and re.fullmatch(r"[0-9a-f]{64}", subject["digest"]["sha256"])
-                    ] if isinstance(subjects, list) else [],
-                })
+                subject_reports.append(
+                    {
+                        "attestationManifest": descriptor["digest"],
+                        "imageAttribution": image,
+                        "statementDigest": layer["digest"],
+                        "subjectCount": len(subjects)
+                        if isinstance(subjects, list)
+                        else None,
+                        "subjectSha256": [
+                            subject["digest"]["sha256"]
+                            for subject in subjects
+                            if isinstance(subject, dict)
+                            and isinstance(subject.get("digest"), dict)
+                            and isinstance(subject["digest"].get("sha256"), str)
+                            and re.fullmatch(
+                                r"[0-9a-f]{64}", subject["digest"]["sha256"]
+                            )
+                        ]
+                        if isinstance(subjects, list)
+                        else [],
+                    }
+                )
                 retain_report()
-                if not isinstance(subjects, list) or not subjects or not all(
-                    isinstance(subject, dict)
-                    and isinstance(subject.get("digest"), dict)
-                    and subject["digest"].get("sha256") == image.removeprefix("sha256:")
-                    for subject in subjects
+                if (
+                    not isinstance(subjects, list)
+                    or not subjects
+                    or not all(
+                        isinstance(subject, dict)
+                        and isinstance(subject.get("digest"), dict)
+                        and subject["digest"].get("sha256")
+                        == image.removeprefix("sha256:")
+                        for subject in subjects
+                    )
                 ):
                     raise SbomValidationError("foreign SPDX statement subject")
                 documents.append((statement.get("predicate"), raw))
@@ -191,20 +250,27 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--oci-archive", type=Path)
     parser.add_argument("--attribution-report", type=Path)
+    parser.add_argument("--expected-source-commit")
     args = parser.parse_args()
     if args.attribution_report is not None and args.oci_archive is None:
         parser.error("--attribution-report requires --oci-archive")
+    if args.expected_source_commit is not None and args.oci_archive is None:
+        parser.error("--expected-source-commit requires --oci-archive")
     try:
         if args.oci_archive is None:
             payload, proof = json.load(sys.stdin), {}
         else:
-            payload, proof = load_archive(args.oci_archive, args.attribution_report)
+            payload, proof = load_archive(
+                args.oci_archive, args.attribution_report, args.expected_source_commit
+            )
         count = validate(payload)
     except SbomValidationError as error:
         print(f"registry SPDX SBOM validation failed: {error}", file=sys.stderr)
         return 1
     except (ValueError, TypeError, OSError, KeyError, tarfile.TarError):
-        print("registry SPDX SBOM is missing, malformed, or incomplete", file=sys.stderr)
+        print(
+            "registry SPDX SBOM is missing, malformed, or incomplete", file=sys.stderr
+        )
         return 1
     details = " ".join(f"{name}={value}" for name, value in proof.items())
     print(f"verified SPDX SBOM packages={count}" + (" " + details if details else ""))

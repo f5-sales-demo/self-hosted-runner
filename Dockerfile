@@ -69,8 +69,9 @@ ARG KUSTOMIZE_VERSION=5.8.1
 ARG KUSTOMIZE_SHA256=029a7f0f4e1932c52a0476cf02a0fd855c0bb85694b82c338fc648dcb53a819d
 ARG BUN_VERSION=1.4.5
 ARG BUN_SHA256=94559b3b528995a49452f9f2404cec74f2efd7d06e0a000a8cd214b02c3666eb
-ARG ZIG_VERSION=0.16.0
-ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00
+ARG ZIG_VERSION=0.17.1
+ARG ZIG_SHA256=3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a
+ARG ZIG_SIZE=57411036
 ARG RUST_TOOLCHAIN=nightly-2026-09-03
 ARG RUST_DIST_MANIFEST_SHA256=df7a2f1a117645520b1019cf2f23d75411be359d431a09e28c31ab97ff710094
 ARG CARGO_NEXTEST_VERSION=0.9.143
@@ -159,6 +160,8 @@ RUN packages='ant bash build-essential clang composer bzip2 ca-certificates cmak
 
 ARG PNPM_VERSION=11.3.0
 ARG PNPM_SHA256=5ade1ef51cf36441f4a00931eaf9003654689eba3684939f70d7576b2dfb8474
+COPY --chown=root:root scripts/download-verified-artifact.py /usr/local/libexec/download-verified-artifact.py
+
 RUN set -eux; \
     curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/gh.tar.gz "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"; \
     echo "${GH_SHA256}  /tmp/gh.tar.gz" | sha256sum --check --strict; \
@@ -201,7 +204,7 @@ RUN set -eux; \
     echo "${KUSTOMIZE_SHA256}  /tmp/kustomize.tar.gz" | sha256sum --check --strict; tar --extract --gzip --file /tmp/kustomize.tar.gz --directory /tmp && install -m 0555 /tmp/kustomize /usr/local/bin/kustomize; \
     curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/bun.zip "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64.zip"; \
     echo "${BUN_SHA256}  /tmp/bun.zip" | sha256sum --check --strict; unzip -q /tmp/bun.zip -d /opt && ln -s /opt/bun-linux-x64/bun /usr/local/bin/bun; \
-    curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/zig.tar.xz "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz"; \
+    python3 /usr/local/libexec/download-verified-artifact.py "https://ziglang.org/download/${ZIG_VERSION}/zig-x86_64-linux-${ZIG_VERSION}.tar.xz" "${ZIG_SHA256}" "${ZIG_SIZE}" /tmp/zig.tar.xz; \
     echo "${ZIG_SHA256}  /tmp/zig.tar.xz" | sha256sum --check --strict; mkdir -p /opt/zig && tar --extract --xz --file /tmp/zig.tar.xz --directory /opt/zig --strip-components=1 && ln -s /opt/zig/zig /usr/local/bin/zig; \
     curl --fail --location --proto =https --proto-redir =https --tlsv1.2 --connect-timeout 20 --max-time 180 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 --remove-on-error --output /tmp/channel-rust-nightly.toml "https://static.rust-lang.org/dist/2026-09-03/channel-rust-nightly.toml"; \
     echo "${RUST_DIST_MANIFEST_SHA256}  /tmp/channel-rust-nightly.toml" | sha256sum --check --strict; \

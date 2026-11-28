@@ -40,7 +40,7 @@ class SuperLinterSeedTests(unittest.TestCase):
         self.assertIn("profile: super-linter-seed", publish)
         self.assertIn("target: super-linter-seed", publish)
         self.assertIn("scripts/build-super-linter-seed.sh", publish)
-        self.assertIn("actions/attest-build-provenance@", publish)
+        self.assertIn("actions/attest@", publish)
         for immutable in (ACTION_COMMIT, INDEX_DIGEST, MANIFEST_DIGEST):
             self.assertIn(immutable, builder)
         for command in (
