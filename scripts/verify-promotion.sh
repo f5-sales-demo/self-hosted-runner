@@ -17,7 +17,6 @@ if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-
 gh attestation verify "oci://${image}" \
   --repo f5-sales-demo/self-hosted-runner \
   --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
@@ -25,7 +24,7 @@ gh attestation verify "oci://${image}" \
   --deny-self-hosted-runners
 # Require the original platform's registry SPDX SBOM after provenance verification.
 docker buildx imagetools inspect \
-  --format '{{json (index .SBOM "linux/amd64")}}' "$image" | \
+  --format '{{json .SBOM}}' "$image" |
   python3 "$(dirname "${BASH_SOURCE[0]}")/verify-sbom.py"
 
 printf "verified GitHub provenance for %s from %s\n" "$image" "$revision"
