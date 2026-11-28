@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
+import runpy
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
 import unittest
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from retained_command import capture as CAPTURE
 
@@ -41,6 +44,7 @@ class DockerActionProfileTests(unittest.TestCase):
         source = f"""\
 #!/usr/bin/env python3
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -88,7 +92,9 @@ elif args[:2] == ["container", "inspect"]:
     print(json.dumps({{"Id": container_id, "Created": "2026-11-27T00:00:00Z", "Image": image_id, "State": {{"OOMKilled": False, "Running": running, "Status": "running" if running else "exited", "ExitCode": 23, "FinishedAt": "" if running else "2026-11-27T00:00:01Z"}}}}))
 elif args[:1] == ["stats"]:
     count = int(samples_path.read_text()) if samples_path.exists() else 0
-    samples_path.write_text(str(count + 1))
+    temporary = samples_path.with_name(samples_path.name + "." + str(os.getpid()) + ".tmp")
+    temporary.write_text(str(count + 1))
+    temporary.replace(samples_path)
     if mode == "malformed":
         print(json.dumps({{"CPUPerc": "--", "PIDs": "--"}}))
     else:
@@ -135,6 +141,27 @@ else:
             "--timeout",
             "10",
         ]
+
+    def test_fixture_stats_counter_is_published_atomically(self) -> None:
+        with preserved_directory() as directory:
+            root = Path(directory)
+            docker = self.fake_docker(root, "malformed")
+            samples = Path(str(docker) + ".stats-count")
+            samples.write_text("1")
+
+            def interrupted_write(path, text, *args, **kwargs):
+                with path.open("w", encoding="utf-8") as stream:
+                    # Read exactly while the writer's destination is empty.
+                    self.assertEqual(samples.read_text(), "1")
+                    return stream.write(text)
+
+            with (
+                mock.patch.object(Path, "write_text", interrupted_write),
+                mock.patch.object(sys, "argv", [str(docker), "stats"]),
+                redirect_stdout(io.StringIO()),
+            ):
+                runpy.run_path(str(docker), run_name="__main__")
+            self.assertEqual(samples.read_text(), "2")
 
     def test_size_and_event_parsers(self) -> None:
         self.assertEqual(128 * 1024**2, MODULE.parse_size("128MiB"))

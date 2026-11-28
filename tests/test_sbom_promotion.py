@@ -8,6 +8,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 IMAGE = "ghcr.io/f5-sales-demo/self-hosted-runner@sha256:" + "a" * 64
 REVISION = "b" * 40
@@ -81,6 +83,29 @@ sys.exit(code)
     def assert_rejected(self, payload: object, *, raw: bool = False) -> None:
         result = self.run_promotion(payload, raw=raw)
         self.assertNotEqual(result.returncode, 0, result.stdout)
+
+    def test_publisher_persists_current_registry_metadata(self) -> None:
+        workflow = yaml.safe_load((ROOT / ".github/workflows/publish.yml").read_text())
+        self.assertIn("artifact-metadata", workflow["permissions"])
+        self.assertEqual(workflow["permissions"]["artifact-metadata"], "write")
+        step = next(
+            item
+            for item in workflow["jobs"]["publish"]["steps"]
+            if item.get("name") == "Attest build provenance"
+        )
+        self.assertEqual(
+            step["uses"], "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6"
+        )
+        self.assertEqual(
+            step["with"]["subject-name"], "ghcr.io/f5-sales-demo/self-hosted-runner"
+        )
+        self.assertEqual(
+            step["with"]["subject-digest"], "${{ steps.image.outputs.digest }}"
+        )
+        self.assertIs(step["with"]["push-to-registry"], True)
+        self.assertIs(step["with"]["create-storage-record"], True)
+        self.assertNotIn("sbom-path", step["with"])
+        self.assertNotIn("predicate-path", step["with"])
 
     def test_publisher_uses_catalogued_immutable_scanner(self) -> None:
         catalog = json.loads((ROOT / "catalog/tool-catalog.json").read_text())

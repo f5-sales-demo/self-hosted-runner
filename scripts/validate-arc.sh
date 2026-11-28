@@ -7,16 +7,18 @@ set -euo pipefail
 }
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
+export HELM_PLUGINS="$repo_root/arc/helm-plugins"
 command -v helm >/dev/null
-test "$(helm version --short)" = "v3.21.3+g1ad6e68"
+test "$(helm version --short)" = "v4.3.2+g8346aaa"
 python3 scripts/arc-config.py --validate-set "$@" >/dev/null
 
-chart_version=0.14.2
-controller_chart_digest=sha256:3081ba15c41f0aa791058dedd2a7406fece24c9aeaa94956c268e5099427a452
-scale_set_chart_digest=sha256:579e3a1bdf4032b3c3de3e9b0880a4a6d3c1989a67c06010f680c1cc49524d11
+chart_version=0.15.1
+controller_chart_digest=sha256:c2497a6dedaaa723322abfe9ea2f5a81b9b8fbb90b38e45d7835b6c7629a3aae
+scale_set_chart_digest=sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365
 runner_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
 seed_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:2222222222222222222222222222222222222222222222222222222222222222
-dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+dind_image=$(jq -er '.base_images.docker_dind' catalog/tool-catalog.json)
+[[ "$dind_image" =~ ^docker\.io/library/docker@sha256:[0-9a-f]{64}$ ]]
 renovate_image=f5salesdemoarcca.azurecr.io/renovate@sha256:1111111111111111111111111111111111111111111111111111111111111111
 
 tmpdir=$(mktemp -d)
@@ -24,10 +26,7 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 export HELM_REGISTRY_CONFIG="$tmpdir/helm-registry.json"
 printf '{}\n' >"$HELM_REGISTRY_CONFIG"
 chmod 0600 "$HELM_REGISTRY_CONFIG"
-if command -v gh >/dev/null && gh auth status >/dev/null 2>&1; then
-  gh auth token | helm registry login ghcr.io \
-    --username "$(gh api user --jq .login)" --password-stdin >/dev/null
-fi
+scripts/arc-registry-context.sh "$HELM_REGISTRY_CONFIG"
 
 pull_chart() {
   local chart=$1 expected=$2 output actual
@@ -48,8 +47,8 @@ helm lint "$controller_chart" -f arc/controller-values.yaml >/dev/null
 helm template arc "$controller_chart" \
   --namespace arc-systems \
   -f arc/controller-values.yaml \
-  --post-renderer scripts/arc-controller-post-renderer.py >"$tmpdir/controller.yaml"
-grep -Fq 'ghcr.io/actions/gha-runner-scale-set-controller@sha256:1b4c7f62e971ab259a4b8798e48e2adaad4af747f45990f474ea5feefa03531d' "$tmpdir/controller.yaml"
+  --post-renderer arc-controller-image >"$tmpdir/controller.yaml"
+grep -Fq 'ghcr.io/actions/gha-runner-scale-set-controller@sha256:4b51a20db717b194e2f3fa96cfe2ddcb21602811f79053c75fd1a383517b9f90' "$tmpdir/controller.yaml"
 
 for profile in socketless compute-candidate container-build; do
   prepull_args=(

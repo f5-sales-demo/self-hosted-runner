@@ -9,38 +9,132 @@
   "base_images": {
     "ubuntu": "docker.io/library/ubuntu@sha256:d78ab76437b1afc5f01e223d6bf0172763f404bb166441328845adbef44518cb",
     "node": "docker.io/library/node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436",
-    "docker_cli": "docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe",
+    "docker_cli": "docker.io/library/docker@sha256:2e7e18e61525a6ea49792681dfcdcb0676a10c25ce66b876ff0ba47bd44dd102",
     "apt_snapshot": "20261126T000000Z",
-    "sbom_scanner": "docker.io/docker/buildkit-syft-scanner@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315"
+    "sbom_scanner": "docker.io/docker/buildkit-syft-scanner@sha256:873a7458c3c8ac8e32c7b796c10e1600b07b963d2aa000a72a2d97aaaa2d6315",
+    "docker_dind": "docker.io/library/docker@sha256:d367ae4192b30dd0559d1d21cfe7a9465c5b03344960eb51cdfcb5479e765d79"
   },
   "update_sources": {
-    "actions-runner": {"strategy": "github-release", "repository": "actions/runner"},
-    "github-cli": {"strategy": "github-release", "repository": "cli/cli"},
-    "powershell": {"strategy": "github-release", "repository": "PowerShell/PowerShell"},
-    "geckodriver": {"strategy": "github-release", "repository": "mozilla/geckodriver"},
-    "uv": {"strategy": "github-release", "repository": "astral-sh/uv"},
-    "biome": {"strategy": "github-release", "repository": "biomejs/biome"},
-    "ruff": {"strategy": "github-release", "repository": "astral-sh/ruff"},
-    "kustomize": {"strategy": "github-release", "repository": "kubernetes-sigs/kustomize"},
-    "bun": {"strategy": "github-release", "repository": "oven-sh/bun"},
-    "opencode": {"strategy": "github-release", "repository": "anomalyco/opencode"},
-    "agy": {"strategy": "antigravity-manifest", "manifest_url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json"},
-    "xcsh": {"strategy": "github-release", "repository": "f5-sales-demo/xcsh"},
-    "codex": {"strategy": "npm", "package": "@openai/codex"},
-    "claude-code": {"strategy": "npm", "package": "@anthropic-ai/claude-code-linux-x64"},
-    "node": {"strategy": "node"},
-    "node-20": {"strategy": "node"},
-    "node-24.14": {"strategy": "node"},
-    "node-24.19": {"strategy": "node"},
-    "tfplugindocs": {"strategy": "github-release", "repository": "hashicorp/terraform-plugin-docs"},
-    "golangci-lint": {"strategy": "github-release", "repository": "golangci/golangci-lint"},
-    "shellcheck": {"strategy": "github-release", "repository": "koalaman/shellcheck"},
-    "zizmor": {"strategy": "github-release", "repository": "zizmorcore/zizmor"},
-    "govulncheck": {"strategy": "go-module", "module": "golang.org/x/vuln"},
-    "pnpm": {"strategy": "npm", "package": "pnpm"},
-    "spectral": {"strategy": "npm", "package": "@stoplight/spectral-cli"},
-    "actionlint": {"strategy": "github-release", "repository": "rhysd/actionlint"},
-    "semantic-release": {"strategy": "npm", "package": "semantic-release"}
+    "actions-runner": {
+      "strategy": "github-release",
+      "repository": "actions/runner"
+    },
+    "github-cli": {
+      "strategy": "github-release",
+      "repository": "cli/cli"
+    },
+    "powershell": {
+      "strategy": "github-release",
+      "repository": "PowerShell/PowerShell"
+    },
+    "geckodriver": {
+      "strategy": "github-release",
+      "repository": "mozilla/geckodriver"
+    },
+    "uv": {
+      "strategy": "github-release",
+      "repository": "astral-sh/uv"
+    },
+    "biome": {
+      "strategy": "github-release",
+      "repository": "biomejs/biome"
+    },
+    "ruff": {
+      "strategy": "github-release",
+      "repository": "astral-sh/ruff"
+    },
+    "kustomize": {
+      "strategy": "github-release",
+      "repository": "kubernetes-sigs/kustomize"
+    },
+    "bun": {
+      "strategy": "github-release",
+      "repository": "oven-sh/bun"
+    },
+    "opencode": {
+      "strategy": "github-release",
+      "repository": "anomalyco/opencode"
+    },
+    "agy": {
+      "strategy": "antigravity-manifest",
+      "manifest_url": "https://antigravity-cli-auto-updater-974169037036.us-central1.run.app/manifests/linux_amd64.json"
+    },
+    "xcsh": {
+      "strategy": "github-release",
+      "repository": "f5-sales-demo/xcsh"
+    },
+    "codex": {
+      "strategy": "npm",
+      "package": "@openai/codex"
+    },
+    "claude-code": {
+      "strategy": "npm",
+      "package": "@anthropic-ai/claude-code-linux-x64"
+    },
+    "node": {
+      "strategy": "node"
+    },
+    "node-20": {
+      "strategy": "node"
+    },
+    "node-24.14": {
+      "strategy": "node"
+    },
+    "node-24.19": {
+      "strategy": "node"
+    },
+    "tfplugindocs": {
+      "strategy": "github-release",
+      "repository": "hashicorp/terraform-plugin-docs"
+    },
+    "golangci-lint": {
+      "strategy": "github-release",
+      "repository": "golangci/golangci-lint"
+    },
+    "shellcheck": {
+      "strategy": "github-release",
+      "repository": "koalaman/shellcheck"
+    },
+    "zizmor": {
+      "strategy": "github-release",
+      "repository": "zizmorcore/zizmor"
+    },
+    "govulncheck": {
+      "strategy": "go-module",
+      "module": "golang.org/x/vuln"
+    },
+    "pnpm": {
+      "strategy": "npm",
+      "package": "pnpm"
+    },
+    "spectral": {
+      "strategy": "npm",
+      "package": "@stoplight/spectral-cli"
+    },
+    "actionlint": {
+      "strategy": "github-release",
+      "repository": "rhysd/actionlint"
+    },
+    "semantic-release": {
+      "strategy": "npm",
+      "package": "semantic-release"
+    },
+    "docker-cli": {
+      "strategy": "github-release",
+      "repository": "moby/moby"
+    },
+    "docker-buildx": {
+      "strategy": "github-release",
+      "repository": "docker/buildx"
+    },
+    "docker-compose": {
+      "strategy": "github-release",
+      "repository": "docker/compose"
+    },
+    "helm": {
+      "strategy": "github-release",
+      "repository": "helm/helm"
+    }
   },
   "setup_actions": {
     "actions/setup-node": {
@@ -146,38 +240,134 @@
     }
   },
   "marketplace_actions": {
-    "actions/cache": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/cache/restore": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/cache/save": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/checkout": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/configure-pages": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/deploy-pages": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/download-artifact": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/github-script": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/setup-go": {"classification": "image-tool-setup", "tool": "go"},
-    "actions/setup-java": {"classification": "image-tool-setup", "tool": "java-17"},
-    "actions/setup-node": {"classification": "image-tool-setup", "tool": "node"},
-    "actions/setup-python": {"classification": "image-tool-setup", "tool": "python"},
-    "actions/upload-artifact": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "actions/upload-pages-artifact": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "astral-sh/ruff-action": {"classification": "image-tool-setup", "tool": "ruff"},
-    "astral-sh/setup-uv": {"classification": "image-tool-setup", "tool": "uv"},
-    "biomejs/setup-biome": {"classification": "image-tool-setup", "tool": "biome"},
-    "changesets/action": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "docker/build-push-action": {"classification": "docker-socket-consumer", "tool": "docker-cli"},
-    "docker/login-action": {"classification": "docker-socket-consumer", "tool": "docker-cli"},
-    "docker/metadata-action": {"classification": "docker-socket-consumer", "tool": "docker-cli"},
-    "docker/setup-buildx-action": {"classification": "docker-socket-consumer", "tool": "docker-cli"},
-    "docker/setup-qemu-action": {"classification": "docker-socket-consumer", "tool": "docker-cli"},
-    "f5-sales-demo/xcsh-action": {"classification": "runner-runtime-consumer", "tool": "xcsh"},
-    "github/codeql-action/upload-sarif": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "hashicorp/setup-terraform": {"classification": "image-tool-setup", "tool": "terraform"},
-    "mikepenz/action-junit-report": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "oven-sh/setup-bun": {"classification": "image-tool-setup", "tool": "bun"},
-    "peter-evans/repository-dispatch": {"classification": "runner-runtime-consumer", "tool": "node"},
-    "pnpm/action-setup": {"classification": "image-tool-setup", "tool": "pnpm"},
-    "stoplightio/spectral-action": {"classification": "image-tool-setup", "tool": "spectral"},
-    "super-linter/super-linter": {"classification": "docker-socket-consumer", "tool": "docker-cli"}
+    "actions/cache": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/cache/restore": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/cache/save": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/checkout": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/configure-pages": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/deploy-pages": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/download-artifact": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/github-script": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/setup-go": {
+      "classification": "image-tool-setup",
+      "tool": "go"
+    },
+    "actions/setup-java": {
+      "classification": "image-tool-setup",
+      "tool": "java-17"
+    },
+    "actions/setup-node": {
+      "classification": "image-tool-setup",
+      "tool": "node"
+    },
+    "actions/setup-python": {
+      "classification": "image-tool-setup",
+      "tool": "python"
+    },
+    "actions/upload-artifact": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "actions/upload-pages-artifact": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "astral-sh/ruff-action": {
+      "classification": "image-tool-setup",
+      "tool": "ruff"
+    },
+    "astral-sh/setup-uv": {
+      "classification": "image-tool-setup",
+      "tool": "uv"
+    },
+    "biomejs/setup-biome": {
+      "classification": "image-tool-setup",
+      "tool": "biome"
+    },
+    "changesets/action": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "docker/build-push-action": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    },
+    "docker/login-action": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    },
+    "docker/metadata-action": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    },
+    "docker/setup-buildx-action": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    },
+    "docker/setup-qemu-action": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    },
+    "f5-sales-demo/xcsh-action": {
+      "classification": "runner-runtime-consumer",
+      "tool": "xcsh"
+    },
+    "github/codeql-action/upload-sarif": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "hashicorp/setup-terraform": {
+      "classification": "image-tool-setup",
+      "tool": "terraform"
+    },
+    "mikepenz/action-junit-report": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "oven-sh/setup-bun": {
+      "classification": "image-tool-setup",
+      "tool": "bun"
+    },
+    "peter-evans/repository-dispatch": {
+      "classification": "runner-runtime-consumer",
+      "tool": "node"
+    },
+    "pnpm/action-setup": {
+      "classification": "image-tool-setup",
+      "tool": "pnpm"
+    },
+    "stoplightio/spectral-action": {
+      "classification": "image-tool-setup",
+      "tool": "spectral"
+    },
+    "super-linter/super-linter": {
+      "classification": "docker-socket-consumer",
+      "tool": "docker-cli"
+    }
   },
   "tools": [
     {
@@ -371,15 +561,15 @@
     },
     {
       "name": "helm",
-      "version": "3.21.3",
-      "source": "https://get.helm.sh/helm-v3.21.3-linux-amd64.tar.gz",
-      "sha256": "15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0",
+      "version": "4.3.2",
+      "source": "https://get.helm.sh/helm-v4.3.2-linux-amd64.tar.gz",
+      "sha256": "d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983",
       "profiles": [
         "standard",
         "container-build"
       ],
       "command": "helm version --short",
-      "expected": "v3.21.3"
+      "expected": "v4.3.2"
     },
     {
       "name": "java",
@@ -539,33 +729,33 @@
     },
     {
       "name": "docker-cli",
-      "version": "29.7.2",
-      "source": "docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe",
+      "version": "29.10.1",
+      "source": "docker.io/library/docker@sha256:2e7e18e61525a6ea49792681dfcdcb0676a10c25ce66b876ff0ba47bd44dd102",
       "profiles": [
         "container-build"
       ],
       "command": "docker --version",
-      "expected": "29.7.2"
+      "expected": "29.10.1"
     },
     {
       "name": "docker-buildx",
-      "version": "",
-      "source": "docker cli image",
+      "version": "0.39.1",
+      "source": "docker.io/library/docker@sha256:2e7e18e61525a6ea49792681dfcdcb0676a10c25ce66b876ff0ba47bd44dd102",
       "profiles": [
         "container-build"
       ],
       "command": "docker buildx version",
-      "expected": ""
+      "expected": "0.39.1"
     },
     {
       "name": "docker-compose",
-      "version": "",
-      "source": "docker cli image",
+      "version": "5.8.0",
+      "source": "docker.io/library/docker@sha256:2e7e18e61525a6ea49792681dfcdcb0676a10c25ce66b876ff0ba47bd44dd102",
       "profiles": [
         "container-build"
       ],
       "command": "docker compose version",
-      "expected": ""
+      "expected": "5.8.0"
     },
     {
       "name": "google-chrome",
@@ -702,7 +892,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/channel-rust-nightly.toml",
       "sha256": "df7a2f1a117645520b1019cf2f23d75411be359d431a09e28c31ab97ff710094",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustup show active-toolchain",
       "expected": "nightly-2026-09-03-x86_64-unknown-linux-gnu"
     },
@@ -711,7 +904,10 @@
       "version": "1.100.0-nightly (2e2b193f8 2026-09-02)",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "bd1f0986150596835e808635d81786c60ab9da3981687dfb00918329925e837a",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustc --version",
       "expected": "rustc 1.100.0-nightly (2e2b193f8 2026-09-02)"
     },
@@ -720,7 +916,10 @@
       "version": "0.101.0-nightly (b2e9d5f9d 2026-09-02)",
       "source": "https://static.rust-lang.org/dist/2026-09-03/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "a60615509715996b8d4d54b30a7db8a1cd62400d06206dbeeb20b223ad1e6b34",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "cargo --version",
       "expected": "cargo 1.100.0-nightly"
     },
@@ -729,7 +928,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "78d96443d9d7effe410c46e27b2c103d674ca18fda645e41da7e3408795d8e21",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustfmt --version",
       "expected": "nightly"
     },
@@ -738,7 +940,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "9715b53a8e80261f85eeddc6096e82e6038218ddd81e9fd8d7d5d558d076191b",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "cargo clippy --version",
       "expected": "clippy 0.1.100"
     },
@@ -747,7 +952,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rust-analyzer-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "a5276dad0411b6213a9e40e855d80b2578b54128a7d6ecc45dc52083b2cdd989",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rust-analyzer --version",
       "expected": "rust-analyzer"
     },
@@ -756,7 +964,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz",
       "sha256": "7bfd37eda0920b04ef50b4785475c5fa2cea8df19c24f3879d0b5cac6e4dcdbc",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustup target list --installed --toolchain nightly-2026-09-03",
       "expected": "x86_64-unknown-linux-gnu"
     },
@@ -765,7 +976,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-x86_64-pc-windows-msvc.tar.xz",
       "sha256": "075661d74da5a65b8d5c8adb9375a868fea80d5b0e5c131af6f4cd059d6b3113",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustup target list --installed --toolchain nightly-2026-09-03",
       "expected": "x86_64-pc-windows-msvc"
     },
@@ -774,7 +988,10 @@
       "version": "nightly-2026-09-03",
       "source": "https://static.rust-lang.org/dist/2026-09-03/rust-std-nightly-aarch64-unknown-linux-gnu.tar.xz",
       "sha256": "3a0e57f9f0251db8d9d2e2f9900e82b5806ab3a9bf4297d5d27ffc361c80d5ed",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rustup target list --installed --toolchain nightly-2026-09-03",
       "expected": "aarch64-unknown-linux-gnu"
     },
@@ -783,7 +1000,10 @@
       "version": "0.9.143",
       "source": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.143/cargo-nextest-0.9.143-x86_64-unknown-linux-gnu.tar.gz",
       "sha256": "66786b9abe23920d022a182d1416b1bbc8130dd4872a9553d76985a1708dcd1e",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "cargo nextest --version",
       "expected": "cargo-nextest 0.9.143"
     },
@@ -791,7 +1011,10 @@
       "name": "llvm-nm",
       "version": "18.1.3",
       "source": "ubuntu snapshot 20260810T000000Z package llvm",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "llvm-nm --version",
       "expected": "Ubuntu LLVM version 18.1.3"
     },
@@ -799,7 +1022,10 @@
       "name": "fd",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z package fd-find",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "fd --version",
       "expected": "fdfind "
     },
@@ -807,7 +1033,10 @@
       "name": "ripgrep",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z package ripgrep",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "rg --version",
       "expected": "ripgrep "
     },
@@ -815,7 +1044,10 @@
       "name": "imagemagick",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z package imagemagick",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "magick --version",
       "expected": "ImageMagick"
     },
@@ -823,7 +1055,10 @@
       "name": "xcsh-native-libraries",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z development packages",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "pkg-config --exists cairo pango libjpeg libgif librsvg-2.0 libsystemd",
       "expected": ""
     },
@@ -831,7 +1066,10 @@
       "name": "gcc-aarch64-linux-gnu",
       "version": "ubuntu-snapshot",
       "source": "ubuntu snapshot 20260810T000000Z",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "aarch64-linux-gnu-gcc --version",
       "expected": ""
     },
@@ -1104,7 +1342,10 @@
       "name": "xvfb-run",
       "version": "21.1.12",
       "source": "ubuntu snapshot 20260810T000000Z package xvfb with xauth",
-      "profiles": ["standard", "container-build"],
+      "profiles": [
+        "standard",
+        "container-build"
+      ],
       "command": "xvfb-run --help",
       "expected": "Usage: xvfb-run"
     }

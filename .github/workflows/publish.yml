@@ -9,6 +9,7 @@ permissions:
   contents: read
   packages: write
   attestations: write
+  artifact-metadata: write
   id-token: write
 
 concurrency:
@@ -79,8 +80,9 @@ jobs:
           printf "digest=%s\nreference=%s\n" "$digest" "$reference" >> "$GITHUB_OUTPUT"
           printf "### %s\n\n\`%s\`\n" "$PROFILE" "$reference" >> "$GITHUB_STEP_SUMMARY"
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-name: ghcr.io/f5-sales-demo/self-hosted-runner
           subject-digest: ${{ steps.image.outputs.digest }}
           push-to-registry: true
+          create-storage-record: true

@@ -1,10 +1,24 @@
+---
 name: Validate ARC runner platform pilot
 
-on:
+"on":
   workflow_dispatch:
+    inputs:
+      standard-image:
+        description: Reviewed standard image with an immutable manifest digest
+        required: true
+        type: string
+      container-build-image:
+        description: Reviewed container-build image and manifest digest
+        required: true
+        type: string
 
 permissions:
   contents: read
+
+concurrency:
+  group: arc-platform-pilot-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   socketless:
@@ -15,14 +29,29 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify complete socketless tool contract
-        run: verify-runner-tools standard
+        env:
+          EXPECTED_RUNNER_IMAGE: ${{ inputs.standard-image }}
+        run: |
+          set -euo pipefail
+          image_pattern='^(ghcr\.io/f5-sales-demo|'
+          image_pattern+='f5salesdemoarcca\.azurecr\.io|'
+          image_pattern+='[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)'
+          image_pattern+='/self-hosted-runner@sha256:[0-9a-f]{64}$'
+          [[ "${EXPECTED_RUNNER_IMAGE:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST##*@}" == "${EXPECTED_RUNNER_IMAGE##*@}" ]]
+          verify-runner-tools standard
       - name: Profile runner smoke
-        run: runner-profile --name runner-smoke --output "$RUNNER_TEMP/workload-profile.json" -- true
+        run: >-
+          runner-profile --name runner-smoke
+          --output "$RUNNER_TEMP/workload-profile.json" -- true
       - name: Upload workload profile
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: workload-profile-socketless-${{ github.run_id }}-${{ github.run_attempt }}
+          name: workload-profile-socketless-${{
+            github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/workload-profile.json
           if-no-files-found: error
           retention-days: 30
@@ -35,6 +64,7 @@ jobs:
           fi
 
   compute:
+    needs: socketless
     runs-on: self-hosted-runner-compute
     timeout-minutes: 60
     steps:
@@ -42,23 +72,37 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify compute tool and identity contract
+        env:
+          EXPECTED_RUNNER_IMAGE: ${{ inputs.standard-image }}
         run: |
           set -euo pipefail
+          image_pattern='^(ghcr\.io/f5-sales-demo|'
+          image_pattern+='f5salesdemoarcca\.azurecr\.io|'
+          image_pattern+='[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)'
+          image_pattern+='/self-hosted-runner@sha256:[0-9a-f]{64}$'
+          [[ "${EXPECTED_RUNNER_IMAGE:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST##*@}" == "${EXPECTED_RUNNER_IMAGE##*@}" ]]
           verify-runner-tools standard
           test "$RUNNER_PROFILE" = compute
           [[ "$RUNNER_IMAGE_DIGEST" =~ ^.+@sha256:[0-9a-f]{64}$ ]]
       - name: Profile compute smoke
-        run: runner-profile --name compute-smoke --output "$RUNNER_TEMP/workload-profile.json" -- true
+        run: >-
+          runner-profile --name compute-smoke
+          --output "$RUNNER_TEMP/workload-profile.json" -- true
       - name: Upload workload profile
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        # v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: workload-profile-compute-${{ github.run_id }}-${{ github.run_attempt }}
+          name: workload-profile-compute-${{
+            github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/workload-profile.json
           if-no-files-found: error
           retention-days: 30
 
   container-build:
+    needs: compute
     runs-on: self-hosted-runner-container-build
     timeout-minutes: 60
     outputs:
@@ -69,7 +113,18 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify complete container-build tool contract
-        run: verify-runner-tools container-build
+        env:
+          EXPECTED_RUNNER_IMAGE: ${{ inputs.container-build-image }}
+        run: |
+          set -euo pipefail
+          image_pattern='^(ghcr\.io/f5-sales-demo|'
+          image_pattern+='f5salesdemoarcca\.azurecr\.io|'
+          image_pattern+='[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)'
+          image_pattern+='/self-hosted-runner@sha256:[0-9a-f]{64}$'
+          [[ "${EXPECTED_RUNNER_IMAGE:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST##*@}" == "${EXPECTED_RUNNER_IMAGE##*@}" ]]
+          verify-runner-tools container-build
       - name: Build through the private DinD daemon
         id: daemon
         run: |
@@ -80,11 +135,13 @@ jobs:
           context="$RUNNER_TEMP/arc-stage1-build"
           mkdir -p "$context"
           printf 'FROM scratch\nLABEL stage1=ephemeral\n' >"$context/Dockerfile"
-          docker buildx create --driver docker-container --use --name "stage1-$GITHUB_RUN_ID"
+          docker buildx create --driver docker-container --use \
+            --name "stage1-$GITHUB_RUN_ID"
           docker buildx inspect --bootstrap
           docker buildx build --load --tag "$probe_image" "$context"
           docker image inspect "$probe_image" >/dev/null
-          printf 'id=%s\nprobe-image=%s\n' "$daemon_id" "$probe_image" >>"$GITHUB_OUTPUT"
+          printf 'id=%s\nprobe-image=%s\n' \
+            "$daemon_id" "$probe_image" >>"$GITHUB_OUTPUT"
 
   container-build-cleanroom:
     needs: container-build
@@ -93,10 +150,18 @@ jobs:
     steps:
       - name: Prove the prior pod-local daemon and image cache are gone
         env:
+          EXPECTED_RUNNER_IMAGE: ${{ inputs.container-build-image }}
           PRIOR_DAEMON_ID: ${{ needs.container-build.outputs.daemon-id }}
           PROBE_IMAGE: ${{ needs.container-build.outputs.probe-image }}
         run: |
           set -euo pipefail
+          image_pattern='^(ghcr\.io/f5-sales-demo|'
+          image_pattern+='f5salesdemoarcca\.azurecr\.io|'
+          image_pattern+='[0-9]{12}\.dkr\.ecr\.us-east-1\.amazonaws\.com)'
+          image_pattern+='/self-hosted-runner@sha256:[0-9a-f]{64}$'
+          [[ "${EXPECTED_RUNNER_IMAGE:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST:-}" =~ $image_pattern ]]
+          [[ "${RUNNER_IMAGE_DIGEST##*@}" == "${EXPECTED_RUNNER_IMAGE##*@}" ]]
           current_daemon_id="$(docker info --format '{{.ID}}')"
           [[ -n "$current_daemon_id" ]]
           [[ "$current_daemon_id" != "$PRIOR_DAEMON_ID" ]]

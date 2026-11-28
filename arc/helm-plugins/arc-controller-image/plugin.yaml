@@ -1,0 +1,8 @@
+name: arc-controller-image
+version: "0.15.1"
+type: postrenderer/v1
+apiVersion: v1
+runtime: subprocess
+runtimeConfig:
+  platformCommand:
+    - command: "${HELM_PLUGIN_DIR}/../../../scripts/arc-controller-post-renderer.py"
