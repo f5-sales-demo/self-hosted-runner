@@ -14,7 +14,16 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 class SbomArchiveTests(unittest.TestCase):
-    def archive(self, *, missing: bool = False, foreign: bool = False, duplicate: bool = False, corrupt: bool = False, architecture: str = "amd64") -> Path:
+    def archive(
+        self,
+        *,
+        missing: bool = False,
+        foreign: bool = False,
+        duplicate: bool = False,
+        corrupt: bool = False,
+        architecture: str = "amd64",
+        source_commit: str | None = None,
+    ) -> Path:
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         archive = Path(temporary.name) / "probe.oci.tar"
@@ -26,22 +35,49 @@ class SbomArchiveTests(unittest.TestCase):
             members["blobs/sha256/" + digest] = data
             return {"digest": "sha256:" + digest, "size": len(data)}
 
-        image = blob({"schemaVersion": 2, "layers": []})
+        config = blob(
+            {
+                "config": {
+                    "Labels": {"org.opencontainers.image.revision": source_commit}
+                    if source_commit
+                    else {}
+                }
+            }
+        )
+        image = blob({"schemaVersion": 2, "config": config, "layers": []})
         image["platform"] = {"os": "linux", "architecture": architecture}
         document = {
-            "spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT",
-            "name": "synthetic-probe", "dataLicense": "CC0-1.0",
+            "spdxVersion": "SPDX-2.3",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "synthetic-probe",
+            "dataLicense": "CC0-1.0",
             "documentNamespace": "https://example.com/spdx/synthetic-probe",
-            "creationInfo": {"created": "2026-11-01T00:00:00Z", "creators": ["Tool: syft"]},
+            "creationInfo": {
+                "created": "2026-11-01T00:00:00Z",
+                "creators": ["Tool: syft"],
+            },
             "packages": [{"name": "synthetic-package", "SPDXID": "SPDXRef-package"}],
         }
-        statement = blob({
-            "predicateType": "https://spdx.dev/Document",
-            "subject": [{"name": "synthetic-probe", "digest": {"sha256": "f" * 64 if foreign else str(image["digest"]).removeprefix("sha256:")}}],
-            "predicate": document,
-        })
+        statement = blob(
+            {
+                "predicateType": "https://spdx.dev/Document",
+                "subject": [
+                    {
+                        "name": "synthetic-probe",
+                        "digest": {
+                            "sha256": "f" * 64
+                            if foreign
+                            else str(image["digest"]).removeprefix("sha256:")
+                        },
+                    }
+                ],
+                "predicate": document,
+            }
+        )
         statement["mediaType"] = "application/vnd.in-toto+json"
-        attestation = blob({"schemaVersion": 2, "layers": [] if missing else [statement]})
+        attestation = blob(
+            {"schemaVersion": 2, "layers": [] if missing else [statement]}
+        )
         attestation["annotations"] = {
             "vnd.docker.reference.type": "attestation-manifest",
             "vnd.docker.reference.digest": image["digest"],
@@ -50,9 +86,13 @@ class SbomArchiveTests(unittest.TestCase):
         if duplicate:
             second = dict(attestation)
             manifests.append(second)
-        members["index.json"] = json.dumps({"schemaVersion": 2, "manifests": manifests}).encode()
+        members["index.json"] = json.dumps(
+            {"schemaVersion": 2, "manifests": manifests}
+        ).encode()
         if corrupt:
-            members["blobs/sha256/" + str(statement["digest"]).removeprefix("sha256:")] += b" "
+            members[
+                "blobs/sha256/" + str(statement["digest"]).removeprefix("sha256:")
+            ] += b" "
         with tarfile.open(archive, "w") as stream:
             for name, data in members.items():
                 member = tarfile.TarInfo(name)
@@ -63,8 +103,16 @@ class SbomArchiveTests(unittest.TestCase):
     def verify(self, **options: object) -> subprocess.CompletedProcess[str]:
         archive = self.archive(**options)
         return subprocess.run(
-            ["python3", str(ROOT / "scripts/verify-sbom.py"), "--oci-archive", str(archive)],
-            cwd=ROOT, capture_output=True, text=True, check=False,
+            [
+                "python3",
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
     def test_attributed_nonempty_spdx_archive_is_verified(self) -> None:
@@ -72,6 +120,59 @@ class SbomArchiveTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("sourceManifest=sha256:", result.stdout)
         self.assertIn("packages=1", result.stdout)
+
+    def test_expected_source_commit_matches_original_image_config(self) -> None:
+        archive = self.archive(source_commit="a" * 40)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+                "--expected-source-commit",
+                "a" * 40,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_foreign_source_image_config_is_rejected(self) -> None:
+        archive = self.archive(source_commit="b" * 40)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+                "--expected-source-commit",
+                "a" * 40,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("image source commit mismatch", result.stderr)
+
+    def test_missing_original_source_label_is_rejected(self) -> None:
+        archive = self.archive()
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+                "--expected-source-commit",
+                "a" * 40,
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("image source commit mismatch", result.stderr)
 
     def test_missing_archive_sbom_is_rejected(self) -> None:
         self.assertNotEqual(self.verify(missing=True).returncode, 0)
@@ -100,10 +201,12 @@ class SbomArchiveTests(unittest.TestCase):
         self.assertIn("foreign SPDX statement subject", result.stderr)
         self.assertNotIn("synthetic-package", result.stderr)
 
-    def test_hosted_probe_names_oci_output_and_retains_subject_diagnostics(self) -> None:
+    def test_hosted_current_source_output_and_retains_subject_diagnostics(self) -> None:
         workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
-        self.assertIn('--tag "$probe_reference"', workflow)
-        self.assertIn("probe_reference=", workflow)
+        self.assertIn('--tag "$candidate_reference"', workflow)
+        self.assertIn("candidate_reference=", workflow)
+        self.assertNotIn("BASE_SOURCE_SHA", workflow)
+        self.assertIn("github.event.pull_request.head.sha", workflow)
         self.assertIn("--attribution-report", workflow)
         self.assertIn("/attribution.json", workflow)
 
@@ -111,9 +214,17 @@ class SbomArchiveTests(unittest.TestCase):
         archive = self.archive(foreign=True)
         report = archive.parent / "attribution.json"
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/verify-sbom.py"),
-             "--oci-archive", str(archive), "--attribution-report", str(report)],
-            capture_output=True, text=True, check=False,
+            [
+                sys.executable,
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+                "--attribution-report",
+                str(report),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertTrue(report.is_file(), result.stderr)
@@ -128,22 +239,34 @@ class SbomArchiveTests(unittest.TestCase):
         archive = self.archive()
         report = archive.parent / "attribution.json"
         result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts/verify-sbom.py"),
-             "--oci-archive", str(archive), "--attribution-report", str(report)],
-            capture_output=True, text=True, check=False,
+            [
+                sys.executable,
+                str(ROOT / "scripts/verify-sbom.py"),
+                "--oci-archive",
+                str(archive),
+                "--attribution-report",
+                str(report),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         value = json.loads(report.read_text())
         self.assertEqual(value["statements"][0]["subjectCount"], 1)
-        self.assertEqual(value["statements"][0]["subjectSha256"],
-                         [value["imageManifests"][0].removeprefix("sha256:")])
+        self.assertEqual(
+            value["statements"][0]["subjectSha256"],
+            [value["imageManifests"][0].removeprefix("sha256:")],
+        )
         self.assertTrue(value["inspectionComplete"])
 
-    def test_hosted_probe_exports_registry_candidate_without_publishing(self) -> None:
+    def test_hosted_current_source_exports_candidate_without_publishing(self) -> None:
         workflow = (ROOT / ".github/workflows/verify-sbom-export.yml").read_text()
         self.assertIn("runs-on: ubuntu-24.04", workflow)
-        self.assertIn("GH_TOKEN: ${{ github.token }}", workflow)
-        self.assertIn("attestations: read", workflow)
+        self.assertIn("TOKEN: ${{ github.token }}", workflow)
+        self.assertIn("packages: read", workflow)
+        self.assertNotIn("BASE_SOURCE_SHA", workflow)
+        self.assertNotIn("gh attestation verify", workflow)
         self.assertIn("--output", workflow)
         self.assertIn("type=oci", workflow)
         self.assertIn("--oci-archive", workflow)

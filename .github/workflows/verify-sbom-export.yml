@@ -1,13 +1,16 @@
-name: Verify published runner SBOM export
+name: Verify current-source runner SBOM export
 
 on:
   pull_request:
     paths:
       - .github/workflows/verify-sbom-export.yml
       - .github/workflows/publish.yml
+      - Dockerfile
       - catalog/tool-catalog.json
+      - scripts/download-verified-artifact.py
       - scripts/verify-sbom.py
       - tests/test_sbom_archive.py
+      - tests/test_current_source_sbom_export.py
 
 permissions:
   contents: read
@@ -23,14 +26,20 @@ jobs:
     permissions:
       contents: read
       packages: read
-      attestations: read
     strategy:
       fail-fast: false
       matrix:
-        profile: [standard, container-build, super-linter-seed]
+        include:
+          - profile: standard
+            target: standard
+          - profile: container-build
+            target: container-build
+          - profile: super-linter-seed
+            target: super-linter-seed
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - name: Set up bounded isolated BuildKit
         uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e
@@ -46,38 +55,36 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - name: Export and verify original-image SPDX evidence
+      - name: Prepare immutable current-source Super-Linter archive
+        if: matrix.profile == 'super-linter-seed'
+        run: scripts/build-super-linter-seed.sh
+      - name: Export and verify current-source image SPDX evidence
         env:
-          GH_TOKEN: ${{ github.token }}
           PROFILE: ${{ matrix.profile }}
-          BASE_SOURCE_SHA: ${{ github.event.pull_request.base.sha }}
+          TARGET: ${{ matrix.target }}
+          SOURCE_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
-          [[ "$BASE_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
-          image=ghcr.io/f5-sales-demo/self-hosted-runner
-          tag="${image}:sha-${BASE_SOURCE_SHA}-${PROFILE}"
-          digest="$(docker buildx imagetools inspect --format '{{json .Manifest}}' "$tag" | jq -er '.digest')"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          reference="${image}@${digest}"
-          probe_reference="${image}:sbom-probe-${BASE_SOURCE_SHA}-${PROFILE}"
-          gh attestation verify "oci://${reference}" --repo f5-sales-demo/self-hosted-runner \
-            --signer-workflow f5-sales-demo/self-hosted-runner/.github/workflows/publish.yml@refs/heads/main \
-            --source-digest "$BASE_SOURCE_SHA" --deny-self-hosted-runners
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           scanner="$(jq -er '.base_images.sbom_scanner' catalog/tool-catalog.json)"
           [[ "$scanner" =~ ^docker\.io/docker/buildkit-syft-scanner@sha256:[0-9a-f]{64}$ ]]
-          SBOM_PROBE_DIR="${RUNNER_TEMP}/sbom-export-${PROFILE}"
-          mkdir -p "$SBOM_PROBE_DIR"
-          printf 'FROM %s\n' "$reference" > "$SBOM_PROBE_DIR/Dockerfile"
-          printf 'profile=%s originalImage=%s originalSource=%s scanner=%s probeName=%s\n' \
-            "$PROFILE" "$reference" "$BASE_SOURCE_SHA" "$scanner" "$probe_reference" >> "$SBOM_PROBE_DIR/receipt.txt"
+          candidate_reference="ghcr.io/f5-sales-demo/self-hosted-runner:sbom-candidate-${SOURCE_SHA}-${PROFILE}"
+          SBOM_EXPORT_DIR="${RUNNER_TEMP}/sbom-export-${PROFILE}"
+          mkdir -p "$SBOM_EXPORT_DIR"
+          printf 'profile=%s sourceCommit=%s scanner=%s candidateName=%s promotionEligible=false\n' \
+            "$PROFILE" "$SOURCE_SHA" "$scanner" "$candidate_reference" >> "$SBOM_EXPORT_DIR/receipt.txt"
           docker buildx build --no-cache --platform linux/amd64 \
-            --tag "$probe_reference" \
-            --provenance=false --sbom="generator=${scanner}" \
-            --output "type=oci,dest=${SBOM_PROBE_DIR}/probe.oci.tar" \
-            "$SBOM_PROBE_DIR" 2>&1 | tee "$SBOM_PROBE_DIR/export.log"
-          python3 scripts/verify-sbom.py --oci-archive "$SBOM_PROBE_DIR/probe.oci.tar" \
-            --attribution-report "$SBOM_PROBE_DIR/attribution.json" 2>&1 |
-            tee -a "$SBOM_PROBE_DIR/receipt.txt"
+            --target "$TARGET" --tag "$candidate_reference" \
+            --label "org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --provenance=mode=max --sbom="generator=${scanner}" \
+            --output "type=oci,dest=${SBOM_EXPORT_DIR}/candidate.oci.tar" \
+            . 2>&1 | tee "$SBOM_EXPORT_DIR/export.log"
+          python3 scripts/verify-sbom.py --oci-archive "$SBOM_EXPORT_DIR/candidate.oci.tar" \
+            --expected-source-commit "$SOURCE_SHA" \
+            --attribution-report "$SBOM_EXPORT_DIR/attribution.json" 2>&1 |
+            tee -a "$SBOM_EXPORT_DIR/receipt.txt"
+          sha256sum "$SBOM_EXPORT_DIR/candidate.oci.tar" >> "$SBOM_EXPORT_DIR/receipt.txt"
       - name: Retain export diagnostics and attribution receipt
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a

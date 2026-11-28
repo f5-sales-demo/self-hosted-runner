@@ -353,19 +353,19 @@ class ImageContractTests(unittest.TestCase):
             (ROOT / "catalog/tool-catalog.json").read_text(encoding="utf-8")
         )
         zig = next(tool for tool in catalog["tools"] if tool["name"] == "zig")
-        self.assertEqual("0.16.0", zig["version"])
+        self.assertEqual("0.17.1", zig["version"])
         self.assertEqual(
-            "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+            "3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a",
             zig["sha256"],
         )
         self.assertEqual(["standard", "container-build"], zig["profiles"])
         self.assertEqual("zig version", zig["command"])
-        self.assertEqual("0.16.0", zig["expected"])
+        self.assertEqual("0.17.1", zig["expected"])
 
         dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
-        self.assertIn("ARG ZIG_VERSION=0.16.0", dockerfile)
+        self.assertIn("ARG ZIG_VERSION=0.17.1", dockerfile)
         self.assertIn(
-            "ARG ZIG_SHA256=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00",
+            "ARG ZIG_SHA256=3581863e3cbcfd0fce0efc682ce7e9e93da96668a977791d356a26d2a7e9b17a",
             dockerfile,
         )
         self.assertIn(
@@ -385,7 +385,7 @@ class ImageContractTests(unittest.TestCase):
         tools = {tool["name"]: tool for tool in catalog["tools"]}
         expected_versions = {
             "bun": "1.4.5",
-            "zig": "0.16.0",
+            "zig": "0.17.1",
             "rust-toolchain-manifest": "nightly-2026-09-03",
             "rustc": "1.100.0-nightly (2e2b193f8 2026-09-02)",
             "cargo": "0.101.0-nightly (b2e9d5f9d 2026-09-02)",
