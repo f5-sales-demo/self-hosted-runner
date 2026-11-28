@@ -1,25 +1,45 @@
 # Fleet rollout handoff
 
-This repository publishes image artifacts only. `docs-control` continues to own repository policy, per-repository labels, registration, diagnostics retention, profile isolation, and the only Docker-socket trust gate.
+This repository publishes image artifacts only. `docs-control` continues to own
+repository policy, per-repository labels, registration, diagnostics retention,
+profile isolation, and the only Docker-socket trust gate.
 
 ## Required first promotion
 
-1. Merge the builder PR and let the GitHub-hosted `publish.yml` workflow emit a `standard` and a `container-build` digest.
-2. Run `scripts/verify-promotion.sh` for both references with the merged source commit. This requires GHCR login with `read:packages` and rejects self-hosted provenance.
-3. On the Ubuntu workstation, run `scripts/preload-image.sh` for the exact digest/profile pair. It pulls; it never builds.
-4. In a fresh `docs-control` issue and isolated worktree, replace every old `actions-runner` image reference with the `standard` digest and the old `actions-runner-container` reference with the `container-build` digest. Retire the old `runner-images/Containerfile` publisher only after the pilot succeeds.
+1. Merge the builder PR and let the GitHub-hosted `publish.yml` workflow emit a
+   `standard` and a `container-build` digest.
+2. Run `scripts/verify-promotion.sh` for both references with the merged source
+   commit. This requires GHCR login with `read:packages` and rejects self-hosted
+   provenance.
+3. On the Ubuntu workstation, run `scripts/preload-image.sh` for the exact
+   digest/profile pair. It pulls; it never builds.
+4. In a fresh `docs-control` issue and isolated worktree, replace every old
+   `actions-runner` image reference with the `standard` digest and the old
+   `actions-runner-container` reference with the `container-build` digest.
+   Retire the old `runner-images/Containerfile` publisher only after the pilot
+   succeeds.
 
 ## Pilot acceptance
 
-- A standard profile job completes with `verify-runner-tools standard`, has no `docker` executable, and deregisters after one job.
-- A trust-gated `container-build` job completes with `verify-runner-tools container-build`, receives the socket only through the existing controller route, and retains diagnostics exactly as before.
-- The policy remains digest-only, repository-scoped labels are unchanged, and documented GitHub-hosted native, platform, and ARM exceptions remain explicit.
+- A standard profile job completes with `verify-runner-tools standard`, has no
+  `docker` executable, and deregisters after one job.
+- A trust-gated `container-build` job completes with `verify-runner-tools
+  container-build`, receives the socket only through the existing controller
+  route, and retains diagnostics exactly as before.
+- The policy remains digest-only, repository-scoped labels are unchanged, and
+  documented GitHub-hosted native, platform, and ARM exceptions remain explicit.
 
 ## Migration gate
 
-Run `python3 scripts/audit-fleet-workflows.py --github --ref main` before each batch. The audit is deliberately fail-closed for self-hosted jobs that use floating setup-action versions, setup/download actions outside the catalogue, direct installers, or privileged package installation. Lockfile installs remain job-local and are reported as informational.
+Run `python3 scripts/audit-fleet-workflows.py --github --ref main` before each
+batch. The audit is deliberately fail-closed for self-hosted jobs that use
+floating setup-action versions, setup/download actions outside the catalogue,
+direct installers, or privileged package installation. Lockfile installs remain
+job-local and are reported as informational.
 
-Migrate managed workflow templates first, then remaining governed repositories in reviewable batches. Do not call the fleet complete until all 39 audit clean and their required checks are green.
+Migrate managed workflow templates first, then remaining governed repositories
+in reviewable batches. Do not call the fleet complete until all 46 audit clean
+and their required checks are green.
 
 ## ARC capacity and compute rollout
 
@@ -29,16 +49,26 @@ Migrate managed workflow templates first, then remaining governed repositories i
    current and future repository; pushes remain authenticated and the admin
    account remains disabled. Anonymous clients share one ACR throttling
    identity, so include pull-rate monitoring in the rollout.
-2. Apply the saved plan. Mirror the approved standard/container-build GHCR digests into ACR and verify byte-identical manifests.
-3. Deploy the two cache releases. The socketless release must be Ready on both socketless and compute nodes; the container-build release remains confined to build nodes.
-4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache arc/repositories/*.yaml` to reconcile the private GHCR credential into every ARC namespace. The source and every copied `ghcr-pull` secret must contain exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute scale set at its repository-declared zero-idle cap, then manually run ARC Compatibility before changing ordinary tests/native builds. Route release compilation last.
+2. Apply the saved plan. Mirror the approved standard/container-build GHCR
+   digests into ACR and verify byte-identical manifests.
+3. Deploy the two cache releases. The socketless release must be Ready on both
+   socketless and compute nodes; the container-build release remains confined to
+   build nodes.
+4. Use `scripts/arc-copy-pull-secret.sh arc-runner-cache
+   arc/repositories/*.yaml` to reconcile the private GHCR credential into every
+   ARC namespace. The source and every copied `ghcr-pull` secret must contain
+   exactly `ghcr.io`; ACR pulls are anonymous. Deploy each approved compute
+   scale set at its repository-declared zero-idle cap, then manually run ARC
+   Compatibility before changing ordinary tests/native builds. Route release
+   compilation last.
 5. After the workflow developer's next workflow-changing xcsh merge, freeze its
    commit and the production image digest. Collect five cold and five warm D16
    runs plus a four-job burst. Keep D16 candidates below the nine-node shared
    production-pool capacity; cancel an experiment when a stable runner is
    pending, a resource gate fails, or the concurrent compute cost exceeds
    $9.20/hour.
-6. Deploy the F32 scale sets only after the D16 comparison. Run two 14-CPU/28-GiB
+6. Deploy the F32 scale sets only after the D16 comparison. Run two
+   14-CPU/28-GiB
    pods per F32 node and burst candidate jobs up to the 4/2/3 repository caps.
    Reject the candidate on any OOM, eviction, output drift, memory at or above
    80%, sustained throttling regression, node disk at or above 70%, warm
@@ -52,68 +82,120 @@ Migrate managed workflow templates first, then remaining governed repositories i
    enriched specs, and provider in that order. Otherwise remove the candidate
    pool and retain D16. Rollback is label-first to stable D16.
 
-Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore the last verified GHCR digest references, and set compute maximum capacity to zero. Do not remove the pool or mirror evidence until correctness, security, and latency are stable again.
+Rollback is label-first: route compute jobs back to `xcsh-socketless`, restore
+the last verified GHCR digest references, and set compute maximum capacity to
+zero. Do not remove the pool or mirror evidence until correctness, security, and
+latency are stable again.
 
 ## Renovate security handoff
 
-1. After the source PR merges, wait for `Publish derived Renovate image`, verify its provenance, and
-   promote its immutable GHCR digest with `scripts/promote-renovate-image.sh`. Commit the generated
-   image lock plus the non-secret App ID, installation ID, bot login, and numeric bot ID in a second
+1. After the source PR merges, wait for `Publish derived Renovate image`, verify
+   its provenance, and
+   promote its immutable GHCR digest with `scripts/promote-renovate-image.sh`.
+   Commit the generated
+   image lock plus the non-secret App ID, installation ID, bot login, and
+   numeric bot ID in a second
    linked PR. Never commit the PEM or installation token.
-2. The organization owner creates `f5-renovate-aks` with webhooks and events disabled and exactly
-   checks-write, commit-statuses-write, metadata-read, contents-write, pull-requests-write, and
-   workflows-write, then selects the exact 39-repository catalog. Checks and commit statuses are
-   required for the release-age and observed-CI gates. The token init helper verifies App metadata,
-   permissions, selected scope, bot identity, token lifetime, and repository equality.
-3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must contain only
-   `private-key.pem`. After verified new scope, disable and uninstall the hosted Renovate App.
-4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It re-verifies byte-identical
-   GHCR/ACR manifests, the one-key App Secret, active chart, exact anonymous ACR digest, and
-   socketless pre-puller. The CronJob has no image pull secret; the pre-puller uses only
-   `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or RoleBinding objects
-   in its namespace. Keep the root filesystem read-only; the main container's scoped,
-   memory-backed `/opt/containerbase` volume is seeded from the immutable image before Renovate
-   starts. Its 2 GiB bound accommodates current Rust toolchains used for artifact updates. The
-   separate bounded 2 GiB memory-backed `/cache` retains package-manager and containerbase
-   downloads across serial repository processing, while the separate bounded 4 GiB memory-backed
-   `/tmp` provides transient executable extraction space for upstream tool installers. Treat these
+2. The organization owner creates `f5-renovate-aks` with webhooks and events
+   disabled and exactly
+   checks-write, commit-statuses-write, metadata-read, contents-write,
+   pull-requests-write, and
+   workflows-write, then selects the exact 46-repository catalog. Checks and
+   commit statuses are
+   required for observed-CI gates. The token init helper verifies App metadata,
+   permissions, selected scope, bot identity, token lifetime, and repository
+   equality.
+3. Stream the PEM into `renovate-system/renovate-github-app`; the Secret must
+   contain only
+   `private-key.pem`. After verified new scope, disable and uninstall the hosted
+   Renovate App.
+4. Run `scripts/renovate-deploy.sh renovate-system/image-lock.json`. It
+   re-verifies byte-identical
+   GHCR/ACR manifests, the one-key App Secret, active chart, exact anonymous ACR
+   digest, and
+   socketless pre-puller. The CronJob has no image pull secret; the pre-puller
+   uses only
+   `ghcr-pull` for its private GHCR runner image. Confirm there are no Role or
+   RoleBinding objects
+   in its namespace. Keep the root filesystem read-only; the main container's
+   scoped,
+   memory-backed `/opt/containerbase` volume is seeded from the immutable image
+   before Renovate
+   starts. Its 2 GiB bound accommodates current Rust toolchains used for
+   artifact updates. The
+   separate bounded 2 GiB memory-backed `/cache` retains package-manager and
+   containerbase
+   downloads across serial repository processing, while the separate bounded 4
+   GiB memory-backed
+   `/tmp` provides transient executable extraction space for upstream tool
+   installers. Treat these
    three paths as independent capacity contracts.
-   The Renovate container requests 6 GiB and is capped at 12 GiB. That limit covers Renovate and
-   package-manager working memory plus cgroup-charged pages in the memory-backed work, cache, tmp,
-   and containerbase volumes. Treat any OOM kill or volume-capacity failure as a failed production
-   gate: suspend the CronJob, retire partial PRs and branches, and repair the resource contract
+   The Renovate container requests 6 GiB and is capped at 12 GiB. That limit
+   covers Renovate and
+   package-manager working memory plus cgroup-charged pages in the memory-backed
+   work, cache, tmp,
+   and containerbase volumes. Treat any OOM kill or volume-capacity failure as a
+   failed production
+   gate: suspend the CronJob, retire partial PRs and branches, and repair the
+   resource contract
    before retrying.
-5. Normal operation is scheduler-owned at `20 5 * * *` in `America/Toronto`, with `Forbid`
-   concurrency and a 2700-second deadline. For a pre-release scheduler proof without a calendar
-   wait, temporarily override only the live Helm `schedule` value to a near-term minute, allow
-   exactly one scheduler-created Job, and immediately redeploy the same chart with
-   `20 5 * * *` restored. Do not create the proof Job manually. The Job must exercise npm and
-   GitHub Actions across all 39 repositories without repository overrides; logs must contain the
-   exact scope receipt and no token/key material. Renovate observes passing pull-request checks
-   before squash-merging eligible minor/patch PRs, while major updates remain manual.
+   Independently verify that the active CronJob references the ConfigMap whose
+   `renovate.json` bytes match the generated policy. Verify its zero-day release
+   age and absence of historical package holds before the scheduler proof.
+5. Normal operation is scheduler-owned at `20 5 * * *` in `America/Toronto`,
+   with `Forbid`
+   concurrency and a 2700-second deadline. For a pre-release scheduler proof
+   without a calendar
+   wait, temporarily override only the live Helm `schedule` value to a near-term
+   minute, allow
+   exactly one scheduler-created Job, and immediately redeploy the same chart
+   with
+   `20 5 * * *` restored. Do not create the proof Job manually. The Job must
+   exercise npm and
+   GitHub Actions across all 46 repositories without repository overrides; logs
+   must contain the
+   exact scope receipt and no token/key material. Renovate observes passing
+   pull-request checks
+   before squash-merging eligible minor/patch PRs, while major updates remain
+   manual.
    Platform-native automerge stays disabled because the
-   fleet does not enforce required status checks and GitHub could otherwise merge before CI starts.
-   The xcsh and marketplace prerelease projects select current stable updates immediately, with
-   zero release age for every update manager. The self-hosted administrator configuration forces
-   immediate PR creation and Renovate-managed automerge after applicable eligibility checks pass. Fleet CI starts
-   on `pull_request`, so a package rule merged into grouped branch configuration cannot be allowed
-   to leave an eligible update as a bare branch with indefinitely pending checks.
-   npm dependency ranges use `bump` so a newer version already admitted by a caret range still
-   advances the reviewed lower bound and triggers any repository artifact task. The later,
-   dependency-type-specific overrides rule remains `pin` for deterministic npm override installs.
-   A repository-scoped rule holds `vscode-xcsh` on the reviewed Babel 7-compatible
-   `@rolldown/plugin-babel` release until its peer graph is intentionally migrated; it does not
-   suppress other npm updates. A separate docs-control rule constrains the setup-uv tool input to
-   uv 0.8.24, the version present in the immutable runner catalog; the setup-uv action itself
-   remains eligible for updates. Advance that input only with the runner-image catalog so setup
-   actions never attempt to mutate the read-only image tool cache. The `docs-icons` artifact rule
+   fleet does not enforce required status checks and GitHub could otherwise
+   merge before CI starts.
+   Every governed repository selects current stable updates immediately, with
+   zero release age for every update manager and no seven-day eligibility
+   window.
+   The self-hosted administrator configuration forces
+   immediate PR creation and Renovate-managed automerge after applicable
+   eligibility checks pass. Fleet CI starts
+   on `pull_request`, so a package rule merged into grouped branch configuration
+   cannot be allowed
+   to leave an eligible update as a bare branch with indefinitely pending
+   checks.
+   npm dependency ranges use `bump` so a newer version already admitted by a
+   caret range still
+   advances the reviewed lower bound and triggers any repository artifact task.
+   The later,
+   dependency-type-specific overrides rule remains `pin` for deterministic npm
+   override installs.
+   Package updates have no historical uv or Babel/Rolldown holds. Qualify the
+   current stable toolchain and peer graph before installation. Keep immutable
+   artifact receipts and the read-only image tool-cache contract intact.
+The `docs-icons` artifact rule
    uses `recreateWhen: always` so a
-   closed fail-closed validation PR can be regenerated during a clean-break retry without enabling
-   fleet-wide closed-PR recreation. The final package rule disables updates to the eight
-   docs-control-managed workflow callers in the other 38 repositories. Canonical dependency
-   updates remain enabled in docs-control and reach downstream repositories only through governed
-   blob-SHA reconciliation, so Renovate cannot create parallel mutable copies of protected files.
+   closed fail-closed validation PR can be regenerated during a clean-break
+   retry without enabling
+   fleet-wide closed-PR recreation. The final package rule disables updates to
+   the eight
+   docs-control-managed workflow callers in the other 45 repositories. Canonical
+   dependency
+   updates remain enabled in docs-control and reach downstream repositories only
+   through governed
+   blob-SHA reconciliation, so Renovate cannot create parallel mutable copies of
+   protected files.
 
-Renovate rollback is intentionally limited to suspending the CronJob and affected pre-pull
-workloads, disabling anonymous ACR pull, and disabling the new App. No token or role-assignment
-fallback is retained. Dependabot and the hosted Renovate installation are not restored.
+Renovate rollback is intentionally limited to suspending the CronJob and
+affected pre-pull
+workloads, disabling anonymous ACR pull, and disabling the new App. No token or
+role-assignment
+fallback is retained. Dependabot and the hosted Renovate installation are not
+restored.

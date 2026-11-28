@@ -2,7 +2,7 @@
 # Build only in the GitHub-hosted workflows in .github/workflows.
 ARG UBUNTU_IMAGE=docker.io/library/ubuntu@sha256:d78ab76437b1afc5f01e223d6bf0172763f404bb166441328845adbef44518cb
 ARG NODE_IMAGE=docker.io/library/node@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436
-ARG DOCKER_CLI_IMAGE=docker.io/library/docker@sha256:000bb62ff495f986c9f5578eb67cc2cb98b91138eda81d7762d5371eb8a497fe
+ARG DOCKER_CLI_IMAGE=docker.io/library/docker@sha256:2e7e18e61525a6ea49792681dfcdcb0676a10c25ce66b876ff0ba47bd44dd102
 
 FROM ${DOCKER_CLI_IMAGE} AS docker-cli
 FROM ${NODE_IMAGE} AS node-cli
@@ -16,11 +16,11 @@ RUN chmod 0555 /usr/local/bin/load-super-linter-seed \
 USER 1001:123
 ENTRYPOINT ["/usr/local/bin/load-super-linter-seed"]
 LABEL org.opencontainers.image.source="https://github.com/f5-sales-demo/self-hosted-runner" \
-      org.opencontainers.image.description="Immutable Docker archive seed for Super-Linter v8.7.0" \
+      org.opencontainers.image.description="Immutable Docker archive seed for Super-Linter v9.0.0" \
       f5.sales-demo.runner.profile="super-linter-seed" \
-      f5.sales-demo.super-linter.action="4ce20838b8ab83717e78138c5b3a1407148e0918" \
-      f5.sales-demo.super-linter.index="sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996" \
-      f5.sales-demo.super-linter.manifest="sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849"
+      f5.sales-demo.super-linter.action="2da136927bd4a73596db63044b504547c62cb854" \
+      f5.sales-demo.super-linter.index="sha256:7620fb6f07a1908b0642d9ddc4f49da7d9f2b9497bcafee4d3d151d1e5567c0b" \
+      f5.sales-demo.super-linter.manifest="sha256:496fe2e10c487771d42eede90cacfc767324db5ac9ddc9f3b2f490afa0a1db73"
 
 FROM ${UBUNTU_IMAGE} AS runner-base
 # Bootstrap the CA bundle from the pinned Docker CLI stage before contacting the signed Ubuntu snapshot.
@@ -42,8 +42,8 @@ ARG POWERSHELL_VERSION=7.6.4
 ARG POWERSHELL_SHA256=4471b5a36bfe86ec7af8525d36bb1cacba0128e7aac22d05cc064bc00e604721
 ARG AWSCLI_VERSION=2.36.20
 ARG AWSCLI_SHA256=59bdfab4035b0251a0c8de801abe01928861a89e27433bb80fc3fcf6dfe32352
-ARG HELM_VERSION=3.21.3
-ARG HELM_SHA256=15e041a93a590dce8100f39385cd98c84a765c9e36aeeb9e2dc6ff9e4769e2e0
+ARG HELM_VERSION=4.3.2
+ARG HELM_SHA256=d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983
 ARG ANDROID_TOOLS_REVISION=11076708
 ARG ANDROID_TOOLS_SHA256=2d2d50857e4eb553af5a6dc3ad507a17adf43d115264b1afc116f95c92e5e258
 ARG APT_SNAPSHOT=20261126T000000Z
@@ -320,6 +320,7 @@ RUN uv venv --python /usr/bin/python3 --no-python-downloads /opt/provider-tools 
     && chmod -R a-w /opt/provider-tools /opt/provider-python.lock
 COPY --chown=root:root scripts/landlock-abi.c /tmp/landlock-abi.c
 COPY --chown=root:root scripts/require-landlock-abi.sh /usr/local/bin/require-landlock-abi
+COPY --chown=root:root scripts/profile_capture.py /usr/local/bin/profile_capture.py
 COPY --chown=root:root scripts/runner-profile.py /usr/local/bin/runner-profile
 COPY --chown=root:root scripts/docker-action-profile.py /usr/local/bin/docker-action-profile
 COPY --chown=root:root scripts/prepare-runner-tool-cache.sh /usr/local/libexec/prepare-runner-tool-cache

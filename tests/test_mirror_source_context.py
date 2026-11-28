@@ -3,11 +3,12 @@
 import hashlib
 import json
 import os
-import subprocess
 import tempfile
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
+
+from retained_command import run_command
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = '{"schemaVersion":2}\n'
@@ -49,8 +50,10 @@ else: sys.exit(95)
 
 @contextmanager
 def fixture_directory():
-    with tempfile.TemporaryDirectory() as directory:
-        yield Path(directory)
+    parent = os.environ.get("PROFILE_CAPTURE_TEST_ROOT")
+    if parent:
+        Path(parent).mkdir(parents=True, exist_ok=True)
+    yield Path(tempfile.mkdtemp(prefix="mirror-fixture-", dir=parent))
 
 
 class MirrorSourceContextTests(unittest.TestCase):
@@ -90,7 +93,7 @@ class MirrorSourceContextTests(unittest.TestCase):
         if configured:
             self.env["GHCR_SOURCE_DOCKER_CONFIG"] = str(self.source_config)
         before = self.source_config_file.read_bytes()
-        result = subprocess.run(
+        result = run_command(
             [
                 "/bin/bash",
                 str(ROOT / "scripts/mirror-runner-image.sh"),
@@ -98,10 +101,10 @@ class MirrorSourceContextTests(unittest.TestCase):
                 source,
                 TARGET if mode == "copy" else TARGET + "@" + DIGEST,
             ],
+            self.folder / "mirror-capture",
+            10,
             env=self.env,
-            capture_output=True,
             text=True,
-            timeout=10,
             check=False,
         )
         self.assertEqual(before, self.source_config_file.read_bytes())

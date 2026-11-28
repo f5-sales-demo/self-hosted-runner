@@ -98,6 +98,35 @@ setup actions, floating tool versions, global installs, curl/wget installers,
 privileged package installation, and Docker/socket actions outside
 `container-build` are rejected unless their tool is supplied by the catalogue.
 
+## Original observer control
+
+`docker-action-profile control` operates on the original observation recorded
+beside its profile. It checks the owning process, workspace, output, phase,
+image and reviewed identities before accepting control. It preserves the
+original clock and never submits another observation.
+
+Use the same values that launched the observer:
+
+```bash
+control=(
+  --name super-linter --output "$profile_dir/profile.json"
+  --image "$SUPER_LINTER_IMAGE"
+  --expected-digest "$SUPER_LINTER_DIGEST"
+  --expected-action-commit "$SUPER_LINTER_ACTION_COMMIT"
+  --expected-manifest-digest "$SUPER_LINTER_MANIFEST_DIGEST"
+)
+docker-action-profile control wait-ready "${control[@]}" --wait 10
+docker-action-profile control inspect "${control[@]}"
+docker-action-profile control wait-complete "${control[@]}" --wait 20
+```
+
+`cancel` writes one exclusive, ownership-bound cancellation request. Repeating
+that same request does not rewrite it or reset the deadline. The observer and
+its commands close naturally; no signal is sent. `wait-complete` accepts a
+successful terminal only after every original process is absent. A changed,
+stopped, truncated, late or unresolved capture stays incomplete and retains
+its evidence and locks. Each wait is bounded to at most sixty seconds.
+
 ## Upstream update detection
 
 `Check runner tool updates` runs weekly and on demand. It compares the
@@ -168,7 +197,8 @@ the kernel that actually governs the job rather than the image build host.
 
 `renovate-system/` is the isolated build context for the organization-owned
 Renovate bot. The
-upstream receipt pins Renovate 44.52.1 by manifest digest; a path-scoped
+upstream receipt records the qualified current stable Renovate release and
+its manifest digest in `renovate-system/image-source.json`; a path-scoped
 GitHub-hosted workflow
 publishes the derived GHCR image with provenance.
 `scripts/promote-renovate-image.sh` copies that
@@ -180,7 +210,7 @@ rejected.
 The active CronJob runs at `20 5 * * *` in `America/Toronto` and uses a
 PEM-reading init container
 to validate exact App metadata,
-permissions, bot identity, and 38-repository selected scope. It hands a
+permissions, bot identity, and 46-repository selected scope. It hands a
 short-lived token through a
 memory-backed volume to the main container, which immediately unlinks it; the
 main container never
@@ -200,6 +230,12 @@ provisioning under that
 deployed filesystem contract; production probes exercise Rust with a
 representative prefilled
 download cache.
+
+All 46 governed repositories use zero release age for every update manager.
+Current stable releases are immediately eligible. Package updates have no
+historical uv or Babel/Rolldown holds; required review, passing CI and immutable
+artifact verification still apply. Qualify the current runtime and dependency
+graph before installing each update.
 
 Regenerate or verify the single global configuration with:
 

@@ -2,7 +2,10 @@
 set -euo pipefail
 umask 077
 
-[[ $# -eq 1 ]] || { echo "usage: $0 <temporary Helm registry configuration>" >&2; exit 2; }
+[[ $# -eq 1 ]] || {
+  echo "usage: $0 <temporary Helm registry configuration>" >&2
+  exit 2
+}
 destination=$1
 source_docker_config=${GHCR_SOURCE_DOCKER_CONFIG:-}
 if [[ -n "$source_docker_config" ]]; then

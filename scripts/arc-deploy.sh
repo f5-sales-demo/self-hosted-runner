@@ -43,7 +43,8 @@ github_config_url=$(jq -er .repository <<<"$config_json")
 chart_version=0.15.1
 controller_chart_digest=sha256:c2497a6dedaaa723322abfe9ea2f5a81b9b8fbb90b38e45d7835b6c7629a3aae
 scale_set_chart_digest=sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365
-dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+dind_image=$(jq -er '.base_images.docker_dind' catalog/tool-catalog.json)
+[[ "$dind_image" =~ ^docker\.io/library/docker@sha256:[0-9a-f]{64}$ ]]
 
 test "$(helm version --short)" = "v4.3.2+g8346aaa"
 kubectl auth can-i '*' '*' --all-namespaces | grep -qx yes

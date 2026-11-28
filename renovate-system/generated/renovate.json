@@ -54,7 +54,7 @@
   "labels": [],
   "prConcurrentLimit": 10,
   "timezone": "America/Toronto",
-  "minimumReleaseAge": "7 days",
+  "minimumReleaseAge": "0 days",
   "internalChecksFilter": "strict",
   "force": {
     "prCreation": "immediate",
@@ -86,19 +86,6 @@
       "rangeStrategy": "pin"
     },
     {
-      "description": "Preserve the vscode-xcsh Babel 7-compatible Rolldown plugin",
-      "matchRepositories": [
-        "f5-sales-demo/vscode-xcsh"
-      ],
-      "matchManagers": [
-        "npm"
-      ],
-      "matchPackageNames": [
-        "@rolldown/plugin-babel"
-      ],
-      "enabled": false
-    },
-    {
       "groupName": "npm-minor-patch",
       "matchManagers": [
         "npm"
@@ -125,19 +112,6 @@
       "platformAutomerge": false
     },
     {
-      "description": "Keep docs-control uv input within the immutable runner catalog",
-      "matchRepositories": [
-        "f5-sales-demo/docs-control"
-      ],
-      "matchManagers": [
-        "github-actions"
-      ],
-      "matchPackageNames": [
-        "astral-sh/uv"
-      ],
-      "allowedVersions": "0.8.24"
-    },
-    {
       "description": "Regenerate docs-icons release artifacts on npm branches",
       "matchRepositories": [
         "f5-sales-demo/docs-icons"
@@ -157,14 +131,6 @@
           "packages/*/icons.json"
         ]
       }
-    },
-    {
-      "description": "Use current stable dependencies immediately in prerelease projects",
-      "matchRepositories": [
-        "f5-sales-demo/marketplace",
-        "f5-sales-demo/xcsh"
-      ],
-      "minimumReleaseAge": "0 days"
     },
     {
       "description": "Keep docs-control managed workflows canonical downstream",

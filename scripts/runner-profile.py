@@ -7,11 +7,12 @@ import argparse
 import json
 import os
 import signal
-import subprocess
 import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+
+from profile_capture import Observation, resume
 
 SCHEMA_VERSION = 1
 SAFE_ENV = {
@@ -192,6 +193,7 @@ def build_parser() -> argparse.ArgumentParser:
     result.add_argument("--pair-id")
     result.add_argument("--output-digest")
     result.add_argument("--interval", type=float, default=0.25)
+    result.add_argument("--timeout", type=float, default=8400)
     result.add_argument(
         "--cgroup-root",
         type=Path,
@@ -211,32 +213,57 @@ def main(argv: list[str] | None = None) -> int:
         args.command = args.command[1:]
     if not args.command or args.interval <= 0:
         arg_parser.error("a command and a positive sampling interval are required")
+    config = {
+        "kind": "workload",
+        "arguments": {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        },
+        "cwd": str(Path.cwd()),
+    }
+    capture_root = args.output.with_name(args.output.name + ".capture")
+    if capture_root.exists():
+        return Observation.inspect(capture_root, config).get("code", 2)
+    if args.output.exists():
+        raise FileExistsError(args.output)
+    observation = Observation(
+        capture_root, config, args.timeout, sources=[Path(__file__)]
+    )
     cgroup = cgroup_path(args.cgroup_root)
     before = snapshot(cgroup)
     sampler = Sampler(cgroup, args.interval)
     sampler.peak = before["memory_current"] or 0
     started_wall = datetime.now(UTC)
-    started_mono = time.monotonic()
-    child = subprocess.Popen(args.command, start_new_session=True)
+    started_mono = observation.request["startedMonotonic"]
+    child = observation.start(args.command)
     received_signal: list[int] = []
 
     def forward(signum, _frame):
         received_signal[:] = [signum]
-        try:
-            os.killpg(child.pid, signum)
-        except ProcessLookupError:
-            pass
 
     handled = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP, signal.SIGQUIT)
     previous = {signum: signal.signal(signum, forward) for signum in handled}
     sampler.start()
+    result = {"status": "pending"}
+    observed = None
     try:
-        returncode = child.wait()
+        while time.monotonic() < observation.deadline:
+            result = resume(child)
+            if result["status"] != "pending":
+                observed = time.monotonic()
+                break
+            if received_signal or observation.cancel_requested():
+                observed = time.monotonic()
+                break
+            time.sleep(min(0.02, max(0, observation.deadline - time.monotonic())))
     finally:
         sampler.stop()
+        closed = observation.close(budget=5)
+        result = resume(child)
         for signum, handler in previous.items():
             signal.signal(signum, handler)
-    duration = time.monotonic() - started_mono
+    returncode = result.get("code", 2)
+    duration = (observed or min(time.monotonic(), observation.deadline)) - started_mono
     after = snapshot(cgroup)
     cpu = delta(
         after["cpu"],
@@ -264,6 +291,17 @@ def main(argv: list[str] | None = None) -> int:
         else (received_signal[0] if received_signal else None)
     )
     exit_code = 128 + termination_signal if termination_signal else returncode
+    cancelled = bool(received_signal) or observation.cancel_requested()
+    if cancelled and not termination_signal:
+        exit_code = 143
+    state = "cancelled" if cancelled else ("completed" if exit_code == 0 else "failed")
+    if (
+        not closed
+        or result["status"] != "complete"
+        or not result.get("withinDeadline")
+        or any(result.get("truncated", {}).values())
+    ):
+        state, exit_code = "unresolved", exit_code or 2
     profile = {
         "schema_version": SCHEMA_VERSION,
         **safe_metadata(args),
@@ -309,11 +347,12 @@ def main(argv: list[str] | None = None) -> int:
         "exit": {"code": exit_code, "signal": termination_signal},
     }
     atomic_json(args.output, profile)
+    outcome = observation.finish(
+        args.output, code=exit_code, result=state, observed_at=observed
+    )
+    # If final binding validation fails, retain the profile and private failure receipt.
     write_summary(os.environ.get("GITHUB_STEP_SUMMARY"), profile)
-    if termination_signal:
-        signal.signal(termination_signal, signal.SIG_DFL)
-        os.kill(os.getpid(), termination_signal)
-    return returncode
+    return outcome["code"]
 
 
 if __name__ == "__main__":

@@ -3,21 +3,32 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import signal
 import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
+from retained_command import capture as CAPTURE
+
 ROOT = Path(__file__).resolve().parent.parent
+
 SPEC = importlib.util.spec_from_file_location(
     "runner_profile", ROOT / "scripts/runner-profile.py"
 )
 assert SPEC is not None and SPEC.loader is not None
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+
+
+@contextmanager
+def preserved_directory():
+    parent = os.environ.get("PROFILE_CAPTURE_TEST_ROOT")
+    if parent:
+        Path(parent).mkdir(parents=True, exist_ok=True)
+    yield tempfile.mkdtemp(prefix="profiler-regression-", dir=parent)
 
 
 class RunnerProfileTests(unittest.TestCase):
@@ -40,7 +51,7 @@ class RunnerProfileTests(unittest.TestCase):
         )
 
     def test_parsers_sum_io_and_accept_unlimited_values(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             self.make_cgroup(root)
             self.assertEqual(40, MODULE.parse_io(root / "io.stat")["rbytes"])
@@ -49,7 +60,7 @@ class RunnerProfileTests(unittest.TestCase):
             self.assertIsNone(MODULE.read_int(root / "memory.max"))
 
     def test_exact_exit_code_schema_and_redaction(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with preserved_directory() as directory:
             root = Path(directory)
             self.make_cgroup(root)
             output = root / "profile.json"
@@ -90,33 +101,46 @@ class RunnerProfileTests(unittest.TestCase):
             )
             self.assertEqual(set(schema["required"]), set(profile))
 
-    def test_signal_is_forwarded_and_profile_is_written(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+    def test_cooperative_cancellation_preserves_natural_child_and_profile(self) -> None:
+        with preserved_directory() as directory:
             root = Path(directory)
             self.make_cgroup(root)
-            output = root / "signal.json"
+            output = root / "cancel.json"
             process = subprocess.Popen(
                 [
                     sys.executable,
                     str(ROOT / "scripts/runner-profile.py"),
                     "--name",
-                    "signal",
+                    "cancel",
                     "--output",
                     str(output),
                     "--cgroup-root",
                     str(root),
+                    "--timeout",
+                    "3",
                     "--",
-                    "sh",
+                    sys.executable,
                     "-c",
-                    "sleep 30",
+                    "import time; time.sleep(.5)",
                 ]
             )
-            time.sleep(0.2)
-            process.send_signal(signal.SIGTERM)
-            self.assertEqual(-signal.SIGTERM, process.wait(timeout=5))
-            profile = json.loads(output.read_text(encoding="utf-8"))
-            self.assertEqual(signal.SIGTERM, profile["exit"]["signal"])
-            self.assertEqual(128 + signal.SIGTERM, profile["exit"]["code"])
+            observer = output.with_name(output.name + ".capture")
+            deadline = time.monotonic() + 2
+            while (
+                not (observer / "commands.private.json").exists()
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.01)
+            request = json.loads((observer / "observation.private.json").read_bytes())
+            CAPTURE.Observation.request_cancel(observer, request["config"])
+            self.assertEqual(143, process.wait(timeout=5))
+            profile = json.loads(output.read_text())
+            self.assertIsNone(profile["exit"]["signal"])
+            self.assertEqual(143, profile["exit"]["code"])
+            self.assertEqual(
+                "cancelled",
+                CAPTURE.Observation.inspect(observer, request["config"])["result"],
+            )
 
 
 if __name__ == "__main__":

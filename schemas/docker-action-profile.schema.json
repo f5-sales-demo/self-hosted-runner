@@ -86,7 +86,7 @@
       "required": ["receive_bytes", "transmit_bytes"],
       "properties": {"receive_bytes": {"type": "integer", "minimum": 0}, "transmit_bytes": {"type": "integer", "minimum": 0}}
     },
-    "pids": {"type": "object", "additionalProperties": false, "required": ["peak"], "properties": {"peak": {"type": "integer", "minimum": 0}}},
+    "pids": {"type": "object", "additionalProperties": false, "required": ["peak"], "properties": {"peak": {"type": ["integer", "null"], "minimum": 0}}},
     "dind": {
       "type": "object", "additionalProperties": false, "required": ["cpu_throttling", "memory", "io", "disk"],
       "properties": {
@@ -100,8 +100,8 @@
     "observer": {
       "type": "object", "additionalProperties": false, "required": ["result", "detail"],
       "properties": {
-        "result": {"enum": ["completed", "cancelled", "timed_out", "ambiguous", "profiler_error"]},
-        "detail": {"enum": ["container_exit_observed", "observer_signal", "container_exit_not_observed", "multiple_matching_containers", "initialization_failed", "docker_observation_failed"]}
+        "result": {"enum": ["completed", "cancelled", "timed_out", "ambiguous", "profiler_error", "unresolved"]},
+        "detail": {"enum": ["container_exit_observed", "observer_signal", "observer_cancel_requested", "original_commands_not_closed", "container_exit_not_observed", "multiple_matching_containers", "initialization_failed", "docker_observation_failed"]}
       }
     }
   },

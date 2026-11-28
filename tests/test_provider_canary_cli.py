@@ -2,15 +2,22 @@
 
 import json
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = "compute-toolchain-canary"
-NAMESPACE = "arc-runners-terraform-provider-xcsh-" + PROFILE
+POLICY = yaml.safe_load(
+    (ROOT / "arc/repositories/terraform-provider-xcsh.yaml").read_text()
+)
+NAMESPACE = next(
+    spec["namespace"] for spec in POLICY["scale_sets"] if spec["profile"] == PROFILE
+)
 RELEASE = "terraform-provider-xcsh-" + PROFILE
 IMAGE = "ghcr.io/f5-sales-demo/self-hosted-runner@sha256:" + "a" * 64
 SOURCE = "b" * 40
@@ -66,7 +73,7 @@ if name == "kubectl":
         pass
     elif args[:2] == ["get", "autoscalinglisteners,ephemeralrunnersets"]:
         print(json.dumps({"items": [
-            {"kind": "AutoscalingListener", "metadata": {"name": "canary-listener", "namespace": "arc-systems", "uid": "fixture-uid"}, "spec": {"autoscalingRunnerSetNamespace": os.environ["RUNNER_NAMESPACE"], "ephemeralRunnerSetName": "canary-set"}},
+            {"kind": "AutoscalingListener", "metadata": {"name": "canary-listener", "namespace": "example-system", "uid": "fixture-uid"}, "spec": {"autoscalingRunnerSetNamespace": os.environ["RUNNER_NAMESPACE"], "ephemeralRunnerSetName": "canary-set"}},
             {"kind": "EphemeralRunnerSet", "metadata": {"namespace": os.environ["RUNNER_NAMESPACE"], "name": "canary-set"}}
         ]}))
     elif args[:2] == ["get", "pods"]:

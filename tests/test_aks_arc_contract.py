@@ -10,7 +10,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 class AksArcContractTests(unittest.TestCase):
     def test_terraform_is_aks_only_and_profile_isolated(self) -> None:
-        source = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text(encoding="utf-8")
+        source = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text(
+            encoding="utf-8"
+        )
         for forbidden in (
             "linux_virtual_machine_scale_set",
             "shared_image_gallery",
@@ -44,16 +46,16 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn('name         = "computecand"', source)
         self.assertIn('profile      = "compute-16-vcpu-candidate"', source)
         self.assertIn("maximum      = 1", source)
-        self.assertIn("maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16", source)
+        self.assertIn(
+            "maximum_dadsv5_vcpus  = 30 * 8 + 9 * 16 + 1 * 16 + 5 * 16", source
+        )
         self.assertIn("required_total_quota  = 815", source)
 
     def test_terraform_preserves_autoscaler_owned_node_counts(self) -> None:
         source = (ROOT / "terraform/azure/runner-fleet/main.tf").read_text(
             encoding="utf-8"
         )
-        self.assertIn(
-            "ignore_changes = [default_node_pool[0].node_count]", source
-        )
+        self.assertIn("ignore_changes = [default_node_pool[0].node_count]", source)
         self.assertEqual(2, source.count("ignore_changes = ["))
 
     def test_arc_artifacts_and_images_are_pinned(self) -> None:
@@ -93,7 +95,9 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("kubectl get secret ghcr-pull", deploy)
         self.assertIn("imagePullSecrets[0]=ghcr-pull", deploy)
         self.assertIn("cache_namespace=arc-runner-cache", deploy)
-        self.assertIn('--namespace "$cache_namespace"\n      --create-namespace', deploy)
+        self.assertIn(
+            '--namespace "$cache_namespace"\n      --create-namespace', deploy
+        )
         self.assertIn("cache_profiles=(socketless container-build)", deploy)
         self.assertIn("cache_profiles+=(compute-candidate)", deploy)
         self.assertIn("nodeProfiles[0]=compute-16-vcpu-candidate", deploy)
@@ -103,7 +107,9 @@ class AksArcContractTests(unittest.TestCase):
         self.assertIn("scripts/mirror-runner-image.sh verify", deploy)
         self.assertIn("scripts/reconcile-arc-listeners.py", deploy)
         self.assertIn("kubectl apply -f arc/candidate-priority-class.yaml", deploy)
-        self.assertTrue((ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111)
+        self.assertTrue(
+            (ROOT / "scripts/arc-copy-pull-secret.sh").stat().st_mode & 0o111
+        )
         mirror = (ROOT / "scripts/mirror-runner-image.sh").read_text(encoding="utf-8")
         self.assertLess(
             mirror.index("az acr login"), mirror.index('if [[ "$mode" == copy ]]')
@@ -114,7 +120,8 @@ class AksArcContractTests(unittest.TestCase):
         )
         self.assertIn("namespace: {{ .Release.Namespace }}", prepull)
         runners_block = deploy.split(
-            'if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]', 1
+            'if [[ "$mode" == runners || "$mode" == toolchain-canary || "$mode" == all ]]',
+            1,
         )[1]
         self.assertNotIn("runner-image-cache arc/prepull", runners_block)
 
@@ -123,9 +130,9 @@ class AksArcContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         deploy = (ROOT / "scripts/arc-deploy.sh").read_text(encoding="utf-8")
-        d16_priority = (ROOT / "arc/compute-16-vcpu-candidate-priority-class.yaml").read_text(
-            encoding="utf-8"
-        )
+        d16_priority = (
+            ROOT / "arc/compute-16-vcpu-candidate-priority-class.yaml"
+        ).read_text(encoding="utf-8")
         d16 = (ROOT / "arc/compute-16-vcpu-candidate-values.yaml").read_text(
             encoding="utf-8"
         )

@@ -13,10 +13,10 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-ACTION_COMMIT = "4ce20838b8ab83717e78138c5b3a1407148e0918"
-INDEX_DIGEST = "sha256:c05768164eed53bac7c82aade7a14a76955206d4962cd41be97118db96fa5996"
+ACTION_COMMIT = "2da136927bd4a73596db63044b504547c62cb854"
+INDEX_DIGEST = "sha256:7620fb6f07a1908b0642d9ddc4f49da7d9f2b9497bcafee4d3d151d1e5567c0b"
 MANIFEST_DIGEST = (
-    "sha256:a38987de6efa8b7286ef98233eb8454cd1370ab58eeab8190ddd74fe0c7ca849"
+    "sha256:496fe2e10c487771d42eede90cacfc767324db5ac9ddc9f3b2f490afa0a1db73"
 )
 SEED_DIGEST = "sha256:" + "d" * 64
 IMAGE_ID = "sha256:" + "b" * 64
@@ -135,9 +135,7 @@ class SuperLinterSeedTests(unittest.TestCase):
 
         validator = (ROOT / "scripts/validate-arc.sh").read_text(encoding="utf-8")
         self.assertIn("grep -n -m1 -- 'name: dind$'", validator)
-        self.assertIn(
-            "grep -n -m1 -- 'name: load-super-linter-seed$'", validator
-        )
+        self.assertIn("grep -n -m1 -- 'name: load-super-linter-seed$'", validator)
         self.assertNotIn("grep -n -- '- name: dind$'", validator)
         self.assertIn(
             "did not render the dind and seed-loader init containers", validator
@@ -146,6 +144,88 @@ class SuperLinterSeedTests(unittest.TestCase):
             "rendered the seed loader before the restartable dind init container",
             validator,
         )
+
+    def test_loader_rejects_foreign_reference_without_removing_it(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive, metadata = self._seed_fixture(root)
+            metadata.write_text(
+                metadata.read_text().replace(
+                    "IMAGE_REFERENCE=ghcr.io/super-linter/super-linter:v9.0.0",
+                    "IMAGE_REFERENCE=example.com/foreign-image:fixture",
+                )
+            )
+            output = root / "result.json"
+            calls = root / "calls"
+            self._fake_docker(root, IMAGE_ID)
+            env = os.environ | {
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "DOCKER_CALLS": str(calls),
+                "SUPER_LINTER_SEED_ARCHIVE": str(archive),
+                "SUPER_LINTER_SEED_METADATA": str(metadata),
+                "SUPER_LINTER_SEED_RESULT": str(output),
+                "SUPER_LINTER_SEED_IMAGE": "ghcr.io/f5-sales-demo/self-hosted-runner@"
+                + SEED_DIGEST,
+                "SUPER_LINTER_EXPECTED_ACTION_COMMIT": ACTION_COMMIT,
+                "SUPER_LINTER_EXPECTED_INDEX_DIGEST": INDEX_DIGEST,
+                "SUPER_LINTER_EXPECTED_MANIFEST_DIGEST": MANIFEST_DIGEST,
+            }
+            result = subprocess.run(
+                ["sh", str(ROOT / "scripts/load-super-linter-seed.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            evidence = json.loads(output.read_text())
+            self.assertEqual("rejected", evidence["result"])
+            self.assertFalse(evidence["qualified"])
+            if calls.exists():
+                self.assertNotIn("image rm", calls.read_text())
+                self.assertNotIn("load --input", calls.read_text())
+
+    def test_loader_malformed_metadata_cannot_forge_qualified_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive, metadata = self._seed_fixture(root)
+            checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+            metadata.write_text(
+                metadata.read_text().replace(
+                    f"ARCHIVE_SHA256={checksum}",
+                    'ARCHIVE_SHA256=invalid","result":"hit","qualified":true,'
+                    '"archive_sha256":"' + checksum,
+                )
+            )
+            output = root / "result.json"
+            calls = root / "calls"
+            self._fake_docker(root, IMAGE_ID)
+            env = os.environ | {
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "DOCKER_CALLS": str(calls),
+                "SUPER_LINTER_SEED_ARCHIVE": str(archive),
+                "SUPER_LINTER_SEED_METADATA": str(metadata),
+                "SUPER_LINTER_SEED_RESULT": str(output),
+                "SUPER_LINTER_SEED_IMAGE": "ghcr.io/f5-sales-demo/self-hosted-runner@"
+                + SEED_DIGEST,
+                "SUPER_LINTER_EXPECTED_ACTION_COMMIT": ACTION_COMMIT,
+                "SUPER_LINTER_EXPECTED_INDEX_DIGEST": INDEX_DIGEST,
+                "SUPER_LINTER_EXPECTED_MANIFEST_DIGEST": MANIFEST_DIGEST,
+            }
+            result = subprocess.run(
+                ["sh", str(ROOT / "scripts/load-super-linter-seed.sh")],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(0, result.returncode, result.stderr)
+            evidence = json.loads(output.read_text())
+            self.assertEqual("rejected", evidence["result"])
+            self.assertFalse(evidence["qualified"])
+            self.assertEqual("", evidence["archive_sha256"])
+            if calls.exists():
+                self.assertNotIn("load --input", calls.read_text())
 
     def _fake_docker(
         self,
@@ -163,7 +243,7 @@ class SuperLinterSeedTests(unittest.TestCase):
                 printf '%s\\n' "$*" >>"$DOCKER_CALLS"
                 if [ "$1" = info ]; then exit 0; fi
                 if [ "$1 $2" = "load --input" ]; then
-                  printf '%s\\n' 'Loaded image: ghcr.io/super-linter/super-linter:v8.7.0'
+                  printf '%s\\n' 'Loaded image: ghcr.io/super-linter/super-linter:v9.0.0'
                   exit 0
                 fi
                 if [ "$1 $2 $3" = "image inspect --format" ]; then
@@ -201,7 +281,7 @@ class SuperLinterSeedTests(unittest.TestCase):
                     f"IMAGE_CONFIG_SHA256={CONFIG_SHA256}",
                     f"ROOTFS_SHA256={ROOTFS_SHA256}",
                     f"ARCHIVE_SHA256={checksum}",
-                    "IMAGE_REFERENCE=ghcr.io/super-linter/super-linter:v8.7.0",
+                    "IMAGE_REFERENCE=ghcr.io/super-linter/super-linter:v9.0.0",
                 )
             )
             + "\n",

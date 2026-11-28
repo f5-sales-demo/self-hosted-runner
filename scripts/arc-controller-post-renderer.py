@@ -19,6 +19,11 @@ pattern = re.compile(
     re.MULTILINE,
 )
 matches = list(pattern.finditer(manifest))
-if manifest.count(SOURCE) != 2 or sorted(m["field"] for m in matches) != ["image", "value"]:
-    raise SystemExit("expected exactly one current controller image and one controller image environment value")
+if manifest.count(SOURCE) != 2 or sorted(m["field"] for m in matches) != [
+    "image",
+    "value",
+]:
+    raise SystemExit(
+        "expected exactly one current controller image and one controller image environment value"
+    )
 sys.stdout.write(pattern.sub(lambda m: m["prefix"] + PINNED + m["suffix"], manifest))

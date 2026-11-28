@@ -17,7 +17,8 @@ controller_chart_digest=sha256:c2497a6dedaaa723322abfe9ea2f5a81b9b8fbb90b38e45d7
 scale_set_chart_digest=sha256:2ae7e43db61047aa3c4182e73c8f58ace35e796fa07d41b64fb3c39e81e1f365
 runner_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:0000000000000000000000000000000000000000000000000000000000000000
 seed_image=ghcr.io/f5-sales-demo/self-hosted-runner@sha256:2222222222222222222222222222222222222222222222222222222222222222
-dind_image=docker.io/library/docker@sha256:12e683a161823b2a839aeea999b9d960e6e1f9a97b1679ad6b441982e2d9cf07
+dind_image=$(jq -er '.base_images.docker_dind' catalog/tool-catalog.json)
+[[ "$dind_image" =~ ^docker\.io/library/docker@sha256:[0-9a-f]{64}$ ]]
 renovate_image=f5salesdemoarcca.azurecr.io/renovate@sha256:1111111111111111111111111111111111111111111111111111111111111111
 
 tmpdir=$(mktemp -d)

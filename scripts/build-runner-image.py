@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Run the unchanged no-cache build while retaining bounded host diagnostics."""
+
 from __future__ import annotations
 
 import argparse
@@ -9,10 +10,16 @@ import os
 from pathlib import Path
 import shutil
 import signal
-import subprocess
 import sys
+import tempfile
 import threading
 import time
+
+from profile_capture import Observation, resume
+
+
+def shell_exit_status(code: int) -> int:
+    return code if code >= 0 else 128 - code
 
 
 def numbers(path: Path, selected: set[str] | None = None) -> dict:
@@ -32,14 +39,19 @@ def numbers(path: Path, selected: set[str] | None = None) -> dict:
 
 def host_snapshot() -> dict:
     data = {
-        "memoryKiB": numbers(Path("/proc/meminfo"), {"MemAvailable", "MemFree", "SwapFree"}),
+        "memoryKiB": numbers(
+            Path("/proc/meminfo"), {"MemAvailable", "MemFree", "SwapFree"}
+        ),
         "vmstat": numbers(Path("/proc/vmstat"), {"oom_kill"}),
         "disks": {},
         "processes": [],
         "cgroup": {},
     }
-    for name, location in [("root", "/"), ("docker", "/var/lib/docker"),
-                           ("runnerTemp", os.environ.get("RUNNER_TEMP"))]:
+    for name, location in [
+        ("root", "/"),
+        ("docker", "/var/lib/docker"),
+        ("runnerTemp", os.environ.get("RUNNER_TEMP")),
+    ]:
         if not location:
             continue
         try:
@@ -53,8 +65,15 @@ def host_snapshot() -> dict:
         try:
             name = (proc / "comm").read_text().strip()
             if name in {"dockerd", "docker", "buildkitd", "containerd"}:
-                data["processes"].append({"pid": int(proc.name), "name": name,
-                    "status": numbers(proc / "status", {"VmRSS", "VmHWM", "VmSize", "PPid"})})
+                data["processes"].append(
+                    {
+                        "pid": int(proc.name),
+                        "name": name,
+                        "status": numbers(
+                            proc / "status", {"VmRSS", "VmHWM", "VmSize", "PPid"}
+                        ),
+                    }
+                )
         except OSError:
             continue
         if len(data["processes"]) == 64:
@@ -82,62 +101,166 @@ def host_snapshot() -> dict:
     return data
 
 
-def run_monitored(command: list[str], emit, interval: float = 15.0, sample=host_snapshot) -> int:
+def run_monitored(
+    command: list[str],
+    emit,
+    interval: float = 15.0,
+    sample=host_snapshot,
+    *,
+    capture_root: Path | None = None,
+    timeout: float = 8400,
+    output: Path | None = None,
+) -> int:
     if interval <= 0 or interval > 60:
         raise ValueError("Diagnostic interval must be positive and at most 60 seconds")
-    stop = threading.Event()
-    started = time.monotonic()
+    fixture_parent = os.environ.get("PROFILE_CAPTURE_TEST_ROOT")
+    if capture_root is None and fixture_parent:
+        Path(fixture_parent).mkdir(parents=True, exist_ok=True)
+    root = (
+        capture_root
+        or Path(tempfile.mkdtemp(prefix="runner-build-", dir=fixture_parent))
+        / "capture"
+    )
+    config = {
+        "kind": "runner-build",
+        "command": command,
+        "cwd": str(Path.cwd()),
+        "timeout": timeout,
+        "interval": interval,
+        "output": str(output.absolute()) if output else None,
+    }
+    if root.exists():
+        prior = Observation.inspect(root, config)
+        return prior.get("code", 2)
+    observation = Observation(root, config, timeout, sources=[Path(__file__)])
+    output = output or root / "build-outcome.private.json"
+    started = observation.request["startedMonotonic"]
     received_signal = None
 
     def report(event: str, **fields):
-        emit({"event": event, "elapsedSeconds": time.monotonic() - started,
-              "observedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(), **fields})
+        emit(
+            {
+                "event": event,
+                "elapsedSeconds": time.monotonic() - started,
+                "observedAt": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                **fields,
+            }
+        )
 
     report("start", host=sample())
-    child = subprocess.Popen(command)
+    child = observation.start(command)
+    offsets = {"stdout": 0, "stderr": 0}
 
-    def observe():
-        while not stop.wait(interval):
-            report("sample", host=sample())
+    def copy_logs():
+        for name, stream in [("stdout", sys.stdout), ("stderr", sys.stderr)]:
+            path = child / f"{name}.private.log"
+            if path.exists():
+                with path.open("rb") as log:
+                    log.seek(offsets[name])
+                    data = log.read()
+                offsets[name] += len(data)
+                stream.write(data.decode("utf-8", errors="replace"))
+                stream.flush()
 
     def interrupted(signum, _frame):
         nonlocal received_signal
         received_signal = signum
         report("signal", signal=signum)
-        if child.poll() is None:
-            try:
-                child.send_signal(signum)
-            except ProcessLookupError:
-                pass
 
-    previous = {sig: signal.signal(sig, interrupted) for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]}
-    observer = threading.Thread(target=observe, daemon=True)
-    observer.start()
+    previous = {
+        sig: signal.signal(sig, interrupted)
+        for sig in [signal.SIGTERM, signal.SIGINT, signal.SIGHUP]
+    }
+    observed = None
+    next_sample = started + interval
+    result = {"status": "pending"}
     try:
-        code = child.wait()
+        while time.monotonic() < observation.deadline:
+            copy_logs()
+            result = resume(child)
+            if result["status"] != "pending":
+                observed = time.monotonic()
+                break
+            if received_signal is not None or observation.cancel_requested():
+                observed = time.monotonic()
+                break
+            if time.monotonic() >= next_sample:
+                report("sample", host=sample())
+                next_sample += interval
+            time.sleep(min(0.02, max(0, observation.deadline - time.monotonic())))
     finally:
-        stop.set()
-        observer.join(timeout=2)
+        closed = observation.close(budget=5)
+        result = resume(child)
         for sig, handler in previous.items():
             signal.signal(sig, handler)
-    # Preserve the shell convention for a child terminated by a signal.
-    result = code if code >= 0 else 128 - code
+    code = result.get("code")
+    exit_code = shell_exit_status(code) if code is not None else 2
+    state = "completed" if code == 0 else "failed"
     if received_signal is not None:
-        result = 128 + received_signal
-    report("exit", childReturnCode=code, exitCode=result, host=sample())
-    return result
+        exit_code, state = 128 + received_signal, "cancelled"
+    elif observation.cancel_requested():
+        exit_code, state = 143, "cancelled"
+    if (
+        not closed
+        or result["status"] != "complete"
+        or not result.get("withinDeadline")
+        or any(result.get("truncated", {}).values())
+    ):
+        exit_code, state = exit_code or 2, "unresolved"
+    final = {
+        "childReturnCode": code,
+        "exitCode": exit_code,
+        "result": state,
+        "host": sample(),
+    }
+    # Emit the effective outcome only after closure; late completion cannot change it.
+    report("exit", **final)
+    if output == root / "build-outcome.private.json":
+        output.write_text(json.dumps(final))
+    outcome = observation.finish(
+        output, code=exit_code, result=state, observed_at=observed
+    )
+    copy_logs()
+    return outcome["code"]
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target", choices=["standard", "container-build"], required=True)
+    parser.add_argument(
+        "--target", choices=["standard", "container-build"], required=True
+    )
     parser.add_argument("--tag", required=True)
     parser.add_argument("--diagnostics", type=Path, required=True)
+    parser.add_argument("--timeout", type=float, default=8400)
     args = parser.parse_args()
     os.umask(0o077)
     args.diagnostics.parent.mkdir(parents=True, exist_ok=True)
     lock = threading.RLock()
+    capture_root = args.diagnostics.with_name(args.diagnostics.name + ".capture")
+    if capture_root.exists():
+        config = {
+            "kind": "runner-build",
+            "command": [
+                "docker",
+                "buildx",
+                "build",
+                "--progress=plain",
+                "--no-cache",
+                "--load",
+                "--target",
+                args.target,
+                "--tag",
+                args.tag,
+                ".",
+            ],
+            "cwd": str(Path.cwd()),
+            "timeout": args.timeout,
+            "interval": 15.0,
+            "output": str(args.diagnostics.absolute()),
+        }
+        return Observation.inspect(capture_root, config).get("code", 2)
     with args.diagnostics.open("x", encoding="utf-8") as output:
+
         def emit(record):
             # Build stdout remains a log stream; this separate file is strict JSONL.
             text = json.dumps(record, sort_keys=True)
@@ -145,8 +268,26 @@ def main() -> int:
                 output.write(text + "\n")
                 output.flush()
                 print("RUNNER_BUILD_DIAGNOSTICS " + text, flush=True)
-        return run_monitored(["docker", "buildx", "build", "--progress=plain", "--no-cache",
-                              "--load", "--target", args.target, "--tag", args.tag, "."], emit)
+
+        return run_monitored(
+            [
+                "docker",
+                "buildx",
+                "build",
+                "--progress=plain",
+                "--no-cache",
+                "--load",
+                "--target",
+                args.target,
+                "--tag",
+                args.tag,
+                ".",
+            ],
+            emit,
+            capture_root=capture_root,
+            timeout=args.timeout,
+            output=args.diagnostics,
+        )
 
 
 if __name__ == "__main__":
